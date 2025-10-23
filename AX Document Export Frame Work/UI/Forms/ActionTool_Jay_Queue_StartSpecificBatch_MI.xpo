@@ -1,0 +1,24 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: FTM
+
+; Microsoft Dynamics AX MENUITEM : Jay_Queue_StartSpecificBatch_MI unloaded
+; --------------------------------------------------------------------------------
+  VERSION 1
+  
+  MENUITEM #Jay_Queue_StartSpecificBatch_MI
+    Type: 3
+    PROPERTIES
+      Name                #Jay_Queue_StartSpecificBatch_MI
+      Label               #Start Processor By Control
+      HelpText            #Manually start a specific queue processor by Control RecId.
+      ObjectType          #Class
+      Object              #Jay_Queue_StartSpecificBatch
+      Origin              #{BA37FA29-EC6B-4179-A8F3-69F523846CF3}
+    ENDPROPERTIES
+    
+  ENDMENUITEM
+  
+
+***Element: END

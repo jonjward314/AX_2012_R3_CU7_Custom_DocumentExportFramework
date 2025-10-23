@@ -1,0 +1,405 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: CLS
+
+; Microsoft Dynamics AX Class: Jay_HistoricBatchEnqueuer unloaded
+; --------------------------------------------------------------------------------
+  CLSVERSION 1
+  
+  CLASS #Jay_HistoricBatchEnqueuer
+    PROPERTIES
+      Name                #Jay_HistoricBatchEnqueuer
+      Extends             #RunBaseBatch
+      Origin              #{4315DFF8-9B09-4893-AF9E-A570770386FE}
+    ENDPROPERTIES
+    
+    METHODS
+      SOURCE #caption
+        #/// <summary>
+        #/// Caption wrapper to display in batch list.
+        #/// </summary>
+        #public Description caption()
+        #{
+        #    return this.description();
+        #}
+        #
+      ENDSOURCE
+      SOURCE #classDeclaration
+        #/// =================================================================================================
+        #/// CLASS: Jay_HistoricBatchEnqueuer
+        #/// PROJECT: Jay_DocExportFramework
+        #/// AUTHOR: Ward, Jonathon
+        #/// CREATED: (auto-generated header, update date on check-in)
+        #/// SR#: PENDING
+        #///
+        #/// PURPOSE:
+        #///     Manually or scheduled batch job for historical document exports.
+        #///     Unlike the Production enqueuer (which runs on a fixed 30-minute cadence),
+        #///     this class allows the user to specify exact From/To UTC times and
+        #///     enqueue documents for reprocessing or backfills across all document types.
+        #///
+        #/// OVERVIEW:
+        #///     - Prompts user for document type, subtype, and UTC window.
+        #///     - Converts user-entered local times to UTC via preferred timezone.
+        #///     - Creates control records (Jay_DocExport_CtrlTbl).
+        #///     - Calls Jay_EnqueueWorker to populate queues (Prod/Hist).
+        #///     - Triggers Jay_QueueProcessorBatch to handle printing/export.
+        #///     - Includes retry logic with exponential backoff up to maxRetries = 3.
+        #///
+        #/// ASSOCIATED OBJECTS:
+        #///     TABLES: Jay_DocExport_CtrlTbl, Jay_DocExportHistQueue, Jay_DocExportProdQueue
+        #///     CLASSES: Jay_DocExportCtrlWorker, Jay_EnqueueWorker, Jay_QueueProcessorBatch
+        #///     ENUMS: Jay_DocExportCtrlStatus, Jay_DocExportQueuePriority, Jay_DocExportDocType
+        #///
+        #/// TRANSACTION / LOCKING NOTES:
+        #///     - Control and queue updates are transactional inside Worker classes.
+        #///     - Retry/reschedule mechanism uses BatchHeader::construct() for idempotence.
+        #///
+        #/// EXECUTION CONTEXT:
+        #///     - RunOn: Server
+        #///     - Designed for manual launch or rare backfill automation.
+        #///     - Requires interactive dialog input.
+        #///
+        #/// =================================================================================================
+        #public class Jay_HistoricBatchEnqueuer extends RunBaseBatch
+        #{
+        #    Jay_DocExportDocType       parmDocType;
+        #    Jay_DocExportDocSubType    parmDocSubType;
+        #    utcDateTime                fromUtc;
+        #    utcDateTime                toUtc;
+        #    RecId                      ctrlRecId;
+        #
+        #    DialogField             dfDocType;
+        #    DialogField             dfDocSubType;
+        #    DialogField             dfFromUtc;
+        #    DialogField             dfToUtc;
+        #
+        #    #define.CurrentVersion(1)
+        #    #localmacro.CurrentList
+        #        parmDocType,
+        #        parmDocSubType,
+        #        fromUtc,
+        #        toUtc,
+        #        ctrlRecId
+        #    #endmacro
+        #
+        #
+        #}
+      ENDSOURCE
+      SOURCE #description
+        #/// <summary>
+        #/// Human-readable description shown in batch list.
+        #/// Includes local time translation for user clarity.
+        #/// </summary>
+        #public Description description()
+        #{
+        #    utcDateTime  nowUtc   = DateTimeUtil::utcNow();
+        #    Timezone     userTz   = DateTimeUtil::getUserPreferredTimeZone();
+        #    utcDateTime  localUtc = DateTimeUtil::applyTimeZoneOffset(nowUtc, userTz);
+        #    str          localStr = DateTimeUtil::toStr(localUtc);
+        #
+        #    return strFmt("Historic Doc Enqueuer [%1/%2 @ %3]",
+        #                  enum2str(parmDocType),
+        #                  enum2str(parmDocSubType),
+        #                  localStr);
+        #}
+        #
+      ENDSOURCE
+      SOURCE #dialog
+        #/// <summary>
+        #/// Dialog setup for user to specify DocType/SubType and time range.
+        #/// Converts UTC times to local timezone for input display.
+        #/// </summary>
+        #public Object dialog()
+        #{
+        #    TimeZone tz;
+        #
+        #    DialogRunbase dialog = super();
+        #
+        #    // Add fields
+        #    dfDocType = dialog.addField(enumStr(Jay_DocExportDocType), "Document type");
+        #    dfDocSubType = dialog.addField(enumStr(Jay_DocExportDocSubType), "Document subtype");
+        #    dfFromUtc = dialog.addField(extendedTypeStr(FromDateTime), "From date/time");
+        #    dfToUtc   = dialog.addField(extendedTypeStr(ToDateTime),   "To date/time");
+        #
+        #    // Ensure defaults in UTC
+        #    if (!fromUtc)
+        #        fromUtc = DateTimeUtil::addMinutes(DateTimeUtil::utcNow(), -30);
+        #    if (!toUtc)
+        #        toUtc = DateTimeUtil::utcNow();
+        #
+        #    // Convert UTC → user local for display
+        #    tz = DateTimeUtil::getUserPreferredTimeZone();
+        #
+        #    dfDocType.value(enum2int(parmDocType));
+        #    dfDocSubType.value(enum2int(parmDocSubType));
+        #    dfFromUtc.value(DateTimeUtil::applyTimeZoneOffset(fromUtc, tz));
+        #    dfToUtc.value(DateTimeUtil::applyTimeZoneOffset(toUtc, tz));
+        #
+        #    return dialog;
+        #}
+      ENDSOURCE
+      SOURCE #getFromDialog
+        #
+        #/// <summary>
+        #/// Retrieves values entered by the user.
+        #/// Converts local times back to UTC for persistence.
+        #/// </summary>
+        #public boolean getFromDialog()
+        #{
+        #    boolean ret = super();
+        #    TimeZone tz = DateTimeUtil::getUserPreferredTimeZone();
+        #
+        #    parmDocType    = dfDocType.value();
+        #    parmDocSubType = dfDocSubType.value();
+        #
+        #     // User enters local times. Convert back to UTC for storage.
+        #    fromUtc = DateTimeUtil::removeTimeZoneOffset(dfFromUtc.value(), tz);
+        #    toUtc   = DateTimeUtil::removeTimeZoneOffset(dfToUtc.value(), tz);
+        #
+        #    return ret;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #pack
+        #// -------------------------------------------------------------------------
+        #// Pack
+        #// -------------------------------------------------------------------------
+        #public container pack()
+        #{
+        #    return [#CurrentVersion, #CurrentList];
+        #}
+      ENDSOURCE
+      SOURCE #parmCtrlRecId
+        #public RecId parmCtrlRecId(RecId _ctrlRecId)
+        #{
+        #    ctrlRecId = _ctrlRecId;
+        #    return ctrlRecId;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #parmDocSubType
+        #public Jay_DocExportDocSubType parmDocSubType(Jay_DocExportDocSubType _value = parmDocSubType)
+        #{
+        #    parmDocSubType = _value;
+        #    return parmDocSubType;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #parmDocType
+        #public Jay_DocExportDocType parmDocType(Jay_DocExportDocType _value = parmDocType)
+        #{
+        #    parmDocType = _value;
+        #    return parmDocType;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #parmFromUtc
+        #public utcDateTime parmFromUtc(utcDateTime _value = fromUtc)
+        #{
+        #    fromUtc = _value;
+        #    return fromUtc;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #parmToUtc
+        #public utcDateTime parmToUtc(utcDateTime _value = toUtc)
+        #{
+        #    toUtc = _value;
+        #    return toUtc;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #run
+        #/// <summary>
+        #/// Main batch execution logic for historical enqueues.
+        #/// Handles initialization, enqueueing, and processor scheduling with retry logic.
+        #/// </summary>
+        #public void run()
+        #{
+        #    RecId                   exportCtrlRecId;
+        #    Jay_DocExportCtrlStatus ctrlStatus;
+        #    int                     attempts, maxRetries = 3; // configurable needs Varibalized In Glabal System Settings
+        #    int delayMinutes;
+        #    Args        args;
+        #
+        #    Jay_DocExport_CtrlTbl ctrlRecord;
+        #
+        #    // 1. Initialize control record
+        #    exportCtrlRecId = Jay_DocExportCtrlWorker::initialize(
+        #        parmDocType,
+        #        parmDocSubType,
+        #        fromUtc,
+        #        toUtc,
+        #        Jay_DocExportQueuePriority::Historical
+        #    );
+        #
+        #    // 2. Enqueue phase
+        #    ctrlStatus = Jay_EnqueueWorker::enqueueController(exportCtrlRecId);
+        #
+        #    // 3. If enqueue succeeded, schedule processor batch job
+        #    if (ctrlStatus == Jay_DocExportCtrlStatus::EnqueueComplete)
+        #    {
+        #        if (Jay_PrintOpsSecurity::isRevverAdmin())
+        #        {
+        #            Jay_QueueProcessorBatch::start_QueueProcessor(exportCtrlRecId);
+        #            info(strFmt("✅ Processor batch scheduled for control record %1", exportCtrlRecId));
+        #        }
+        #        else
+        #        {
+        #            info(strFmt("ℹ Enqueue complete for %1, but processor not scheduled due to policy. A RevverAdmin must start the Queue Processor.", exportCtrlRecId));
+        #        }
+        #    }
+        #    else
+        #    {
+        #        Jay_DocExportCtrlWorker::updateStatus(exportCtrlRecId, Jay_DocExportCtrlStatus::Failed);
+        #    }
+        #
+        #    // 4. Retry / failure handling
+        #    if (ctrlStatus == Jay_DocExportCtrlStatus::Failed)
+        #    {
+        #        attempts = Jay_DocExportCtrlWorker::getAttempts(exportCtrlRecId);
+        #
+        #        if (attempts < maxRetries)
+        #        {
+        #            warning(strFmt("Export %1 failed (%2). Retrying with backoff (%3/%4)...",
+        #                exportCtrlRecId,
+        #                enum2str(ctrlStatus),
+        #                attempts,
+        #                maxRetries));
+        #
+        #            // Increment attempts
+        #            Jay_DocExportCtrlWorker::incrementAttempts(exportCtrlRecId);
+        #
+        #            // Calculate exponential backoff (minutes)
+        #            delayMinutes = 2 << (attempts - 1); // 2, 4, 8, 16... up to maxRetries
+        #
+        #            // Reschedule this control record with delay
+        #            Jay_HistoricBatchEnqueuer::reschedule(
+        #                exportCtrlRecId, delayMinutes
+        #            );
+        #        }
+        #        else
+        #        {
+        #            error(strFmt("Export %1 skipped after %2 failed attempts.",
+        #                exportCtrlRecId, attempts));
+        #
+        #            Jay_DocExportCtrlWorker::updateStatus(
+        #                exportCtrlRecId,
+        #                Jay_DocExportCtrlStatus::Failed
+        #            );
+        #        }
+        #    }
+        #}
+        #
+      ENDSOURCE
+      SOURCE #showBatchTab
+        #/// <summary>
+        #/// Allows recurrence setup in Batch tab.
+        #/// </summary>
+        #public boolean showBatchTab(boolean _set = false)
+        #{
+        #    return true;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #unpack
+        #// -------------------------------------------------------------------------
+        #// Pack/Unpack
+        #// -------------------------------------------------------------------------
+        #public boolean unpack(container _packedClass)
+        #{
+        #    Version version = conpeek(_packedClass, 1);
+        #
+        #    switch (version)
+        #    {
+        #        case #CurrentVersion:
+        #            [version, #CurrentList] = _packedClass;
+        #            break;
+        #        default:
+        #            return false;
+        #    }
+        #
+        #    return true;
+        #}
+      ENDSOURCE
+      SOURCE #main
+        #/// <summary>
+        #/// Static entry point for manual or scheduled runs.
+        #/// Opens dialog and schedules job accordingly.
+        #/// </summary>
+        # public static void main(Args _args)
+        #{
+        #    Jay_HistoricBatchEnqueuer job = new Jay_HistoricBatchEnqueuer();
+        #
+        #    if (job.prompt())   // show dialog, populate parameters
+        #    {
+        #        // Force scheduling instead of running immediately
+        #        Jay_HistoricBatchEnqueuer::schedule(
+        #            job.parmDocType(),
+        #            job.parmDocSubType(),
+        #            job.parmFromUtc(),
+        #            job.parmToUtc()
+        #        );
+        #    }
+        #}
+      ENDSOURCE
+      SOURCE #reschedule
+        #/// <summary>
+        #/// Schedules a future rerun of the same control record (used by retry backoff).
+        #/// </summary>
+        #public static void reschedule(RecId _ctrlRecId, int _delayMinutes = 0)
+        #{
+        #    BatchHeader header;
+        #
+        #    Jay_HistoricBatchEnqueuer job = new Jay_HistoricBatchEnqueuer();
+        #
+        #    job.parmCtrlRecId(_ctrlRecId);
+        #
+        #    header = BatchHeader::construct();
+        #    header.addTask(job);
+        #    header.parmCaption(job.description());
+        #    if (_delayMinutes > 0)
+        #    {
+        #        // Push start time into the future (backoff delay)
+        #        header.parmStartDateTime(
+        #            DateTimeUtil::addMinutes(DateTimeUtil::utcNow(), _delayMinutes)
+        #        );
+        #    }
+        #    header.save();
+        #}
+        #
+      ENDSOURCE
+      SOURCE #schedule
+        #/// <summary>
+        #/// Primary scheduling method for new jobs (1-minute delay start).
+        #/// </summary>
+        #public static void schedule(
+        #    Jay_DocExportDocType    _docType,
+        #    Jay_DocExportDocSubType _subType,
+        #    utcDateTime             _fromUtc,
+        #    utcDateTime             _toUtc)
+        #{
+        #    BatchHeader header;
+        #
+        #    Jay_HistoricBatchEnqueuer job = new Jay_HistoricBatchEnqueuer();
+        #
+        #    job.parmDocType(_docType);
+        #    job.parmDocSubType(_subType);
+        #    job.parmFromUtc(_fromUtc);
+        #    job.parmToUtc(_toUtc);
+        #
+        #    header = BatchHeader::construct();
+        #    header.parmStartDateTime(
+        #            DateTimeUtil::addMinutes(DateTimeUtil::utcNow(), 1)
+        #    );
+        #    header.addTask(job);
+        #    header.parmCaption(job.description());
+        #    header.save();
+        #}
+      ENDSOURCE
+    ENDMETHODS
+  ENDCLASS
+
+***Element: END

@@ -1,0 +1,121 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: CLS
+
+; Microsoft Dynamics AX Class: Jay_Queue_StartEligible unloaded
+; --------------------------------------------------------------------------------
+  CLSVERSION 1
+  
+  CLASS #Jay_Queue_StartEligible
+    PROPERTIES
+      Name                #Jay_Queue_StartEligible
+      Extends             #RunBaseBatch
+      Origin              #{C9FA5EEA-7D30-4A5B-9534-E515A5C96524}
+    ENDPROPERTIES
+    
+    METHODS
+      SOURCE #classDeclaration
+        #class Jay_Queue_StartEligible extends RunBaseBatch
+        #{
+        #    int         maxCount;
+        #    DialogField dfMax;
+        #
+        #    #define.CurrentVersion(1)
+        #    #localmacro.CurrentList
+        #        maxCount
+        #    #endmacro
+        #}
+        #
+        #
+      ENDSOURCE
+      SOURCE #dialog
+        #// =======================================================================
+        #//  Jay_Queue_StartEligible
+        #//  Purpose: Schedules or manually starts all eligible export controls.
+        #//  Context: Used by RevverAdmin to auto-start queued print/export jobs.
+        #//  Notes:   Batch-safe (RunBaseBatch).  Dialog collects max count.
+        #// =======================================================================
+        #
+        #public Object dialog()
+        #{
+        #    // Build dialog for manual or scheduled runs.
+        #    DialogRunbase dlg = super();
+        #    dfMax = dlg.addField(extendedTypeStr(Counter), "Max processors to start");
+        #    dfMax.value(10);
+        #    return dlg;
+        #}
+        #
+        #
+      ENDSOURCE
+      SOURCE #getFromDialog
+        #public boolean getFromDialog()
+        #{
+        #    // Pull values from dialog.
+        #    boolean ok = super();
+        #    maxCount = dfMax.value();
+        #    if (maxCount <= 0)
+        #        maxCount = 10;
+        #    return ok;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #pack
+        #public container pack()
+        #{
+        #    // Persist settings for batch scheduling.
+        #    return [#CurrentVersion, #CurrentList];
+        #}
+        #
+        #
+      ENDSOURCE
+      SOURCE #run
+        #
+        #public void run()
+        #{
+        #    // Core logic: start up to N eligible controls.
+        #    Jay_PrintOpsSecurity::requireRevverAdmin();
+        #    Jay_QueueProcessorOps::startAllEligible(maxCount);
+        #    info(strFmt("Started up to %1 eligible queue processor(s).", maxCount));
+        #}
+        #
+        #
+      ENDSOURCE
+      SOURCE #unpack
+        #public boolean unpack(container _packed)
+        #{
+        #    // Restore settings when batch executes.
+        #    Version version = conPeek(_packed,1);
+        #    switch (version)
+        #    {
+        #        case #CurrentVersion:
+        #            [version, #CurrentList] = _packed;
+        #            break;
+        #        default:
+        #            return false;
+        #    }
+        #    return true;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #main
+        #
+        #public static void main(Args _args)
+        #{
+        #    // Entry point for both manual and scheduled execution.
+        #    Jay_Queue_StartEligible job = new Jay_Queue_StartEligible();
+        #
+        #    if (BatchHeader::isExecutingInBatch())
+        #    {
+        #        job.run(); // silent batch
+        #    }
+        #    else if (job.prompt())
+        #    {
+        #        job.run(); // interactive
+        #    }
+        #}
+      ENDSOURCE
+    ENDMETHODS
+  ENDCLASS
+
+***Element: END

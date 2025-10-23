@@ -1,0 +1,1457 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: CLS
+
+; Microsoft Dynamics AX Class: Jay_QueueProcessorBatch unloaded
+; --------------------------------------------------------------------------------
+  CLSVERSION 1
+  
+  CLASS #Jay_QueueProcessorBatch
+    PROPERTIES
+      Name                #Jay_QueueProcessorBatch
+      Extends             #RunBaseBatch
+      RunOn               #Server
+      Origin              #{CCE380B1-0FD8-4BC7-B5A5-438C5C8C3BEB}
+    ENDPROPERTIES
+    
+    METHODS
+      SOURCE #caption
+        #/// <summary>
+        #/// Provides fallback caption if none explicitly set.
+        #/// </summary>
+        #/// <returns>Task caption or default name.</returns>
+        #public BatchCaption caption()
+        #    {
+        #        return taskCaption ? taskCaption : "Jay Queue Processor Batch";
+        #    }
+      ENDSOURCE
+      SOURCE #classDeclaration
+        #/**
+        # * Class: Jay_QueueProcessorBatch
+        # * Project: Jay_AXDocumentExportTool
+        # * Author: Jon Ward
+        # * Created: 2025-10-06
+        # * RunOn: Server
+        # * SR# PENDING
+        # *
+        # * Summary:
+        # *   Central dispatcher for document export queue processing.
+        # *   Executes queued print/export jobs for both Production and Historical
+        # *   priority groups, routing by DocType to SSRS/PrecisionForms outputs.
+        # *   Operates headlessly as a RunBaseBatch job.
+        # *
+        # * Responsibilities:
+        # *   • Dequeue and dispatch print jobs from Jay_DocExportProdQueue / Jay_DocExportHistQueue.
+        # *   • Invoke SSRS reports that output XML payloads to PrecisionForms directories.
+        # *   • Update control and queue record statuses.
+        # *   • Perform log and queue cleanup via Jay_LogMaintenanceService::purgeExpired().
+        # *
+        # * Environment Context:
+        # *   • Server-only execution (RunOn = Server)
+        # *   • Silent, unattended batch execution only
+        # *   • Invoked by: Jay_ProductionBatchEnqueuer, Jay_HistoricBatchEnqueuer
+        # *
+        # * Related AOT Objects:
+        # *   Tables: Jay_DocExport_CtrlTbl, Jay_DocExportProdQueue, Jay_DocExportHistQueue
+        # *   Enums: Jay_DocExportDocType, Jay_DocExportDocSubType,
+        # *          Jay_DocExportQueuePriority, Jay_DocExportQueueStatus, Jay_DocExportCtrlStatus
+        # *   Classes: Jay_DocExportQueueWorker, Jay_DocExportCtrlWorker, Jay_LogMaintenanceService
+        # *
+        # * Methods Summary:
+        # *   caption()           – Provides caption for batch header.
+        # *   description()       – Returns human-readable purpose text.
+        # *   parmRecId()         – Gets/sets control record reference.
+        # *   processQueue()      – Core loop: dequeues, processes, and logs outcomes.
+        # *   print*()            – Dispatch entry points for each document type.
+        # *   run()               – Batch entry; invokes processQueue and log maintenance.
+        # *   delaystart_QueueProcessor() – Requeues jobs with backoff delay.
+        # *   start_QueueProcessor()      – Initializes and queues the batch job.
+        # *
+        # * Dependencies:
+        # *   PrecisionForms integration configured under:
+        # *     System administration > Setup > PrecisionForms > Defaults
+        # *   Output path defined via XML Output Location (e.g. \\jaysrv01\PF\PrecisionForms\Output\DAXXML)
+        # *
+        # * Cleanup Behavior:
+        # *   purgeExpired() invoked at batch end removes stale queue/control entries
+        # *   (Production > 7 days, Historical > 30 days)
+        # */
+        #class Jay_QueueProcessorBatch extends RunBaseBatch
+        #{
+        #    #define.CurrentVersion(1)
+        #    #localmacro.CurrentList
+        #        crtlRecid
+        #    #endmacro
+        #
+        #    BatchCaption taskCaption;
+        #    RecId        crtlRecid;
+        #    str  fnName;   // e.g. "processQueue_BatchTag"
+        #    guid batchTag; // if applicable
+        #}
+        #
+      ENDSOURCE
+      SOURCE #description
+        #/// <summary>
+        #/// Provides human-readable job name in batch list.
+        #/// </summary>
+        #/// <returns>Batch caption string.</returns>
+        #public Description description()
+        #{
+        #    return "Executes the Queue Processor silently in background.";
+        #}
+        #
+      ENDSOURCE
+      SOURCE #executeDefault
+        #public void executeDefault()
+        #{
+        #     boolean paused;
+        #    int     deferMin;
+        #    Args    args;
+        #    Jay_DocExport_CtrlTbl ctrlRecord;
+        #
+        #    info(strFmt("▶ [RUN] Starting task: %1, RecId: %2", this.caption(), crtlRecid));
+        #
+        #    // Respect pause flag: defer yourself politely
+        #    paused   = Jay_ExportRuntimeSettings::pausePrint();
+        #    deferMin = Jay_ExportRuntimeSettings::docQueueCadenceMin();
+        #
+        #    if (paused)
+        #    {
+        #        info(strFmt("⏸ Print flow paused by settings. Deferring Queue Processor by %1 minute(s).", deferMin));
+        #        // This will be invoked by RevverAdmin normally, so the gate is OK here.
+        #        Jay_QueueProcessorBatch::delaystart_QueueProcessor(this.parmRecid(), deferMin);
+        #        return;
+        #    }
+        #
+        #    try
+        #    {
+        #        if (this.parmRecid())
+        #        {
+        #            info("FLAG: Entering processQueue()");
+        #            ctrlRecord = this.processQueue(this.parmRecid());
+        #            info("FLAG: Returned from processQueue()");
+        #
+        #            Jay_DocExportCtrlWorker::updateStatus(
+        #                this.parmRecid(),
+        #                Jay_DocExportCtrlStatus::JobFinished
+        #            );
+        #        }
+        #        else
+        #        {
+        #            warning(strFmt("FLAG: No control record found for RecId %1", this.parmRecid()));
+        #        }
+        #
+        #        // 🔧 Log maintenance is best-effort
+        #        try
+        #        {
+        #            info("FLAG: Invoking log maintenance (purgeExpired)");
+        #            Jay_DocExportCtrlWorker::updateStatus(
+        #                this.parmRecid(),
+        #                Jay_DocExportCtrlStatus::PurgingQueue
+        #            );
+        #            Jay_LogMaintenanceService::purgeExpired();
+        #            Jay_DocExportCtrlWorker::updateStatus(
+        #                this.parmRecid(),
+        #                Jay_DocExportCtrlStatus::JobFinished
+        #            );
+        #
+        #            if (Jay_DocExportCtrlWorker::countActiveProd() == 0
+        #             && !Jay_DocExportCtrlWorker::existsProdEligibleToRunNext())
+        #            {
+        #                Jay_ArbitrationLogger::log(
+        #                    this.parmRecid(), ctrlRecord.ExportPriority,
+        #                    "ResumeHistorical",
+        #                    "Production idle — arbitration triggering Historical"
+        #                );
+        #                Jay_ArbitrationAgent::resumeEligibleHistorical();
+        #            }
+        #             else
+        #        {
+        #            Jay_ArbitrationLogger::log(
+        #                this.parmRecid(), ctrlRecord.ExportPriority,
+        #                "ResumeProduction",
+        #                "Production still has eligible work — resuming Production"
+        #            );
+        #            Jay_ArbitrationAgent::resumeEligibleProduction(ctrlRecord);
+        #        }
+        #
+        #        }
+        #        catch (Exception::Error)
+        #        {
+        #            warning("⚠ Log maintenance failed or skipped — continuing without interruption.");
+        #        }
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        // Need to update to failed satuss here
+        #        error(strFmt("❌ [RUN] Fatal error for RecId %1", this.parmRecid()));
+        #    }
+        #
+        #    info(strFmt("▶ [RUN] Task finished: %1, RecId: %2", this.caption(), this.parmRecid()));
+        #}
+      ENDSOURCE
+      SOURCE #pack
+        #/// <summary>
+        #/// Packs class state for batch persistence.
+        #/// </summary>
+        #/// <returns>Container of version and control RecId.</returns>
+        #public container pack()
+        #{
+        #    return [#CurrentVersion, crtlRecid];
+        #}
+      ENDSOURCE
+      SOURCE #parmBatchTag
+        #public guid parmBatchTag(guid _v = batchTag)
+        #{
+        #    batchTag = _v;
+        #    return batchTag;
+        #}
+      ENDSOURCE
+      SOURCE #parmCaption
+        #/// <summary>
+        #/// Returns or sets the batch caption for the task.
+        #/// </summary>
+        #/// <param name="_caption">Optional new caption.</param>
+        #/// <returns>Current batch caption string.</returns>
+        #
+        #public BatchCaption parmCaption(BatchCaption _caption = taskCaption)
+        #{
+        #    taskCaption = _caption;
+        #    return taskCaption;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #parmFunctionName
+        #public str parmFunctionName(str _v = fnName)
+        #{
+        #    fnName = _v;
+        #    return fnName;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #parmRecid
+        #public RecId parmRecid(RecId _ctrlRecId = crtlRecid)
+        #{
+        #    crtlRecid = _ctrlRecId;
+        #    return crtlRecid;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #processHistQueueRecord
+        #
+        #/// <summary>
+        #/// Processes one Historical queue record.
+        #/// </summary>
+        #/// <param name="_ctrlRecord">Parent control record.</param>
+        #/// <param name="_histRec">Historical queue record.</param>
+        #/// <returns>True if successful, false otherwise.</returns>
+        #/// <remarks>
+        #/// Similar to processProdQueueRecord() but operates against Jay_DocExportHistQueue.
+        #/// </remarks>
+        #private boolean processHistQueueRecord(Jay_DocExport_CtrlTbl _ctrlRecord, Jay_DocExportHistQueue _histRec)
+        #{
+        #    boolean success = false;
+        #
+        #    try
+        #    {
+        #        // Mark record as Processing
+        #        Jay_DocExportQueueWorker::updateHistStatus(_histRec.RecId, Jay_DocExportQueueStatus::Processing, false);
+        #
+        #        // ---- Dispatch by DocType ----
+        #        Jay_QueueProcessorBatch::print(_histRec);
+        #
+        #        // ---- Throttle: 1 doc / sec ----
+        #        sleep(1000);
+        #
+        #        // Mark as Exported
+        #        Jay_DocExportQueueWorker::updateHistStatus(_histRec.RecId, Jay_DocExportQueueStatus::Exported, false);
+        #
+        #        success = true;
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        // Increment attempts, mark as Failed
+        #        Jay_DocExportQueueWorker::incrementHistAttempts(_histRec.RecId);
+        #        Jay_DocExportQueueWorker::updateHistStatus(_histRec.RecId, Jay_DocExportQueueStatus::FailedExport, false);
+        #
+        #        success = false;
+        #    }
+        #
+        #    return success;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #processProdQueueRecord
+        #/// <summary>
+        #/// Processes one Production queue record.
+        #/// </summary>
+        #/// <param name="_ctrlRecord">Parent control record.</param>
+        #/// <param name="_prodRec">Production queue record.</param>
+        #/// <returns>True if successful, false otherwise.</returns>
+        #/// <remarks>
+        #/// Updates status to Processing → Exported / FailedExport.
+        #/// Retries and increments attempt count on failure.
+        #/// </remarks>
+        #private boolean processProdQueueRecord(Jay_DocExport_CtrlTbl _ctrlRecord, Jay_DocExportProdQueue _prodRec)
+        #{
+        #    boolean success = false;
+        #
+        #    try
+        #    {
+        #        // Mark record as Processing
+        #        Jay_DocExportQueueWorker::updateProdStatus(_prodRec.RecId, Jay_DocExportQueueStatus::Processing, false);
+        #
+        #        // ---- Dispatch by DocType ----
+        #        Jay_QueueProcessorBatch::print(_prodRec);
+        #
+        #        // ---- Throttle: 1 doc / sec ----
+        #        sleep(1000);
+        #
+        #        // Mark as Exported
+        #        Jay_DocExportQueueWorker::updateProdStatus(_prodRec.RecId, Jay_DocExportQueueStatus::Exported, false);
+        #
+        #        success = true;
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        // Increment attempts + mark as Failed
+        #        Jay_DocExportQueueWorker::incrementProdAttempts(_prodRec.RecId);
+        #        Jay_DocExportQueueWorker::updateProdStatus(_prodRec.RecId, Jay_DocExportQueueStatus::FailedExport, false);
+        #
+        #        success = false;
+        #    }
+        #
+        #    return success;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #processQueue
+        #private Jay_DocExport_CtrlTbl processQueue(RecId _ctrlRecId)
+        #{
+        #    #define.DefaultPrintDelayMs(1000)
+        #
+        #        // -------------- NEW CAP LOGIC ---------------
+        #    boolean prodCapEnabled  = Jay_ExportRuntimeSettings::Prod_EnablePrintCap() == NoYes::Yes;
+        #    boolean histCapEnabled  = Jay_ExportRuntimeSettings::Hist_EnablePrintCap() == NoYes::Yes;
+        #    int     prodCapLimit    = Jay_ExportRuntimeSettings::Prod_MaxDocsPerPrintSlice();
+        #    int     histCapLimit    = Jay_ExportRuntimeSettings::Hist_MaxDocsPerPrintSlice();
+        #
+        #    int capRemaining; // final computed cap budget
+        #
+        #
+        #
+        #    Jay_DocExport_CtrlTbl  ctrlRecord;
+        #    Jay_DocExportHistQueue histRec;
+        #    Jay_DocExportProdQueue prodRec;
+        #
+        #    int     processed;
+        #    int     failed;
+        #    int     delayMsGlobal;
+        #    int     remaining;
+        #    int64     ageMin;
+        #    int     staleMin;
+        #    int     fatalMin;
+        #    utcDateTime  nowUtc;
+        #
+        #    select firstOnly ctrlRecord
+        #        where ctrlRecord.RecId == _ctrlRecId;
+        #
+        #    if (!ctrlRecord.RecId)
+        #        return ctrlRecord;
+        #
+        #    if (ctrlRecord.ExportPriority == Jay_DocExportQueuePriority::Production && prodCapEnabled)
+        #        capRemaining = prodCapLimit;
+        #    else if (ctrlRecord.ExportPriority == Jay_DocExportQueuePriority::Historical && histCapEnabled)
+        #        capRemaining = histCapLimit;
+        #    else
+        #        capRemaining = remaining; // fallback to governor-only
+        #
+        #    // governor result always wins if smaller (safety-first)
+        #    remaining = min(remaining, capRemaining);
+        #    // --------------------------------------------
+        #
+        #    try
+        #    {
+        #        nowUtc   = DateTimeUtil::utcNow();
+        #        staleMin = Jay_ExportRuntimeSettings::staleControllerMinutes();
+        #        fatalMin = Jay_ExportRuntimeSettings::fatalLivelockMinutes();
+        #
+        #        if (ctrlRecord.CtrlStatus != Jay_DocExportCtrlStatus::JobFinished
+        #         && ctrlRecord.CtrlStatus != Jay_DocExportCtrlStatus::Failed)
+        #        {
+        #            ageMin = DateTimeUtil::getDifference(nowUtc, ctrlRecord.modifiedDateTime) / 60;
+        #
+        #            if (ageMin >= fatalMin)
+        #            {
+        #                Jay_DocExportCtrlWorker::updateStatus(_ctrlRecId, Jay_DocExportCtrlStatus::PartialComplete);
+        #                Jay_ArbitrationLogger::log(
+        #                    _ctrlRecId, ctrlRecord.ExportPriority,
+        #                    "AutoRecovery",
+        #                    strFmt("Fatal livelock override — age %1 ≥ %2", ageMin, fatalMin)
+        #                );
+        #            }
+        #            else if (ageMin >= staleMin)
+        #            {
+        #                Jay_DocExportCtrlWorker::updateStatus(_ctrlRecId, Jay_DocExportCtrlStatus::PartialComplete);
+        #                Jay_ArbitrationLogger::log(
+        #                    _ctrlRecId, ctrlRecord.ExportPriority,
+        #                    "AutoRecovery",
+        #                    strFmt("Stale controller recovered — age %1 ≥ %2", ageMin, staleMin)
+        #                );
+        #            }
+        #        }
+        #
+        #        Jay_DocExportCtrlWorker::updateStatus(_ctrlRecId, Jay_DocExportCtrlStatus::Processing);
+        #
+        #        delayMsGlobal = ctrlRecord.PrintDelay;
+        #        if (delayMsGlobal <= 0)
+        #            delayMsGlobal = #DefaultPrintDelayMs;
+        #        delayMsGlobal = min(delayMsGlobal, 600000);
+        #
+        #        if (ctrlRecord.ExportPriority == Jay_DocExportQueuePriority::Historical)
+        #        {
+        #            if (Jay_DocExportCtrlWorker::existsBlockingProd(ctrlRecord.RecId)
+        #             || Jay_DocExportCtrlWorker::existsOlderHistBlocking(ctrlRecord.CreatedDateTime))
+        #            {
+        #                Jay_ArbitrationLogger::log(
+        #                    _ctrlRecId, ctrlRecord.ExportPriority,
+        #                    "Deferred",
+        #                    "Historical blocked — Production or older Historical active"
+        #                );
+        #                Jay_DocExportCtrlWorker::updateStatus(_ctrlRecId, Jay_DocExportCtrlStatus::Waiting);
+        #                Jay_QueueProcessorBatch::delaystart_QueueProcessor(_ctrlRecId,
+        #                    Jay_ExportRuntimeSettings::capacityDeferMinutes());
+        #                return ctrlRecord;
+        #            }
+        #        }
+        #
+        #        remaining = Jay_PrintGovernor::remainingCapacity();
+        #        if (remaining <= 0)
+        #        {
+        #            Jay_ArbitrationLogger::log(
+        #                _ctrlRecId, ctrlRecord.ExportPriority,
+        #                "Deferred",
+        #                "Governor capacity exhausted"
+        #            );
+        #            Jay_QueueProcessorBatch::delaystart_QueueProcessor(_ctrlRecId,
+        #                Jay_ExportRuntimeSettings::capacityDeferMinutes());
+        #            return ctrlRecord;
+        #        }
+        #
+        #        if (ctrlRecord.ExportPriority == Jay_DocExportQueuePriority::Historical)
+        #        {
+        #            while select forUpdate histRec
+        #                where histRec.CtrlRecId   == _ctrlRecId
+        #                   && histRec.QueueStatus == Jay_DocExportQueueStatus::Queued
+        #            {
+        #                if (remaining <= 0)
+        #                {
+        #                    Jay_ArbitrationLogger::log(
+        #                        _ctrlRecId, ctrlRecord.ExportPriority,
+        #                        "DeferredMidBatch",
+        #                        "Historical capacity exhausted mid-cycle"
+        #                    );
+        #                    Jay_DocExportQueueWorker::updateRemainingToWaiting(_ctrlRecId, histRec.BatchTag);
+        #                    Jay_QueueProcessorBatch::delaystart_QueueProcessor(_ctrlRecId,
+        #                        Jay_ExportRuntimeSettings::capacityDeferMinutes());
+        #                    return ctrlRecord;
+        #                }
+        #
+        #                ttsBegin;
+        #                histRec.QueueStatus           = Jay_DocExportQueueStatus::Processing;
+        #                histRec.LastAttemptedDateTime = DateTimeUtil::utcNow();
+        #                histRec.update();
+        #                ttsCommit;
+        #
+        #                try
+        #                {
+        #                    if (Jay_QueueProcessorBatch::print(histRec))
+        #                    {
+        #                        Jay_PrintGovernor::registerPrint();
+        #                        remaining--;
+        #                        Jay_DocExportQueueWorker::updateHistStatus(
+        #                            histRec.RecId, Jay_DocExportQueueStatus::Exported, false);
+        #                        processed++;
+        #                    }
+        #                    else
+        #                    {
+        #                        Jay_DocExportQueueWorker::updateHistStatus(
+        #                            histRec.RecId, Jay_DocExportQueueStatus::FailedExport, true);
+        #                        failed++;
+        #                    }
+        #                }
+        #                catch (Exception::Error)
+        #                {
+        #                    Jay_DocExportQueueWorker::updateHistStatus(
+        #                        histRec.RecId, Jay_DocExportQueueStatus::FailedExport, true);
+        #                    failed++;
+        #                }
+        #
+        #                sleep(delayMsGlobal);
+        #            }
+        #        }
+        #        else
+        #        {
+        #            while select forUpdate prodRec
+        #                where prodRec.CtrlRecId   == _ctrlRecId
+        #                   && prodRec.QueueStatus == Jay_DocExportQueueStatus::Queued
+        #            {
+        #                if (remaining <= 0)
+        #                {
+        #                    Jay_ArbitrationLogger::log(
+        #                        _ctrlRecId, ctrlRecord.ExportPriority,
+        #                        "DeferredMidBatch",
+        #                        "Production capacity exhausted mid-cycle"
+        #                    );
+        #                    Jay_DocExportQueueWorker::updateRemainingToWaiting(_ctrlRecId, prodRec.BatchTag);
+        #                    Jay_QueueProcessorBatch::delaystart_QueueProcessor(_ctrlRecId,
+        #                        Jay_ExportRuntimeSettings::capacityDeferMinutes());
+        #                    return ctrlRecord;
+        #                }
+        #
+        #                ttsBegin;
+        #                prodRec.QueueStatus           = Jay_DocExportQueueStatus::Processing;
+        #                prodRec.LastAttemptedDateTime = DateTimeUtil::utcNow();
+        #                prodRec.update();
+        #                ttsCommit;
+        #
+        #                try
+        #                {
+        #                    if (Jay_QueueProcessorBatch::print(prodRec))
+        #                    {
+        #                        Jay_PrintGovernor::registerPrint();
+        #                        remaining--;
+        #                        Jay_DocExportQueueWorker::updateProdStatus(
+        #                            prodRec.RecId, Jay_DocExportQueueStatus::Exported, false);
+        #                        processed++;
+        #                    }
+        #                    else
+        #                    {
+        #                        Jay_DocExportQueueWorker::updateProdStatus(
+        #                            prodRec.RecId, Jay_DocExportQueueStatus::FailedExport, true);
+        #                        failed++;
+        #                    }
+        #                }
+        #                catch (Exception::Error)
+        #                {
+        #                    Jay_DocExportQueueWorker::updateProdStatus(
+        #                        prodRec.RecId, Jay_DocExportQueueStatus::FailedExport, true);
+        #                    failed++;
+        #                }
+        #
+        #                sleep(delayMsGlobal);
+        #            }
+        #        }
+        #
+        #        if (failed > 0 && processed == 0)
+        #            Jay_DocExportCtrlWorker::updateStatus(_ctrlRecId, Jay_DocExportCtrlStatus::Failed);
+        #        else if (failed > 0 && processed > 0)
+        #            Jay_DocExportCtrlWorker::updateStatus(_ctrlRecId, Jay_DocExportCtrlStatus::PartialComplete);
+        #        else
+        #            Jay_DocExportCtrlWorker::updateStatus(_ctrlRecId, Jay_DocExportCtrlStatus::ProcessingComplete);
+        #
+        #        if (ctrlRecord.ExportPriority == Jay_DocExportQueuePriority::Production)
+        #        {
+        #            if (Jay_DocExportCtrlWorker::countActiveProd() == 0
+        #             && Jay_DocExportCtrlWorker::existsProdEligibleToRunNext())
+        #            {
+        #                Jay_ArbitrationLogger::log(
+        #                    _ctrlRecId, ctrlRecord.ExportPriority,
+        #                    "ResumeHistorical",
+        #                    "Production idle — arbitration triggering Historical"
+        #                );
+        #                Jay_ArbitrationAgent::resumeEligibleHistorical();
+        #            }
+        #        }
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        Jay_DocExportCtrlWorker::updateStatus(_ctrlRecId, Jay_DocExportCtrlStatus::Failed);
+        #    }
+        #
+        #    return ctrlRecord;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #processQueue_BatchTag
+        #public void processQueue_BatchTag()
+        #{
+        #    Jay_DocExport_CtrlTbl   ctrlRecord;
+        #    Jay_DocExportHistQueue  histRec;
+        #    Jay_DocExportProdQueue  prodRec;
+        #    int                     processed, failed, remaining, deferMin;
+        #    int                     maxAttempts;
+        #    RecId                   ctrlRecId;
+        #    Jay_DocExportQueuePriority priority;
+        #    boolean prodCapEnabled  = Jay_ExportRuntimeSettings::Prod_EnablePrintCap() == NoYes::Yes;
+        #    boolean histCapEnabled  = Jay_ExportRuntimeSettings::Hist_EnablePrintCap() == NoYes::Yes;
+        #    int     prodCapLimit    = Jay_ExportRuntimeSettings::Prod_MaxDocsPerPrintSlice();
+        #    int     histCapLimit    = Jay_ExportRuntimeSettings::Hist_MaxDocsPerPrintSlice();
+        #
+        #    int capRemaining;
+        #
+        #
+        #    ctrlRecId  = this.parmRecid();
+        #    batchTag   = this.parmBatchTag();
+        #    processed  = 0;
+        #    failed     = 0;
+        #    remaining  = Jay_PrintGovernor::remainingCapacity();
+        #    deferMin   = Jay_ExportRuntimeSettings::capacityDeferMinutes();
+        #    maxAttempts = Jay_ExportRuntimeSettings::maxAllowedPrintAttempts();
+        #
+        #    // -------------- NEW CAP LOGIC ---------------
+        #
+        #    // Decide which cap applies based on priority
+        #    if (priority == Jay_DocExportQueuePriority::Production && prodCapEnabled)
+        #        capRemaining = prodCapLimit;
+        #    else if (priority == Jay_DocExportQueuePriority::Historical && histCapEnabled)
+        #        capRemaining = histCapLimit;
+        #    else
+        #        capRemaining = remaining; // fallback to governor-only
+        #
+        #    // Hard safety clamp: cap vs governor (smallest wins)
+        #    remaining = min(remaining, capRemaining);
+        #    // --------------------------------------------
+        #
+        #
+        #    select firstOnly ctrlRecord
+        #        where ctrlRecord.RecId == ctrlRecId;
+        #
+        #    if (!ctrlRecord.RecId)
+        #        return;
+        #
+        #    priority = ctrlRecord.ExportPriority;
+        #    Jay_DocExportCtrlWorker::updateStatus(ctrlRecId, Jay_DocExportCtrlStatus::Processing);
+        #
+        #    // --------------------------
+        #    // Historical Arbitration Gate
+        #    // --------------------------
+        #    if (priority == Jay_DocExportQueuePriority::Historical
+        #     && (Jay_DocExportCtrlWorker::existsBlockingProd(ctrlRecord.RecId)
+        #      || Jay_DocExportCtrlWorker::existsOlderHistBlocking(ctrlRecord.CreatedDateTime)))
+        #    {
+        #        Jay_DocExportCtrlWorker::updateStatus(ctrlRecId, Jay_DocExportCtrlStatus::Waiting);
+        #        Jay_QueueProcessorBatch::delaystart_HistoricalBatch(ctrlRecId, batchTag, deferMin);
+        #        return;
+        #    }
+        #
+        #    // --------------------------
+        #    // Governor Pre-check
+        #    // --------------------------
+        #    if (remaining <= 0)
+        #    {
+        #        if (priority == Jay_DocExportQueuePriority::Historical)
+        #             Jay_QueueProcessorBatch::delaystart_HistoricalBatch(ctrlRecId, batchTag, deferMin);
+        #        else Jay_QueueProcessorBatch::delaystart_QueueProcessor(ctrlRecId, deferMin);
+        #        return;
+        #    }
+        #
+        #    // --------------------------
+        #    // EXECUTION LOOP
+        #    // --------------------------
+        #    if (priority == Jay_DocExportQueuePriority::Historical)
+        #    {
+        #        while select forUpdate histRec
+        #            where histRec.CtrlRecId  == ctrlRecId
+        #              && histRec.BatchTag    == batchTag
+        #              && histRec.QueueStatus != Jay_DocExportQueueStatus::Exported
+        #              && histRec.ExportAttempts < maxAttempts   // ← tactical skip
+        #        {
+        #            if (remaining <= 0)
+        #            {
+        #                Jay_DocExportQueueWorker::updateRemainingToWaiting(ctrlRecId, batchTag);
+        #                Jay_QueueProcessorBatch::delaystart_HistoricalBatch(ctrlRecId, batchTag, deferMin);
+        #                return;
+        #            }
+        #
+        #            ttsbegin;
+        #            histRec.QueueStatus           = Jay_DocExportQueueStatus::Processing;
+        #            histRec.LastAttemptedDateTime = DateTimeUtil::utcNow();
+        #            histRec.update();
+        #            ttscommit;
+        #
+        #            try
+        #            {
+        #                if (Jay_QueueProcessorBatch::print(histRec))
+        #                {
+        #                    Jay_PrintGovernor::registerPrint();
+        #                    remaining--;
+        #                    Jay_DocExportQueueWorker::updateHistStatus(histRec.RecId, Jay_DocExportQueueStatus::Exported, false);
+        #                    processed++;
+        #                }
+        #                else
+        #                {
+        #                    Jay_DocExportQueueWorker::updateHistStatus(histRec.RecId, Jay_DocExportQueueStatus::FailedExport, true);
+        #                    failed++;
+        #                }
+        #            }
+        #            catch (Exception::Error)
+        #            {
+        #                Jay_DocExportQueueWorker::updateHistStatus(histRec.RecId, Jay_DocExportQueueStatus::FailedExport, true);
+        #                failed++;
+        #            }
+        #        }
+        #    }
+        #    else // PRODUCTION MIRROR
+        #    {
+        #        while select forUpdate prodRec
+        #            where prodRec.CtrlRecId  == ctrlRecId
+        #              && prodRec.BatchTag    == batchTag
+        #              && prodRec.QueueStatus != Jay_DocExportQueueStatus::Exported
+        #              && prodRec.ExportAttempts < maxAttempts   // ← silent skip
+        #        {
+        #            if (remaining <= 0)
+        #            {
+        #                Jay_DocExportQueueWorker::updateRemainingToWaiting(ctrlRecId, prodRec.BatchTag);
+        #                Jay_QueueProcessorBatch::delaystart_QueueProcessor(ctrlRecId, deferMin);
+        #                return;
+        #            }
+        #
+        #            ttsbegin;
+        #            prodRec.QueueStatus           = Jay_DocExportQueueStatus::Processing;
+        #            prodRec.LastAttemptedDateTime = DateTimeUtil::utcNow();
+        #            prodRec.update();
+        #            ttscommit;
+        #
+        #            try
+        #            {
+        #                if (Jay_QueueProcessorBatch::print(prodRec))
+        #                {
+        #                    Jay_PrintGovernor::registerPrint();
+        #                    remaining--;
+        #                    Jay_DocExportQueueWorker::updateProdStatus(prodRec.RecId, Jay_DocExportQueueStatus::Exported, false);
+        #                    processed++;
+        #                }
+        #                else
+        #                {
+        #                    Jay_DocExportQueueWorker::updateProdStatus(prodRec.RecId, Jay_DocExportQueueStatus::FailedExport, true);
+        #                    failed++;
+        #                }
+        #            }
+        #            catch (Exception::Error)
+        #            {
+        #                Jay_DocExportQueueWorker::updateProdStatus(prodRec.RecId, Jay_DocExportQueueStatus::FailedExport, true);
+        #                failed++;
+        #            }
+        #        }
+        #    }
+        #
+        #    Jay_DocExportCtrlWorker::finalizeIfNoRemainingWork(ctrlRecId);
+        #}
+        #
+      ENDSOURCE
+      SOURCE #run
+        #public void run()
+        #{
+        #    switch (this.parmFunctionName())
+        #    {
+        #        case "processQueue_BatchTag":
+        #            this.processQueue_BatchTag();
+        #            return;
+        #
+        #        default:
+        #            this.executeDefault(); // what run() used to do
+        #            return;
+        #    }
+        #}
+      ENDSOURCE
+      SOURCE #unpack
+        #/// <summary>
+        #/// Restores class state from packed data.
+        #/// </summary>
+        #/// <param name="_packedClass">Packed container.</param>
+        #/// <returns>True if unpack succeeded.</returns>
+        #public boolean unpack(container _packedClass)
+        #{
+        #    Version version = conPeek(_packedClass, 1);
+        #
+        #    switch (version)
+        #    {
+        #        case #CurrentVersion:
+        #            crtlRecid = conPeek(_packedClass, 2);
+        #            break;
+        #        default:
+        #            return false;
+        #    }
+        #    return true;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #delaystart_HistoricalBatch
+        #/// summary
+        #/// Reschedules a Historical batch for a later retry.
+        #/// end summary
+        #public static void delaystart_HistoricalBatch(RecId _ctrlRecId, guid _batchTag, int _delayMinutes)
+        #{
+        #    BatchHeader             header = BatchHeader::construct();
+        #    Jay_QueueProcessorBatch job    = new Jay_QueueProcessorBatch();
+        #
+        #    job.parmRecid(_ctrlRecId);
+        #    job.parmBatchTag(_batchTag);
+        #    job.parmCaption(strFmt("Delayed Historical Batch — Ctrl:%1 Tag:%2", _ctrlRecId, guid2str(_batchTag)));
+        #    job.parmFunctionName("processQueue_BatchTag");
+        #
+        #    header.parmCaption(strFmt("Delayed Historical Batch — Ctrl:%1 Tag:%2", _ctrlRecId, guid2str(_batchTag)));
+        #    header.parmStartDateTime(DateTimeUtil::addMinutes(DateTimeUtil::utcNow(), _delayMinutes));
+        #
+        #    // ❌ CU8 ONLY — NOT VALID IN CU7
+        #    // header.addTask(classNum(Jay_QueueProcessorBatch),
+        #    //    methodStr(Jay_QueueProcessorBatch, processQueue_BatchTag),
+        #    //    args);
+        #
+        #    // ✅ CU7-safe
+        #    header.addTask(job);
+        #    header.save();
+        #}
+        #
+        #
+      ENDSOURCE
+      SOURCE #delaystart_QueueProcessor
+        #static void delaystart_QueueProcessor(RecId _ctrlRecId, int _delayMinutes)
+        #{
+        #    BatchHeader             header;
+        #    Jay_QueueProcessorBatch job;
+        #    Jay_DocExport_CtrlTbl   ctrl;
+        #    BatchCaption            caption;
+        #    utcDateTime             fromUtc;
+        #    utcDateTime             toUtc;
+        #    str                     docTypeTxt;
+        #    str                     priorityTxt;
+        #    TimeZone                tz;
+        #    utcDateTime             localFrom;
+        #    utcDateTime             localTo;
+        #    str                     localFromStr;
+        #    str                     localToStr;
+        #
+        #    // Policy gate
+        #    Jay_PrintOpsSecurity::requireRevverAdmin();
+        #
+        #    select firstOnly ctrl
+        #        where ctrl.RecId == _ctrlRecId;
+        #
+        #    if (ctrl.RecId)
+        #    {
+        #        fromUtc      = ctrl.ExportFromUtc;
+        #        toUtc        = ctrl.ExportToUtc;
+        #        docTypeTxt   = enum2str(ctrl.ExportDocType);
+        #        priorityTxt  = enum2str(ctrl.ExportPriority);
+        #        tz           = DateTimeUtil::getUserPreferredTimeZone();
+        #        localFrom    = DateTimeUtil::applyTimeZoneOffset(fromUtc, tz);
+        #        localTo      = DateTimeUtil::applyTimeZoneOffset(toUtc,   tz);
+        #        localFromStr = DateTimeUtil::toStr(localFrom);
+        #        localToStr   = DateTimeUtil::toStr(localTo);
+        #        caption      = strFmt("Queue Processor [%1/%2 | %3 → %4]",
+        #                              docTypeTxt, priorityTxt, localFromStr, localToStr);
+        #    }
+        #    else
+        #    {
+        #        caption = "Jay Queue Processor";
+        #    }
+        #
+        #    header = BatchHeader::construct();
+        #    header.parmCaption(caption);
+        #
+        #    if (_delayMinutes > 0)
+        #    {
+        #        header.parmStartDateTime(DateTimeUtil::addMinutes(DateTimeUtil::utcNow(), _delayMinutes));
+        #    }
+        #
+        #    job = new Jay_QueueProcessorBatch();
+        #    job.parmCaption(caption);
+        #    job.parmRecid(_ctrlRecId);
+        #
+        #    header.addTask(job);
+        #    header.save();
+        #}
+      ENDSOURCE
+      SOURCE #main
+        #
+        #public static void main(Args _args)
+        #{
+        #    Jay_QueueProcessorBatch batch = new Jay_QueueProcessorBatch();
+        #
+        #    if (BatchHeader::isExecutingInBatch())
+        #    {
+        #        batch.run(); // silent
+        #    }
+        #    else
+        #    {
+        #        batch.run(); // still silent, no dialog
+        #    }
+        #}
+      ENDSOURCE
+      SOURCE #print
+        #/// <summary>
+        #/// Routes print operations by document type.
+        #/// </summary>
+        #/// <param name="_docType">Document type (Confirmation, Invoice, etc.).</param>
+        #/// <param name="_subType">Document subtype (if applicable).</param>
+        #/// <param name="_recId">Source record RecId.</param>
+        #/// <returns>True if the print succeeded.</returns>
+        #/// <remarks>
+        #/// Centralized entrypoint for PrecisionForms SSRS print jobs.
+        #/// </remarks>
+        #public static boolean print(Common _queueRec)
+        #{
+        #    Jay_DocExportDocType     docType;
+        #    Jay_DocExportDocSubType  subType;
+        #    boolean                  success = false;
+        #
+        #    // Infer document type from the buffer
+        #    switch (_queueRec.TableId)
+        #    {
+        #        case tableNum(Jay_DocExportHistQueue):
+        #            docType = _queueRec.(fieldNum(Jay_DocExportHistQueue, ExportDocType));
+        #            subType = _queueRec.(fieldNum(Jay_DocExportHistQueue, ExportDocSubType));
+        #            break;
+        #        case tableNum(Jay_DocExportProdQueue):
+        #            docType = _queueRec.(fieldNum(Jay_DocExportProdQueue, ExportDocType));
+        #            subType = _queueRec.(fieldNum(Jay_DocExportProdQueue, ExportDocSubType));
+        #            break;
+        #        default:
+        #            throw error(strFmt("Unsupported queue table: %1", tableId2Name(_queueRec.TableId)));
+        #    }
+        #
+        #    try
+        #    {
+        #        switch (docType)
+        #        {
+        #            case Jay_DocExportDocType::Confirmation:
+        #                success = Jay_QueueProcessorBatch::printConfirmation(_queueRec);
+        #                break;
+        #            case Jay_DocExportDocType::Invoice:
+        #                success = Jay_QueueProcessorBatch::printInvoice(_queueRec);
+        #                break;
+        #            case Jay_DocExportDocType::PurchaseOrder:
+        #                success = Jay_QueueProcessorBatch::printPurchaseOrder(_queueRec);
+        #                break;
+        #            case Jay_DocExportDocType::MSRP:
+        #                success = Jay_QueueProcessorBatch::printMSRP(_queueRec);
+        #                break;
+        #            case Jay_DocExportDocType::CertificateOfOrigin:
+        #                success = Jay_QueueProcessorBatch::printCertificateOfOrigin(_queueRec);
+        #                break;
+        #            default:
+        #                warning(strFmt("⚠ No print handler implemented for DocType=%1", docType));
+        #                break;
+        #        }
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        error(strFmt("❌ Exception while routing print. CtrlRecId=%1 DocType=%2 SubDocType=%3",
+        #                     _queueRec.(fieldNum(Jay_DocExportHistQueue, CtrlRecId)), docType, subType));
+        #        success = false;
+        #    }
+        #
+        #    return success;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #printCertificateOfOrigin
+        #public static boolean printCertificateOfOrigin(Common _queueRec)
+        #{
+        #    Jay_DocExportDocSubType  subType;
+        #    RecId                    recId;
+        #    utcDateTime              fromUtc;
+        #    utcDateTime              toUtc;
+        #    RecId                    ctrlRecId;
+        #    Jay_DocExport_CtrlTbl    ctrl;
+        #    SalesTable               salesTable;
+        #    McaLoadDocsController    controller;
+        #    McaLoadDocsRptContract   contract;
+        #    SalesIdBase              salesId;
+        #    AMDeviceIdBase           deviceId;
+        #    Args                     args;
+        #
+        #    // -------------------------------------
+        #    // Normalize field extraction by table
+        #    // -------------------------------------
+        #    switch (_queueRec.TableId)
+        #    {
+        #        case tableNum(Jay_DocExportHistQueue):
+        #            subType   = _queueRec.(fieldNum(Jay_DocExportHistQueue, ExportDocSubType));
+        #            recId     = _queueRec.(fieldNum(Jay_DocExportHistQueue, SourceRecId));
+        #            fromUtc   = _queueRec.(fieldNum(Jay_DocExportHistQueue, ExportFromUtc));
+        #            toUtc     = _queueRec.(fieldNum(Jay_DocExportHistQueue, ExportToUtc));
+        #            ctrlRecId = _queueRec.(fieldNum(Jay_DocExportHistQueue, CtrlRecId));
+        #            salesId = _queueRec.(fieldNum(Jay_DocExportHistQueue, RefId1));
+        #            deviceId = _queueRec.(fieldNum(Jay_DocExportHistQueue, RefId2));
+        #            break;
+        #
+        #        case tableNum(Jay_DocExportProdQueue):
+        #            subType   = _queueRec.(fieldNum(Jay_DocExportProdQueue, ExportDocSubType));
+        #            recId     = _queueRec.(fieldNum(Jay_DocExportProdQueue, SourceRecId));
+        #            fromUtc   = _queueRec.(fieldNum(Jay_DocExportProdQueue, ExportFromUtc));
+        #            toUtc     = _queueRec.(fieldNum(Jay_DocExportProdQueue, ExportToUtc));
+        #            ctrlRecId = _queueRec.(fieldNum(Jay_DocExportProdQueue, CtrlRecId));
+        #            salesId = _queueRec.(fieldNum(Jay_DocExportProdQueue, RefId1));
+        #            deviceId = _queueRec.(fieldNum(Jay_DocExportProdQueue, RefId2));
+        #            break;
+        #
+        #        default:
+        #            throw error(strFmt("Unsupported queue record type: %1", tableId2Name(_queueRec.TableId)));
+        #    }
+        #
+        #    // -------------------------------------
+        #    // Actual print logic
+        #    // -------------------------------------
+        #    try
+        #    {
+        #
+        #        controller = new McaLoadDocsController();
+        #        controller.parmReportName(ssrsReportStr(McaLoadDocsCertificateOfOriginReport, CertificateOfOrigin));
+        #
+        #        contract = new McaLoadDocsRptContract();
+        #        contract.parmSalesId(salesId);
+        #        contract.parmAMDeviceId(deviceId);
+        #
+        #        select firstOnly salesTable where salesTable.RecId == recId && salesTable.DataAreaId == curext();
+        #        args = new Args();
+        #        args.record(salesTable);
+        #
+        #        controller.parmArgs(args);
+        #        controller.parmReportContract().parmRdpContract(contract);
+        #        controller.parmShowDialog(false);
+        #        controller.startOperation();
+        #
+        #        info(strFmt("✔ Printed Certificate of Origin: SalesId=%1 | CtrlRecId=%2 | QueueRecId=%3",
+        #                    salesTable.SalesId,
+        #                    ctrlRecId,
+        #                    _queueRec.RecId));
+        #        return true;
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        error(strFmt("❌ Failed to print CertificateOfOrigin — CtrlRecId=%1 QueueRecId=%2",
+        #                     ctrlRecId,
+        #                     _queueRec.RecId));
+        #        return false;
+        #    }
+        #}
+      ENDSOURCE
+      SOURCE #printConfirmation
+        #/// <summary>
+        #/// Print a Sales Confirmation document.
+        #/// </summary>
+        #/// <param name="_subType">Document subtype (unused).</param>
+        #/// <param name="_recId">CustConfirmJour.RecId.</param>
+        #/// <returns>True if print succeeded.</returns>
+        #/// <remarks>
+        #/// Uses SalesConfirmController; outputs XML to PF path defined in System Admin > PrecisionForms > Defaults.
+        #/// </remarks>
+        #public static boolean printConfirmation(Common _queueRec)
+        #{
+        #    Jay_DocExportDocSubType  subType;
+        #    RecId                    recId;
+        #    utcDateTime              fromUtc;
+        #    utcDateTime              toUtc;
+        #    RecId                    ctrlRecId;
+        #    Jay_DocExport_CtrlTbl    ctrl;
+        #    CustConfirmJour          journal;
+        #    SalesConfirmController   controller;
+        #    SalesConfirmContract     contract;
+        #    Args                     args;
+        #
+        #    // -------------------------------------
+        #    // Normalize field extraction by table
+        #    // -------------------------------------
+        #    switch (_queueRec.TableId)
+        #    {
+        #        case tableNum(Jay_DocExportHistQueue):
+        #            subType   = _queueRec.(fieldNum(Jay_DocExportHistQueue, ExportDocSubType));
+        #            recId     = _queueRec.(fieldNum(Jay_DocExportHistQueue, SourceRecId));
+        #            ctrlRecId = _queueRec.(fieldNum(Jay_DocExportHistQueue, CtrlRecId));
+        #            break;
+        #
+        #        case tableNum(Jay_DocExportProdQueue):
+        #            subType   = _queueRec.(fieldNum(Jay_DocExportProdQueue, ExportDocSubType));
+        #            recId     = _queueRec.(fieldNum(Jay_DocExportProdQueue, SourceRecId));
+        #            ctrlRecId = _queueRec.(fieldNum(Jay_DocExportProdQueue, CtrlRecId));
+        #            break;
+        #
+        #        default:
+        #            throw error(strFmt("Unsupported queue record type: %1", tableId2Name(_queueRec.TableId)));
+        #    }
+        #
+        #    // -------------------------------------
+        #    // Actual print logic
+        #    // -------------------------------------
+        #    try
+        #    {
+        #
+        #        /*if (!journal.RecId || !journal.SalesId || !journal.ConfirmId)
+        #        {
+        #            warning(strFmt("⚠ Skipping RecId %1 — missing key fields.", recId));
+        #            return false;
+        #        }*/
+        #
+        #        controller = SalesConfirmController::construct();
+        #        controller.parmReportName(ssrsReportStr(SalesConfirm, Report));
+        #
+        #        contract = new SalesConfirmContract();
+        #        contract.parmRecordId(recId);
+        #
+        #        select firstOnly journal where journal.RecId == recId && journal.DataAreaId == curext();
+        #
+        #        args = new Args();
+        #        args.record(journal);
+        #
+        #        controller.parmArgs(args);
+        #        controller.parmReportContract().parmRdpContract(contract);
+        #        controller.parmShowDialog(false);
+        #        controller.startOperation();
+        #
+        #        info(strFmt("✔ Printed Sales Confirmation: SalesId=%1 CtrlRecId=%2 QueueRecId=%3",
+        #                    journal.SalesId, ctrlRecId, _queueRec.RecId));
+        #        return true;
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        error(strFmt("❌ Failed to print Sales Confirmation — CtrlRecId=%1 QueueRecId=%2",
+        #                     ctrlRecId, _queueRec.RecId));
+        #        return false;
+        #    }
+        #}
+        #
+      ENDSOURCE
+      SOURCE #printInvoice
+        #/// <summary>
+        #/// Print a Sales Invoice document.
+        #/// </summary>
+        #/// <param name="_subType">Document subtype (unused).</param>
+        #/// <param name="_recId">CustInvoiceJour.RecId.</param>
+        #/// <returns>True if print succeeded.</returns>
+        #/// <remarks>
+        #/// Uses SalesInvoiceController; output routed to PrecisionForms XML output.
+        #/// </remarks>
+        #
+        #public static boolean printInvoice(Common _queueRec)
+        #{
+        #    Jay_DocExportDocSubType  subType;
+        #    RecId                    recId;
+        #    utcDateTime              fromUtc;
+        #    utcDateTime              toUtc;
+        #    RecId                    ctrlRecId;
+        #    Jay_DocExport_CtrlTbl    ctrl;
+        #    CustInvoiceJour          jour;
+        #    SalesInvoiceController   controller;
+        #    SalesInvoiceContract     contract;
+        #    Args                     args;
+        #
+        #    // -------------------------------------
+        #    // Normalize field extraction by table
+        #    // -------------------------------------
+        #    switch (_queueRec.TableId)
+        #    {
+        #        case tableNum(Jay_DocExportHistQueue):
+        #            subType   = _queueRec.(fieldNum(Jay_DocExportHistQueue, ExportDocSubType));
+        #            recId     = _queueRec.(fieldNum(Jay_DocExportHistQueue, SourceRecId));
+        #            fromUtc   = _queueRec.(fieldNum(Jay_DocExportHistQueue, ExportFromUtc));
+        #            toUtc     = _queueRec.(fieldNum(Jay_DocExportHistQueue, ExportToUtc));
+        #            ctrlRecId = _queueRec.(fieldNum(Jay_DocExportHistQueue, CtrlRecId));
+        #            break;
+        #
+        #        case tableNum(Jay_DocExportProdQueue):
+        #            subType   = _queueRec.(fieldNum(Jay_DocExportProdQueue, ExportDocSubType));
+        #            recId     = _queueRec.(fieldNum(Jay_DocExportProdQueue, SourceRecId));
+        #            fromUtc   = _queueRec.(fieldNum(Jay_DocExportProdQueue, ExportFromUtc));
+        #            toUtc     = _queueRec.(fieldNum(Jay_DocExportProdQueue, ExportToUtc));
+        #            ctrlRecId = _queueRec.(fieldNum(Jay_DocExportProdQueue, CtrlRecId));
+        #            break;
+        #
+        #        default:
+        #            throw error(strFmt("Unsupported queue record type: %1", tableId2Name(_queueRec.TableId)));
+        #    }
+        #
+        #    // -------------------------------------
+        #    // Actual print logic
+        #    // -------------------------------------
+        #    try
+        #    {
+        #
+        #
+        #        controller = new SalesInvoiceController();
+        #        controller.parmReportName(ssrsReportStr(SalesInvoice, Report));
+        #
+        #        contract = new SalesInvoiceContract();
+        #        contract.parmRecordId(recId);
+        #
+        #        select firstOnly jour where jour.RecId == recId && jour.DataAreaId == curext();
+        #        args = new Args();
+        #        args.record(jour);
+        #
+        #        controller.parmArgs(args);
+        #        controller.parmReportContract().parmRdpContract(contract);
+        #        controller.parmShowDialog(false);
+        #        controller.startOperation();
+        #
+        #        info(strFmt("✔ Printed Sales Invoice: InvoiceId=%1 SalesId=%2 CtrlRecId=%3 QueueRecId=%4",
+        #                    jour.InvoiceId, jour.SalesId, ctrlRecId, _queueRec.RecId));
+        #        return true;
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        error(strFmt("❌ Failed to print Invoice — CtrlRecId=%1 QueueRecId=%2", ctrlRecId, _queueRec.RecId));
+        #        return false;
+        #    }
+        #}
+        #
+      ENDSOURCE
+      SOURCE #printMSRP
+        #/// <summary>
+        #/// Print an MSRP Sheet.
+        #/// </summary>
+        #/// <param name="_recId">SalesTable.RecId.</param>
+        #/// <returns>True if print succeeded.</returns>
+        #/// <remarks>
+        #/// Uses McaLoadDocsController and McaLoadDocsMSRPSheetReport.
+        #/// Output XML stored in PF path for MSRP Sheets.
+        #/// </remarks>
+        #public static boolean printMSRP(Common _queueRec)
+        #{
+        #    Jay_DocExportDocSubType  subType;
+        #    RecId                    recId;
+        #    utcDateTime              fromUtc;
+        #    utcDateTime              toUtc;
+        #    RecId                    ctrlRecId;
+        #    Jay_DocExport_CtrlTbl    ctrl;
+        #    SalesTable               salesTable;
+        #    McaLoadDocsController    controller;
+        #    McaLoadDocsRptContract   contract;
+        #    SalesIdBase              salesId;
+        #    AMDeviceIdBase           deviceId;
+        #    Args                     args;
+        #
+        #    // -------------------------------------
+        #    // Normalize field extraction by table
+        #    // -------------------------------------
+        #    switch (_queueRec.TableId)
+        #    {
+        #        case tableNum(Jay_DocExportHistQueue):
+        #            subType   = _queueRec.(fieldNum(Jay_DocExportHistQueue, ExportDocSubType));
+        #            recId     = _queueRec.(fieldNum(Jay_DocExportHistQueue, SourceRecId));
+        #            fromUtc   = _queueRec.(fieldNum(Jay_DocExportHistQueue, ExportFromUtc));
+        #            toUtc     = _queueRec.(fieldNum(Jay_DocExportHistQueue, ExportToUtc));
+        #            ctrlRecId = _queueRec.(fieldNum(Jay_DocExportHistQueue, CtrlRecId));
+        #            salesId = _queueRec.(fieldNum(Jay_DocExportHistQueue, RefId1));
+        #            deviceId = _queueRec.(fieldNum(Jay_DocExportHistQueue, RefId2));
+        #            break;
+        #
+        #        case tableNum(Jay_DocExportProdQueue):
+        #            subType   = _queueRec.(fieldNum(Jay_DocExportProdQueue, ExportDocSubType));
+        #            recId     = _queueRec.(fieldNum(Jay_DocExportProdQueue, SourceRecId));
+        #            fromUtc   = _queueRec.(fieldNum(Jay_DocExportProdQueue, ExportFromUtc));
+        #            toUtc     = _queueRec.(fieldNum(Jay_DocExportProdQueue, ExportToUtc));
+        #            ctrlRecId = _queueRec.(fieldNum(Jay_DocExportProdQueue, CtrlRecId));
+        #            salesId = _queueRec.(fieldNum(Jay_DocExportProdQueue, RefId1));
+        #            deviceId = _queueRec.(fieldNum(Jay_DocExportProdQueue, RefId2));
+        #            break;
+        #
+        #        default:
+        #            throw error(strFmt("Unsupported queue record type: %1", tableId2Name(_queueRec.TableId)));
+        #    }
+        #
+        #    // -------------------------------------
+        #    // Actual print logic
+        #    // -------------------------------------
+        #    try
+        #    {
+        #        controller = new McaLoadDocsController();
+        #        controller.parmReportName(ssrsReportStr(McaLoadDocsMSRPSheetReport, MSRPSheet));
+        #
+        #        contract = new McaLoadDocsRptContract();
+        #        contract.parmSalesId(salesId);
+        #        contract.parmAMDeviceId(deviceId);
+        #
+        #        select firstOnly salesTable where salesTable.RecId == recId && salesTable.DataAreaId == curext();
+        #
+        #        args = new Args();
+        #        args.record(salesTable);
+        #
+        #        controller.parmArgs(args);
+        #        controller.parmReportContract().parmRdpContract(contract);
+        #        controller.parmShowDialog(false);
+        #        controller.startOperation();
+        #
+        #        info(strFmt("✔ Printed MSRP Sheet: SalesId=%1 RecId=%2",
+        #        salesTable, recId));
+        #        return true;
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #           error(strFmt("❌ Failed to print MSRP (RecId=%1)", recId));
+        #           return false;
+        #    }
+        #}
+      ENDSOURCE
+      SOURCE #printPurchaseOrder
+        #/// <summary>
+        #/// Print a Purchase Order document.
+        #/// </summary>
+        #/// <param name="_subType">Document subtype (unused).</param>
+        #/// <param name="_recId">PurchTable.RecId.</param>
+        #/// <returns>True if print succeeded.</returns>
+        #/// <remarks>
+        #/// Invokes PurchPurchaseOrderController; routes to vendor PrecisionForms XML destination.
+        #/// </remarks>
+        #public static boolean printPurchaseOrder(Common _queueRec)
+        #{
+        #    Jay_DocExportDocSubType      subType;
+        #    RecId                        recId;
+        #    utcDateTime                  fromUtc;
+        #    utcDateTime                  toUtc;
+        #    RecId                        ctrlRecId;
+        #    Jay_DocExport_CtrlTbl        ctrl;
+        #    PurchTable                   purchTable;
+        #    PurchParmTable               parmTable;
+        #    PurchPurchaseOrderController controller;
+        #    PurchPurchaseOrderContract   contract;
+        #    PurchIdBase                  purchId;
+        #    Args                         args;
+        #
+        #    // -------------------------------------
+        #    // Normalize field extraction by table
+        #    // -------------------------------------
+        #    switch (_queueRec.TableId)
+        #    {
+        #        case tableNum(Jay_DocExportHistQueue):
+        #            subType   = _queueRec.(fieldNum(Jay_DocExportHistQueue, ExportDocSubType));
+        #            recId     = _queueRec.(fieldNum(Jay_DocExportHistQueue, SourceRecId));
+        #            fromUtc   = _queueRec.(fieldNum(Jay_DocExportHistQueue, ExportFromUtc));
+        #            toUtc     = _queueRec.(fieldNum(Jay_DocExportHistQueue, ExportToUtc));
+        #            ctrlRecId = _queueRec.(fieldNum(Jay_DocExportHistQueue, CtrlRecId));
+        #            purchId   = _queueRec.(fieldNum(Jay_DocExportHistQueue, RefId1));
+        #            break;
+        #
+        #        case tableNum(Jay_DocExportProdQueue):
+        #            subType   = _queueRec.(fieldNum(Jay_DocExportProdQueue, ExportDocSubType));
+        #            recId     = _queueRec.(fieldNum(Jay_DocExportProdQueue, SourceRecId));
+        #            fromUtc   = _queueRec.(fieldNum(Jay_DocExportProdQueue, ExportFromUtc));
+        #            toUtc     = _queueRec.(fieldNum(Jay_DocExportProdQueue, ExportToUtc));
+        #            ctrlRecId = _queueRec.(fieldNum(Jay_DocExportProdQueue, CtrlRecId));
+        #            purchId   = _queueRec.(fieldNum(Jay_DocExportProdQueue, RefId1));
+        #            break;
+        #
+        #        default:
+        #            throw error(strFmt("Unsupported queue record type: %1", tableId2Name(_queueRec.TableId)));
+        #    }
+        #
+        #    // -------------------------------------
+        #    // Actual print logic
+        #    // -------------------------------------
+        #    try
+        #    {
+        #
+        #        controller = PurchPurchaseOrderController::construct();
+        #        controller.parmReportName(ssrsReportStr(PurchPurchaseOrder, Report));
+        #
+        #        contract = new PurchPurchaseOrderContract();
+        #        contract.parmRecordId(recId);
+        #
+        #         select firstOnly parmTable where parmTable.PurchId == purchTable.PurchId && parmTable.DataAreaId == curext();
+        #
+        #
+        #        args = new Args();
+        #        args.record(purchTable);
+        #
+        #        controller.parmArgs(args);
+        #        controller.parmReportContract().parmRdpContract(contract);
+        #        controller.parmShowDialog(false);
+        #        controller.startOperation();
+        #
+        #        info(strFmt("✔ Printed Purchase Order: %1 | CtrlRecId=%2 | QueueRecId=%3",
+        #                    purchId,
+        #                    ctrlRecId,
+        #                    _queueRec.RecId));
+        #        return true;
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        error(strFmt("❌ Failed to print Purchase Order — CtrlRecId=%1 QueueRecId=%2", ctrlRecId, _queueRec.RecId));
+        #        return false;
+        #    }
+        #}
+      ENDSOURCE
+      SOURCE #start_BatchTag
+        #/// summary
+        #/// Launches a queue processor for a specific BatchTag.
+        #/// end summary
+        #public static void start_BatchTag(RecId _ctrlRecId, guid _batchTag, Jay_DocExportQueuePriority _priority)
+        #{
+        #    BatchHeader             header = BatchHeader::construct();
+        #    Jay_QueueProcessorBatch job    = new Jay_QueueProcessorBatch();
+        #
+        #    header.parmCaption(
+        #        strFmt("%1 Queue Processor — Ctrl:%2 Tag:%3",
+        #               enum2str(_priority), _ctrlRecId, guid2str(_batchTag))
+        #    );
+        #
+        #    job.parmRecid(_ctrlRecId);
+        #    job.parmBatchTag(_batchTag);
+        #    job.parmCaption(header.parmCaption());
+        #    job.parmFunctionName("processQueue_BatchTag");
+        #
+        #    header.addTask(job);
+        #    header.save();
+        #}
+        #
+      ENDSOURCE
+      SOURCE #start_QueueProcessor
+        #// Jay_QueueProcessorBatch
+        #static void start_QueueProcessor(RecId _ctrlRecId)
+        #{
+        #    BatchHeader             header;
+        #    Jay_QueueProcessorBatch job;
+        #    Jay_DocExport_CtrlTbl   ctrl;
+        #    BatchCaption            caption;
+        #    utcDateTime             fromUtc;
+        #    utcDateTime             toUtc;
+        #    str                     docTypeTxt;
+        #    str                     priorityTxt;
+        #    TimeZone                tz;
+        #    utcDateTime             localFrom;
+        #    utcDateTime             localTo;
+        #    str                     localFromStr;
+        #    str                     localToStr;
+        #
+        #    // Policy gate
+        #    Jay_PrintOpsSecurity::requireRevverAdmin();
+        #
+        #    select firstOnly ctrl
+        #        where ctrl.RecId == _ctrlRecId;
+        #
+        #    if (ctrl.RecId)
+        #    {
+        #        fromUtc      = ctrl.ExportFromUtc;
+        #        toUtc        = ctrl.ExportToUtc;
+        #        docTypeTxt   = enum2str(ctrl.ExportDocType);
+        #        priorityTxt  = enum2str(ctrl.ExportPriority);
+        #        tz           = DateTimeUtil::getUserPreferredTimeZone();
+        #        localFrom    = DateTimeUtil::applyTimeZoneOffset(fromUtc, tz);
+        #        localTo      = DateTimeUtil::applyTimeZoneOffset(toUtc,   tz);
+        #        localFromStr = DateTimeUtil::toStr(localFrom);
+        #        localToStr   = DateTimeUtil::toStr(localTo);
+        #        caption      = strFmt("Queue Processor [%1/%2 | %3 → %4]",
+        #                              docTypeTxt, priorityTxt, localFromStr, localToStr);
+        #    }
+        #    else
+        #    {
+        #        caption = "Jay Queue Processor";
+        #    }
+        #
+        #    header = BatchHeader::construct();
+        #    header.parmCaption(caption);
+        #
+        #    job = new Jay_QueueProcessorBatch();
+        #    job.parmCaption(caption);
+        #    job.parmRecid(_ctrlRecId);
+        #
+        #    header.addTask(job);
+        #    header.save();
+        #}
+      ENDSOURCE
+    ENDMETHODS
+  ENDCLASS
+
+***Element: END

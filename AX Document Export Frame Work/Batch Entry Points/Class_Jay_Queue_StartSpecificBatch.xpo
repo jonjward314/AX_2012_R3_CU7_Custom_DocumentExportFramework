@@ -1,0 +1,115 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: CLS
+
+; Microsoft Dynamics AX Class: Jay_Queue_StartSpecificBatch unloaded
+; --------------------------------------------------------------------------------
+  CLSVERSION 1
+  
+  CLASS #Jay_Queue_StartSpecificBatch
+    PROPERTIES
+      Name                #Jay_Queue_StartSpecificBatch
+      Extends             #RunBaseBatch
+      Origin              #{DCB1433A-ECD2-43C5-9AC4-798CEC1E4EFB}
+    ENDPROPERTIES
+    
+    METHODS
+      SOURCE #classDeclaration
+        #class Jay_Queue_StartSpecificBatch extends RunBaseBatch
+        #{
+        #    RecId       ctrlRecId;
+        #    DialogField dfCtrl;
+        #
+        #    #define.CurrentVersion(1)
+        #    #localmacro.CurrentList
+        #        ctrlRecId
+        #    #endmacro
+        #}
+        #
+        #
+      ENDSOURCE
+      SOURCE #dialog
+        #// =======================================================================
+        #//  Jay_Queue_StartSpecificBatch
+        #//  Purpose : Launch a single queue processor for a specific control record.
+        #//  Context : Used by RevverAdmin for ad-hoc testing or recovery.
+        #//  Notes   : Batch-safe (RunBaseBatch).  Dialog asks for Control RecId.
+        #// =======================================================================
+        #
+        #public Object dialog()
+        #{
+        #    // Build dialog for manual selection.
+        #    DialogRunbase dlg = super();
+        #    dfCtrl = dlg.addField(extendedTypeStr(RefRecId), "Control RecId");
+        #    return dlg;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #getFromDialog
+        #
+        #public boolean getFromDialog()
+        #{
+        #    // Capture dialog value.
+        #    boolean ok = super();
+        #    ctrlRecId = dfCtrl.value();
+        #    return ok;
+        #}
+        #
+        #
+      ENDSOURCE
+      SOURCE #pack
+        #public container pack()
+        #{
+        #    // Persist batch parameters.
+        #    return [#CurrentVersion, #CurrentList];
+        #}
+        #
+        #
+      ENDSOURCE
+      SOURCE #run
+        #public void run()
+        #{
+        #    // Execute processor for chosen control record.
+        #    Jay_PrintOpsSecurity::requireRevverAdmin();
+        #    Jay_QueueProcessorBatch::start_QueueProcessor(ctrlRecId);
+        #    info(strFmt("Started Queue Processor for control %1.", ctrlRecId));
+        #}
+        #
+        #
+      ENDSOURCE
+      SOURCE #unpack
+        #public boolean unpack(container _packed)
+        #{
+        #    // Restore batch parameters when executing in batch.
+        #    Version v = conPeek(_packed,1);
+        #    if (v == #CurrentVersion)
+        #        [v, #CurrentList] = _packed;
+        #    else
+        #        return false;
+        #    return true;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #main
+        #
+        #public static void main(Args _args)
+        #{
+        #    // Entry point: prompt for RecId if run manually.
+        #    Jay_Queue_StartSpecificBatch job = new Jay_Queue_StartSpecificBatch();
+        #
+        #    if (BatchHeader::isExecutingInBatch())
+        #    {
+        #        job.run();   // Silent batch execution
+        #    }
+        #    else if (job.prompt())
+        #    {
+        #        job.run();   // Interactive run
+        #    }
+        #}
+        #
+      ENDSOURCE
+    ENDMETHODS
+  ENDCLASS
+
+***Element: END

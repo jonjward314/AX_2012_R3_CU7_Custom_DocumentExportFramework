@@ -1,0 +1,475 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: DBT
+
+; Microsoft Dynamics AX Table : Jay_DocExportRuntimeSettingsTable unloaded
+; --------------------------------------------------------------------------------
+  TABLEVERSION 1
+  
+  TABLE #Jay_DocExportRuntimeSettingsTable
+    EnforceFKRelation 1
+    PROPERTIES
+      Name                #Jay_DocExportRuntimeSettingsTable
+      CreateRecIdIndex    #Yes
+      PrimaryIndex        #SurrogateKey
+      ClusterIndex        #SurrogateKey
+      Origin              #{1190C231-DDAD-4A16-AB50-A92AF50D2B58}
+    ENDPROPERTIES
+    
+    FIELDS
+      FIELD #BatchGroupPrint
+        STRING
+        PROPERTIES
+          Name                #BatchGroupPrint
+          Table               #Jay_DocExportRuntimeSettingsTable
+          Origin              #{ADE50BBF-0D43-478A-AADD-E740588443DD}
+        ENDPROPERTIES
+        
+      FIELD #CaptionQueueProcessor
+        STRING
+        PROPERTIES
+          Name                #CaptionQueueProcessor
+          Table               #Jay_DocExportRuntimeSettingsTable
+          Origin              #{195AF88A-C99C-4CB2-9405-4C86834F9B79}
+          StringSize          #120
+        ENDPROPERTIES
+        
+      FIELD #DocQueueCadenceMin
+        INT
+        PROPERTIES
+          Name                #DocQueueCadenceMin
+          Table               #Jay_DocExportRuntimeSettingsTable
+          Origin              #{B9412CF2-0ABA-4228-997F-F46512DFFB30}
+        ENDPROPERTIES
+        
+      FIELD #FailedReprintThresholdHours
+        INT
+        PROPERTIES
+          Name                #FailedReprintThresholdHours
+          Table               #Jay_DocExportRuntimeSettingsTable
+          Origin              #{27A03ADF-8E1D-4155-8DE2-8FE04B434D54}
+        ENDPROPERTIES
+        
+      FIELD #PauseDocFlow
+        ENUM
+        PROPERTIES
+          Name                #PauseDocFlow
+          Table               #Jay_DocExportRuntimeSettingsTable
+          Origin              #{E91390B9-1A01-4304-BDD9-18EEF4D29ACE}
+          EnumType            #NoYes
+        ENDPROPERTIES
+        
+      FIELD #PausePrintFlow
+        ENUM
+        PROPERTIES
+          Name                #PausePrintFlow
+          Table               #Jay_DocExportRuntimeSettingsTable
+          Origin              #{ABC1C97A-BE35-4660-A338-AB5FB4E2AB1B}
+          EnumType            #NoYes
+        ENDPROPERTIES
+        
+      FIELD #PrintCadenceMs
+        INT
+        PROPERTIES
+          Name                #PrintCadenceMs
+          Table               #Jay_DocExportRuntimeSettingsTable
+          Origin              #{165E437B-2B6D-4A36-80B0-45706C53AF4E}
+        ENDPROPERTIES
+        
+      FIELD #RevverUser
+        STRING
+        PROPERTIES
+          Name                #RevverUser
+          Label               #Revver User
+          Table               #Jay_DocExportRuntimeSettingsTable
+          Origin              #{B8DD5A59-142D-4CE0-A61D-2F4D1CF9AA43}
+          ExtendedDataType    #Name
+          StringSize          #60
+        ENDPROPERTIES
+        
+      FIELD #RuntimeMode
+        ENUM
+        PROPERTIES
+          Name                #RuntimeMode
+          Table               #Jay_DocExportRuntimeSettingsTable
+          Origin              #{2D62A517-E3C6-43C9-97D6-68A803660921}
+          EnumType            #Jay_DocExportRuntimeMode
+        ENDPROPERTIES
+        
+      FIELD #UNKNOWN
+        INT
+        PROPERTIES
+          Name                #UNKNOWN
+          Label               #Max Docs Per Hist Slice
+          Table               #Jay_DocExportRuntimeSettingsTable
+          Origin              #{A6A60F5E-2AE2-4E5C-9C4D-4D760359BDB4}
+        ENDPROPERTIES
+        
+      FIELD #UNKNOWN
+        INT
+        PROPERTIES
+          Type                #Enum
+          Name                #UNKNOWN
+          Label               #Enable Hist Print Cap
+          Table               #Jay_DocExportRuntimeSettingsTable
+          Origin              #{990E8814-56B1-4796-87A3-0BEEA0EE01FA}
+          ExtendedDataType    #NoYesId
+        ENDPROPERTIES
+        
+      FIELD #UNKNOWN
+        INT
+        PROPERTIES
+          Name                #UNKNOWN
+          Label               #Max Docs Per Prod Slice
+          Table               #Jay_DocExportRuntimeSettingsTable
+          Origin              #{31CE7AD8-F74C-4652-A9A7-8984075EF7C6}
+        ENDPROPERTIES
+        
+      FIELD #UNKNOWN
+        INT
+        PROPERTIES
+          Type                #Enum
+          Name                #UNKNOWN
+          Label               #Enable Prod Print Cap
+          Table               #Jay_DocExportRuntimeSettingsTable
+          Origin              #{5CC2FEF9-941C-4689-85B9-4AAFD86C7C9E}
+          ExtendedDataType    #NoYesId
+        ENDPROPERTIES
+        
+      FIELD #UNKNOWN
+        INT
+        PROPERTIES
+          Name                #UNKNOWN
+          Label               #Doc Exporter Automatic Queue Ignition
+          Table               #Jay_DocExportRuntimeSettingsTable
+          Origin              #{43AEF79D-0852-46B7-A14E-E5A3B13F7418}
+        ENDPROPERTIES
+        
+      FIELD #UNKNOWN
+        INT
+        PROPERTIES
+          Name                #UNKNOWN
+          Label               #SuperDrain Hour
+          Table               #Jay_DocExportRuntimeSettingsTable
+          Origin              #{71D20A75-DE33-407F-8909-F975AA0CB1E0}
+        ENDPROPERTIES
+        
+      FIELD #UNKNOWN
+        INT
+        PROPERTIES
+          Type                #Enum
+          Name                #UNKNOWN
+          Label               #EnableSuper Drain
+          Table               #Jay_DocExportRuntimeSettingsTable
+          Origin              #{F5079671-EC7C-48C0-A0D9-A83E164D2B1E}
+        ENDPROPERTIES
+        
+      FIELD #UNKNOWN
+        INT
+        PROPERTIES
+          Name                #UNKNOWN
+          Label               #Historical Start Hour
+          Table               #Jay_DocExportRuntimeSettingsTable
+          Origin              #{157D4C0E-17B6-4816-8E86-F6BC385BCC0A}
+        ENDPROPERTIES
+        
+      FIELD #UNKNOWN
+        INT
+        PROPERTIES
+          Name                #UNKNOWN
+          Table               #Jay_DocExportRuntimeSettingsTable
+          Origin              #{C85BEE4D-5443-4A3F-A2A8-5EA74726EB7F}
+        ENDPROPERTIES
+        
+      FIELD #UNKNOWN
+        INT
+        PROPERTIES
+          Name                #UNKNOWN
+          Label               #Max Stage batch Size
+          Table               #Jay_DocExportRuntimeSettingsTable
+          Origin              #{1831D98B-1B8E-4186-B454-567C08C84927}
+        ENDPROPERTIES
+        
+      FIELD #UNKNOWN
+        INT
+        PROPERTIES
+          Name                #UNKNOWN
+          Table               #Jay_DocExportRuntimeSettingsTable
+          Origin              #{DEE16001-C429-4D17-958B-ACAAC1A12732}
+        ENDPROPERTIES
+        
+      FIELD #UNKNOWN
+        INT
+        PROPERTIES
+          Type                #Enum
+          Name                #UNKNOWN
+          Label               #Arbitration Log Level
+          Table               #Jay_DocExportRuntimeSettingsTable
+          Origin              #{DD8146B8-22C1-4FCA-B8E5-B35EA98FB3EE}
+        ENDPROPERTIES
+        
+      FIELD #UNKNOWN
+        INT
+        PROPERTIES
+          Name                #UNKNOWN
+          Label               #Avoids Potential Lock Out Conditions Default 60 min
+          Table               #Jay_DocExportRuntimeSettingsTable
+          Origin              #{3459E9E6-7B9D-46D9-8806-D8659785257B}
+        ENDPROPERTIES
+        
+      FIELD #UNKNOWN
+        INT
+        PROPERTIES
+          Name                #UNKNOWN
+          Label               #Avoids Potential Lock Out Conditions Default 60 min
+          Table               #Jay_DocExportRuntimeSettingsTable
+          Origin              #{66A42324-56DA-46FC-A01C-D8BBBE61B168}
+        ENDPROPERTIES
+        
+      FIELD #UNKNOWN
+        INT
+        PROPERTIES
+          Name                #UNKNOWN
+          Label               #Arbitration Log Retention (Days)
+          Table               #Jay_DocExportRuntimeSettingsTable
+          Origin              #{D7890A09-3C97-4AB0-BA85-079FD6ED5C2B}
+        ENDPROPERTIES
+        
+      FIELD #UNKNOWN
+        INT
+        PROPERTIES
+          Name                #UNKNOWN
+          Label               #Print Governor Log Retention (Days)
+          Table               #Jay_DocExportRuntimeSettingsTable
+          Origin              #{976A2599-5061-45F6-A802-21852876AD07}
+        ENDPROPERTIES
+        
+      FIELD #UNKNOWN
+        INT
+        PROPERTIES
+          Name                #UNKNOWN
+          Label               #Defer Minutes when Capacity Exceeded
+          Table               #Jay_DocExportRuntimeSettingsTable
+          Origin              #{535DD226-704A-4B45-A4AF-6D8C3FFC5B78}
+        ENDPROPERTIES
+        
+      FIELD #UNKNOWN
+        INT
+        PROPERTIES
+          Name                #UNKNOWN
+          Label               #Max Concurrent Historical Controllers
+          Table               #Jay_DocExportRuntimeSettingsTable
+          Origin              #{33998B3A-7219-4C89-A839-8889CD761D7D}
+        ENDPROPERTIES
+        
+      FIELD #UNKNOWN
+        INT
+        PROPERTIES
+          Name                #UNKNOWN
+          Label               #ArbitrationIntervalMin
+          Table               #Jay_DocExportRuntimeSettingsTable
+          Origin              #{0078C826-09B9-4BFD-8615-795CC5CAE226}
+        ENDPROPERTIES
+        
+    ENDFIELDS
+    GROUPS
+    ENDGROUPS
+    
+    INDICES
+    ENDINDICES
+    FULLTEXTINDICES
+    ENDFULLTEXTINDICES
+    REFERENCES
+    ENDREFERENCES
+    
+    DELETEACTIONS
+    ENDDELETEACTIONS
+    
+    METHODS
+      SOURCE #initValue
+        #public void initValue()
+        #{
+        #    super();
+        #
+        #    // ---- CORE SAFETY PRESETS ----
+        #    this.RuntimeMode                 = Jay_DocExportRuntimeMode::SafeDeterministic;
+        #    this.BatchGroupPrint             = "BATCHPRINT";           // explicit stability
+        #    this.CaptionQueueProcessor       = "Default Processor";    // visible in UI/logs
+        #    this.DocQueueCadenceMin          = 30;                     // 30-minute windows
+        #    this.PrintCadenceMs              = 1000;                   // 1 sec pacing
+        #    this.PauseDocFlow                = NoYes::No;
+        #    this.PausePrintFlow              = NoYes::No;
+        #
+        #    // ---- LIVETHRESH & GOVERNANCE SAFETY ----
+        #    this.staleControllerMinutes      = 30;                     // auto-recover after 30 min inactivity
+        #    this.fatalLivelockMinutes        = 60;                     // escalate hard after 60 min stall
+        #    this.GovernorRetentionDays       = 30;                     // auto-clean dead controllers
+        #
+        #    // ---- ARBITRATION + LOGGING ----
+        #    this.ArbitrationIntervalMin      = 1;                      // arbitration sweep every 1 min
+        #    this.ArbitrationLogLevel         = Jay_ArbitrationLogLevel::Minimal;  // safe default
+        #    this.ArbitrationLogRetentionDays = 7;                      // a week of insight is generous for start
+        #
+        #    // ---- HISTORICAL & PRODUCTION BALANCE ----
+        #    this.HistoricalMaxConcurrent     = 1;                      // controlled at MVP
+        #    this.CapacityDeferMinutes        = 5;                      // yield 5 min if capacity exhausted
+        #
+        #    // ---- RETRY + DAMAGE PROTECTION ----
+        #    this.MaxAllowedPrintAttempts     = 3;                      // 3 failures → quarantine
+        #    this.FailedReprintThresholdHours = 24;                     // retry only if old enough
+        #
+        #    // ---- REVVER OR SERVICE USER STUB ----
+        #    this.RevverUser                  = "";                     // left empty on purpose (forces correctness later)
+        #
+        #    this.HistoricalStartHour       = 1;   // 1 AM
+        #    this.HistoricalEndHour         = 5;   // 5 AM
+        #    this.SuperDrainEnabled         = NoYes::No;
+        #    this.SuperDrainHour            = 4;   // 4 AM
+        #    this.Jay_AutoIgniter           = 15;   // 15 minutes
+        #    this.Prod_EnablePrintCap         = NoYes::Yes;    // ON by default
+        #    this.Prod_MaxDocsPerPrintSlice   = 1600;          // ~90% 1/sec × 30 min
+        #
+        #    this.Hist_EnablePrintCap         = NoYes::No;     // OFF by default
+        #    this.Hist_MaxDocsPerPrintSlice   = 5000;          // ready but not active by default
+        #
+        #
+        #
+        #}
+        #
+      ENDSOURCE
+      SOURCE #insert
+        #public void insert()
+        #{
+        #    Jay_DocExportRuntimeSettingsTable Settings;
+        #
+        #    // Enforce singleton per company
+        #    select firstOnly Settings
+        #        where Settings.dataAreaId == curext();
+        #
+        #    if (Settings.RecId)
+        #    {
+        #        error("@SYS22594"); // "Record already exists" or craft your own label
+        #        return;
+        #    }
+        #
+        #    super();
+        #}
+      ENDSOURCE
+      SOURCE #validateWrite
+        #public boolean validateWrite()
+        #{
+        #    Jay_DocExportRuntimeSettingsTable existing;
+        #    boolean ok = super();
+        #
+        #    if (!ok)
+        #        return false;
+        #
+        #    select firstOnly RecId from existing
+        #        where existing.RecId != this.RecId
+        #           && existing.DataAreaId == this.DataAreaId;
+        #
+        #    if (existing)
+        #    {
+        #        error("Only one Global Settings record is allowed per company.");
+        #        return false;
+        #    }
+        #
+        #    return true;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #findOrCreate
+        #public static Jay_DocExportRuntimeSettingsTable findOrCreate()
+        #{
+        #    Jay_DocExportRuntimeSettingsTable settings;
+        #
+        #    // Try existing first
+        #    select firstOnly settings;
+        #    if (settings.RecId)
+        #        return settings;
+        #
+        #    // Otherwise → CREATE SINGLETON
+        #    ttsBegin;
+        #    settings.clear();
+        #    settings.initValue();   // ✅ your defaults defined here are respected
+        #    settings.insert();      // persist durable baseline
+        #    ttsCommit;
+        #
+        #    return settings;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #start_QueueProcessor
+        #/// <summary>
+        #/// Safely starts the Queue Processor for the specified control record.
+        #/// Launches only if no Processor is already executing or waiting for this CtrlRecId.
+        #/// Arbitration is handled exclusively inside processQueue().
+        #/// </summary>
+        #public static void start_QueueProcessor(RecId _ctrlRecId)
+        #{
+        #    Jay_DocExport_CtrlTbl   ctrl;
+        #    BatchHeader             header;
+        #    Jay_QueueProcessorBatch job;
+        #    BatchCaption            caption;
+        #    utcDateTime             fromUtc;
+        #    utcDateTime             toUtc;
+        #    str                     docTypeTxt;
+        #    str                     priorityTxt;
+        #    TimeZone                tz;
+        #    utcDateTime             localFrom;
+        #    utcDateTime             localTo;
+        #    str                     localFromStr;
+        #    str                     localToStr;
+        #
+        #    // Policy gate — still enforced here
+        #    Jay_PrintOpsSecurity::requireRevverAdmin();
+        #
+        #    select firstOnly ctrl
+        #        where ctrl.RecId == _ctrlRecId;
+        #
+        #    if (!ctrl.RecId)
+        #    {
+        #        warning(strFmt("Cannot start Queue Processor — CtrlRecId %1 not found.", _ctrlRecId));
+        #        return;
+        #    }
+        #
+        #    // --- DUPLICATE LAUNCH PROTECTION ---
+        #    if (ctrl.CtrlStatus == Jay_DocExportCtrlStatus::Processing
+        #     || ctrl.CtrlStatus == Jay_DocExportCtrlStatus::Waiting)
+        #    {
+        #        info(strFmt("Queue Processor for CtrlRecId %1 is already active or pending — launch skipped.", _ctrlRecId));
+        #        return;
+        #    }
+        #
+        #    // Build caption (for visibility, non-governing)
+        #    fromUtc      = ctrl.ExportFromUtc;
+        #    toUtc        = ctrl.ExportToUtc;
+        #    docTypeTxt   = enum2str(ctrl.ExportDocType);
+        #    priorityTxt  = enum2str(ctrl.ExportPriority);
+        #    tz           = DateTimeUtil::getUserPreferredTimeZone();
+        #    localFrom    = DateTimeUtil::applyTimeZoneOffset(fromUtc, tz);
+        #    localTo      = DateTimeUtil::applyTimeZoneOffset(toUtc,   tz);
+        #    localFromStr = DateTimeUtil::toStr(localFrom);
+        #    localToStr   = DateTimeUtil::toStr(localTo);
+        #    caption      = strFmt("Queue Processor [%1/%2 | %3 → %4]",
+        #                          docTypeTxt, priorityTxt, localFromStr, localToStr);
+        #
+        #    // Now safely launch — nothing more
+        #    header = BatchHeader::construct();
+        #    header.parmCaption(caption);
+        #
+        #    job = new Jay_QueueProcessorBatch();
+        #    job.parmCaption(caption);
+        #    job.parmRecid(_ctrlRecId);
+        #
+        #    header.addTask(job);
+        #    header.save();
+        #}
+        #
+      ENDSOURCE
+    ENDMETHODS
+  ENDTABLE
+  
+
+***Element: END

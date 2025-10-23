@@ -1,0 +1,202 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: CLS
+
+; Microsoft Dynamics AX Class: Jay_LogMaintenanceService unloaded
+; --------------------------------------------------------------------------------
+  CLSVERSION 1
+  
+  CLASS #Jay_LogMaintenanceService
+    PROPERTIES
+      Name                #Jay_LogMaintenanceService
+      Extends             #RunBaseBatch
+      Origin              #{6769246C-16F3-4963-86B2-35A57705AEC8}
+    ENDPROPERTIES
+    
+    METHODS
+      SOURCE #caption
+        #public Description caption()
+        #{
+        #    return this.description();
+        #}
+      ENDSOURCE
+      SOURCE #classDeclaration
+        #/// <summary>
+        #/// Jay_LogMaintenanceService
+        #/// Batch service to purge aged export log/control records.
+        #/// - Completed records are purged after 7 days
+        #/// - Non-completed records are purged after 30 days
+        #/// </summary>
+        #class Jay_LogMaintenanceService extends RunBaseBatch
+        #{
+        #    #define.CurrentVersion(1)
+        #    #localmacro.CurrentList
+        #    #endmacro
+        #}
+        #
+      ENDSOURCE
+      SOURCE #description
+        #public Description description()
+        #{
+        #    return "Log Maintenance Service (purges completed @7d, others @30d)";
+        #}
+        #
+        #
+      ENDSOURCE
+      SOURCE #dialog
+        #public Object dialog()
+        #{
+        #    DialogRunbase dialog = super();
+        #    dialog.addText("This job will purge aged export log/control records:\n" +
+        #                    " - Completed older than 7 days\n" +
+        #                    " - Non-completed older than 30 days\n" +
+        #                    "Schedule recurrence (daily) via Batch tab.");
+        #    return dialog;
+        #}
+      ENDSOURCE
+      SOURCE #pack
+        #public container pack()
+        #{
+        #    return [#CurrentVersion];
+        #}
+        #
+      ENDSOURCE
+      SOURCE #run
+        #public void run()
+        #{
+        #
+        #    // NEEDS REVIEW
+        #    utcDateTime nowUtc            = DateTimeUtil::utcNow();
+        #    utcDateTime cutoffComplete    = DateTimeUtil::addDays(nowUtc, -7);// need globalized
+        #    utcDateTime cutoffNonComplete = DateTimeUtil::addDays(nowUtc, -30);// need globalized
+        #
+        #    int64 deletedCtrlComplete, deletedCtrlOther;
+        #    int64 deletedHistComplete, deletedHistOther;
+        #    int64 deletedProdComplete, deletedProdOther;
+        #
+        #    Jay_DocExport_CtrlTbl    ctrlTbl;
+        #    Jay_DocExportHistQueue   histQueue;
+        #    Jay_DocExportProdQueue   prodQueue;
+        #
+        #    ttsBegin;
+        #
+        #    // ----------------------------
+        #    // Control table cleanup
+        #    // ----------------------------
+        #    delete_from ctrlTbl
+        #        where ctrlTbl.CtrlStatus == Jay_DocExportCtrlStatus::ProcessingComplete
+        #           && ctrlTbl.CreatedDateTime < cutoffComplete;
+        #    deletedCtrlComplete = ctrlTbl.rowCount();
+        #
+        #    delete_from ctrlTbl
+        #        where ctrlTbl.CtrlStatus != Jay_DocExportCtrlStatus::ProcessingComplete
+        #           && ctrlTbl.CreatedDateTime < cutoffNonComplete;
+        #    deletedCtrlOther = ctrlTbl.rowCount();
+        #
+        #    // ----------------------------
+        #    // Historical queue cleanup
+        #    // ----------------------------
+        #    delete_from histQueue
+        #        where histQueue.QueueStatus == Jay_DocExportQueueStatus::Exported
+        #           && histQueue.CreatedDateTime < cutoffComplete;
+        #    deletedHistComplete = histQueue.rowCount();
+        #
+        #    delete_from histQueue
+        #        where histQueue.QueueStatus != Jay_DocExportQueueStatus::Exported
+        #           && histQueue.CreatedDateTime < cutoffNonComplete;
+        #    deletedHistOther = histQueue.rowCount();
+        #
+        #    // ----------------------------
+        #    // Production queue cleanup
+        #    // ----------------------------
+        #    delete_from prodQueue
+        #        where prodQueue.QueueStatus == Jay_DocExportQueueStatus::Exported
+        #           && prodQueue.CreatedDateTime < cutoffComplete;
+        #    deletedProdComplete = prodQueue.rowCount();
+        #
+        #    delete_from prodQueue
+        #        where prodQueue.QueueStatus != Jay_DocExportQueueStatus::Exported
+        #           && prodQueue.CreatedDateTime < cutoffNonComplete;
+        #    deletedProdOther = prodQueue.rowCount();
+        #
+        #    ttsCommit;
+        #
+        #    info(strFmt("Jay_LogMaintenanceService purged: "
+        #              + "Ctrl(Complete=%1, Other=%2), "
+        #              + "Hist(Complete=%3, Other=%4), "
+        #              + "Prod(Complete=%5, Other=%6)",
+        #              deletedCtrlComplete, deletedCtrlOther,
+        #              deletedHistComplete, deletedHistOther,
+        #              deletedProdComplete, deletedProdOther));
+        #}
+        #
+      ENDSOURCE
+      SOURCE #showBatchTab
+        #public boolean showBatchTab(boolean _set = false)
+        #{
+        #    return true;
+        #}
+      ENDSOURCE
+      SOURCE #unpack
+        #public boolean unpack(container _packedClass)
+        #{
+        #    Version version = conPeek(_packedClass,1);
+        #    switch (version)
+        #    {
+        #        case #CurrentVersion:
+        #            break;
+        #        default:
+        #            return false;
+        #    }
+        #    return true;
+        #}
+        #
+        #
+      ENDSOURCE
+      SOURCE #main
+        #public static void main(Args _args)
+        #{
+        #    Jay_LogMaintenanceService job = new Jay_LogMaintenanceService();
+        #    if (job.prompt())
+        #    {
+        #        job.run();
+        #    }
+        #}
+      ENDSOURCE
+      SOURCE #purgeExpired
+        #public static void purgeExpired()
+        #{
+        #    Jay_DocExport_CtrlTbl  ctrl;
+        #    Jay_DocExportProdQueue prod;
+        #    Jay_DocExportHistQueue hist;
+        #    utcDateTime nowUtc = DateTimeUtil::utcNow();
+        #    utcDateTime cutoffProd = DateTimeUtil::addDays(nowUtc, -7);
+        #    utcDateTime cutoffHist = DateTimeUtil::addDays(nowUtc, -30);
+        #
+        #    ttsBegin;
+        #    delete_from prod
+        #        where prod.QueueStatus == Jay_DocExportQueueStatus::Exported
+        #           && prod.CreatedDateTime < cutoffProd;
+        #    ttsCommit;
+        #
+        #    ttsBegin;
+        #    delete_from hist
+        #        where hist.QueueStatus == Jay_DocExportQueueStatus::Exported
+        #           && hist.CreatedDateTime < cutoffHist;
+        #    ttsCommit;
+        #
+        #    ttsBegin;
+        #    delete_from ctrl
+        #        where ctrl.CtrlStatus == Jay_DocExportCtrlStatus::JobFinished
+        #           && ctrl.CreatedDateTime < cutoffHist;
+        #    ttsCommit;
+        #
+        #    info("✅ Log maintenance complete — old queue/control records purged.");
+        #}
+        #
+      ENDSOURCE
+    ENDMETHODS
+  ENDCLASS
+
+***Element: END

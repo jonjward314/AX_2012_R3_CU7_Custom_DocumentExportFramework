@@ -1,0 +1,215 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: DBT
+
+; Microsoft Dynamics AX Table : Jay_DocExportHistQueue unloaded
+; --------------------------------------------------------------------------------
+  TABLEVERSION 1
+  
+  TABLE #Jay_DocExportHistQueue
+    EnforceFKRelation 1
+    PROPERTIES
+      Name                #Jay_DocExportHistQueue
+      CreateRecIdIndex    #Yes
+      PrimaryIndex        #SurrogateKey
+      ClusterIndex        #SurrogateKey
+      ModifiedDateTime    #Yes
+      CreatedDateTime     #Yes
+      Origin              #{F4FFF4D1-D539-41F3-9978-CA86112DBA5D}
+    ENDPROPERTIES
+    
+    FIELDS
+      FIELD #BatchTag
+        GUID
+        PROPERTIES
+          Name                #BatchTag
+          Table               #Jay_DocExportHistQueue
+          Origin              #{6EE4C9D9-1426-4239-A911-6CD6EE9BD930}
+        ENDPROPERTIES
+        
+      FIELD #CtrlRecId
+        INT64
+        PROPERTIES
+          Name                #CtrlRecId
+          Table               #Jay_DocExportHistQueue
+          Origin              #{E0E1B30C-8A65-42F3-A571-655C0C9611AD}
+          ExtendedDataType    #RecId
+        ENDPROPERTIES
+        
+      FIELD #ExportAttempts
+        INT
+        PROPERTIES
+          Name                #ExportAttempts
+          Table               #Jay_DocExportHistQueue
+          Origin              #{D6C313E5-B32B-4F10-BD5E-04EC7844DDC4}
+        ENDPROPERTIES
+        
+      FIELD #ExportDocSubType
+        ENUM
+        PROPERTIES
+          Name                #ExportDocSubType
+          Table               #Jay_DocExportHistQueue
+          Origin              #{38EBBA03-9D2C-435E-8451-0F4A7C71F2C1}
+          EnumType            #Jay_DocExportDocSubType
+        ENDPROPERTIES
+        
+      FIELD #ExportDocType
+        ENUM
+        PROPERTIES
+          Name                #ExportDocType
+          Table               #Jay_DocExportHistQueue
+          Origin              #{310D1765-902E-450A-AB15-6D3FA84B5DF7}
+          EnumType            #Jay_DocExportDocType
+        ENDPROPERTIES
+        
+      FIELD #ExportFromUtc
+        DATETIME
+        PROPERTIES
+          Name                #ExportFromUtc
+          Table               #Jay_DocExportHistQueue
+          Origin              #{8F9EBE54-C638-411C-BE4D-9B0F0748B9A8}
+        ENDPROPERTIES
+        
+      FIELD #ExportToUtc
+        DATETIME
+        PROPERTIES
+          Name                #ExportToUtc
+          Table               #Jay_DocExportHistQueue
+          Origin              #{76C7E234-15BB-4B4D-9736-3F844D733600}
+        ENDPROPERTIES
+        
+      FIELD #LastAttemptedDateTime
+        DATETIME
+        PROPERTIES
+          Name                #LastAttemptedDateTime
+          Table               #Jay_DocExportHistQueue
+          Origin              #{D7896AFB-B215-41F2-96D8-A7F5C085F5FF}
+        ENDPROPERTIES
+        
+      FIELD #OrigQueueTime
+        DATETIME
+        PROPERTIES
+          Name                #OrigQueueTime
+          Table               #Jay_DocExportHistQueue
+          Origin              #{086FF9E8-97FC-4E57-83DC-0573050574F7}
+        ENDPROPERTIES
+        
+      FIELD #PrintDelay
+        INT
+        PROPERTIES
+          Name                #PrintDelay
+          HelpText            #PrintDelay
+          Table               #Jay_DocExportHistQueue
+          Origin              #{009E80EE-A6E2-4F28-BD18-29138BD3CEB3}
+        ENDPROPERTIES
+        
+      FIELD #QueueStatus
+        ENUM
+        PROPERTIES
+          Name                #QueueStatus
+          Table               #Jay_DocExportHistQueue
+          Origin              #{C8D55604-6D0A-4012-91D5-384CADBFCDE0}
+          EnumType            #Jay_DocExportQueueStatus
+        ENDPROPERTIES
+        
+      FIELD #RefId1
+        STRING
+        PROPERTIES
+          Name                #RefId1
+          Table               #Jay_DocExportHistQueue
+          Origin              #{86ADA24C-A9DF-4665-8238-F92798DE928B}
+          StringSize          #60
+        ENDPROPERTIES
+        
+      FIELD #RefId2
+        STRING
+        PROPERTIES
+          Name                #RefId2
+          Table               #Jay_DocExportHistQueue
+          Origin              #{62713A15-CE22-498C-A2F0-EFB2E354ECC4}
+          StringSize          #60
+        ENDPROPERTIES
+        
+      FIELD #RefId3
+        STRING
+        PROPERTIES
+          Name                #RefId3
+          Table               #Jay_DocExportHistQueue
+          Origin              #{7AA9C76A-7957-484A-892D-EEA8BFB93C77}
+          StringSize          #60
+        ENDPROPERTIES
+        
+      FIELD #Refid4
+        STRING
+        PROPERTIES
+          Name                #Refid4
+          Table               #Jay_DocExportHistQueue
+          Origin              #{E78CC260-C571-4752-990A-A6DF514EEF6F}
+          StringSize          #60
+        ENDPROPERTIES
+        
+      FIELD #SourceRecId
+        INT64
+        PROPERTIES
+          Name                #SourceRecId
+          Table               #Jay_DocExportHistQueue
+          Origin              #{31593889-55A1-4586-BE4E-0F0AA5DDC05A}
+          ExtendedDataType    #RecId
+        ENDPROPERTIES
+        
+    ENDFIELDS
+    GROUPS
+    ENDGROUPS
+    
+    INDICES
+      #IDX_RefLookup
+      PROPERTIES
+        Name                #IDX_RefLookup
+        Origin              #{502AFDBE-F446-47E2-8E96-2718456E1207}
+      ENDPROPERTIES
+      
+      INDEXFIELDS
+        #ExportDocType
+        #RefId3
+        #Refid4
+        #RefId1
+        #RefId2
+      ENDINDEXFIELDS
+      
+      #UNKNOWN
+      PROPERTIES
+        Name                #UNKNOWN
+        Origin              #{D9A3FCD9-96EC-49BE-A73A-C43C95432D0C}
+      ENDPROPERTIES
+      
+      INDEXFIELDS
+        #CtrlRecId
+        #QueueStatus
+      ENDINDEXFIELDS
+      
+      #UNKNOWN
+      PROPERTIES
+        Name                #UNKNOWN
+        Origin              #{7354CC77-B101-40F1-A9C7-944B1892DED1}
+      ENDPROPERTIES
+      
+      INDEXFIELDS
+        #BatchTag
+      ENDINDEXFIELDS
+      
+    ENDINDICES
+    FULLTEXTINDICES
+    ENDFULLTEXTINDICES
+    REFERENCES
+    ENDREFERENCES
+    
+    DELETEACTIONS
+    ENDDELETEACTIONS
+    
+    METHODS
+    ENDMETHODS
+  ENDTABLE
+  
+
+***Element: END

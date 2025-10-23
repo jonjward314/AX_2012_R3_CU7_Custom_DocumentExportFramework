@@ -1,0 +1,69 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: DBT
+
+; Microsoft Dynamics AX Table : Jay_PrintGovernorLog unloaded
+; --------------------------------------------------------------------------------
+  TABLEVERSION 1
+  
+  TABLE #Jay_PrintGovernorLog
+    EnforceFKRelation 1
+    PROPERTIES
+      Name                #Jay_PrintGovernorLog
+      CreateRecIdIndex    #Yes
+      PrimaryIndex        #SurrogateKey
+      ClusterIndex        #SurrogateKey
+      Origin              #{BBB8F259-27F1-4D3A-BDEA-107C788DD32D}
+    ENDPROPERTIES
+    
+    FIELDS
+      FIELD #PrintedCount
+        INT
+        PROPERTIES
+          Name                #PrintedCount
+          Label               #Printed Count
+          Table               #Jay_PrintGovernorLog
+          Origin              #{7333DD75-EC3C-49DB-B156-EF9FA4B0969F}
+        ENDPROPERTIES
+        
+      FIELD #TimeSliceStartUtc
+        DATETIME
+        PROPERTIES
+          Name                #TimeSliceStartUtc
+          Label               #Slice
+          Table               #Jay_PrintGovernorLog
+          Origin              #{9E9905E1-295E-4483-A64B-AEF23F7BB9C5}
+        ENDPROPERTIES
+        
+    ENDFIELDS
+    GROUPS
+    ENDGROUPS
+    
+    INDICES
+      #IdxSlice
+      PROPERTIES
+        Name                #IdxSlice
+        AllowDuplicates     #No
+        Origin              #{65F09C3C-A569-41EF-B2D3-4B7A04FBE48A}
+      ENDPROPERTIES
+      
+      INDEXFIELDS
+        #TimeSliceStartUtc
+      ENDINDEXFIELDS
+      
+    ENDINDICES
+    FULLTEXTINDICES
+    ENDFULLTEXTINDICES
+    REFERENCES
+    ENDREFERENCES
+    
+    DELETEACTIONS
+    ENDDELETEACTIONS
+    
+    METHODS
+    ENDMETHODS
+  ENDTABLE
+  
+
+***Element: END

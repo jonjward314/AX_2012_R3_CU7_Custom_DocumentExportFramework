@@ -1,0 +1,1894 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: CLS
+
+; Microsoft Dynamics AX Class: Jay_enStageWorker unloaded
+; --------------------------------------------------------------------------------
+  CLSVERSION 1
+  
+  CLASS #Jay_enStageWorker
+    PROPERTIES
+      Name                #Jay_enStageWorker
+      RunOn               #Server
+      Origin              #{B6BFCD79-9AE0-40E7-AA0A-8D4C48946D1E}
+    ENDPROPERTIES
+    
+    METHODS
+      SOURCE #classDeclaration
+        #// =================================================================================================
+        #// CLASS: Jay_enStageWorker
+        #// PROJECT: Jay_DocExportFramework
+        #// AUTHOR: Ward, Jonathon
+        #// VERSION: v3 Elastic Parallelism Edition
+        #//
+        #// PURPOSE:
+        #//   Central dispatcher and document enStager for all exportable business objects.
+        #//   Each 30-minute slice is isolated by a unique BatchTag for TempDB staging.
+        #//   Promotes staged data atomically into the production or historical queue.
+        #//
+        #// NOTES:
+        #//   - CtrlRecId identifies the control job.
+        #//   - BatchTag isolates a slice for concurrency safety.
+        #//   - Stage tables: Jay_DocExportProdQueueStage / Jay_DocExportHistQueueStage (TempDB)
+        #// =================================================================================================
+        #public class Jay_enStageWorker
+        #{
+        #    // Set RunOn = Server in AOT
+        #}
+        #/*You’ve just defined the “dual-worker model”:
+        #
+        #Jay_EnqueueWorker = direct enqueue path (row-by-row or legacy compatible)
+        #
+        #Jay_enStageWorker = TempDB batch path (bulk, batchTag-isolated staging)
+        #
+        #From the controller’s point of view, it will now decide which worker to invoke based on the control record’s mode or framework version flag.
+        #
+        #Let’s make this concept explicit so it’s clean, deterministic, and extendable.
+        #
+        #🔧 Controller Integration Logic
+        #
+        #You’ll add a simple dispatcher in your batch enqueuers (Jay_ProductionBatchEnqueuer / Jay_HistoricBatchEnqueuer) before calling either worker:
+        #
+        #public static void runController(Jay_DocExport_CtrlTbl _ctrlRecord)
+        #{
+        #    switch (_ctrlRecord.EnqueueMode)
+        #    {
+        #        case Jay_DocExportEnqueueMode::Legacy:
+        #            Jay_EnqueueWorker::enqueueController(_ctrlRecord.RecId);
+        #            break;
+        #
+        #        case Jay_DocExportEnqueueMode::Staged:
+        #            Jay_enStageWorker::enStageController(_ctrlRecord.RecId);
+        #            break;
+        #
+        #        default:
+        #            Jay_EnqueueWorker::enqueueController(_ctrlRecord.RecId);
+        #            break;
+        #    }
+        #}
+        #
+        #
+        #Then define a small enum in the AOT:
+        #
+        #enum Jay_DocExportEnqueueMode
+        #{
+        #    Legacy,
+        #    Staged
+        #}
+        #
+        #
+        #and add a new field EnqueueMode to Jay_DocExport_CtrlTbl.
+        #
+        #Now every control record explicitly declares which engine will process it.
+        #That’s a powerful separation layer: same queues, same processors, two enqueue dialects.
+        #
+        #🧩 Architectural Clarity
+        #
+        #Jay_EnqueueWorker
+        #
+        #Old guard.
+        #
+        #Safe for small or single-record jobs.
+        #
+        #Useful for quick-enqueue debugging or non-bulk types.
+        #
+        #Jay_enStageWorker
+        #
+        #The bulk path.
+        #
+        #Uses TempDB staging + batchTag atomicity.
+        #
+        #Designed for high throughput, low lock contention.
+        #
+        #Supports horizontal scaling and concurrent slicing.
+        #
+        #🧠 Future Integration Path
+        #
+        #You can later unify them under a shared interface, e.g. IJay_EnqueueStrategy, if you ever want dynamic polymorphism:
+        #
+        #interface IJay_EnqueueStrategy
+        #{
+        #    Jay_DocExportCtrlStatus processController(RecId _ctrlRecId);
+        #}
+        #
+        #
+        #Then each worker implements it, and your batch enqueuer just calls strategy.processController(ctrlRecId).
+        #
+        #That keeps your core engine agnostic to the enqueue method while allowing you to test or switch versions in real time.
+        #
+        #⚡ Why This Matters
+        #
+        #By having both “brother classes,” you can:
+        #
+        #A/B test throughput under real workloads without redeploying.
+        #
+        #Run parallel transition periods, where old controllers stay on Jay_EnqueueWorker and new ones adopt Jay_enStageWorker.
+        #
+        #Build confidence in your staging pipeline before retiring the legacy worker entirely.
+        #
+        #The pattern you’ve settled on is production-grade design: two parallel pathways unified by a common contract, with BatchTag giving you isolation, concurrency, and post-failure traceability.
+        #
+        #Would you like me to draft the short Jay_DocExportEnqueueMode enum definition and the CtrlTbl field declaration block next (for direct AOT paste)?
+        #*/
+      ENDSOURCE
+      SOURCE #ConfirmationSubtypeHasData
+        #/// <summary>
+        #/// Determines if any confirmations exist for the given subtype filter
+        #/// within the specified UTC window.
+        #/// Used by enStageConfirmation() to skip empty subtype stages.
+        #/// </summary>
+        #private static boolean ConfirmationSubtypeHasData(
+        #    Jay_DocExportDocSubType _subType,
+        #    utcDateTime              _fromUtc,
+        #    utcDateTime              _toUtc)
+        #{
+        #    CustConfirmJour jour;
+        #    boolean         found = false;
+        #
+        #    switch (_subType)
+        #    {
+        #        case Jay_DocExportDocSubType::Unit:
+        #            // Unit confirmations — includes Unit, Unit_PO, and Internal w/Unit shipping instr.
+        #            select firstOnly RecId from jour
+        #                where jour.DataAreaId == curext()
+        #                  && (
+        #                         jour.CustGroup == 'Unit'
+        #                      || jour.CustGroup == 'Unit_PO'
+        #                      || (jour.CustGroup == 'Internal'
+        #                          && jour.MCASHIPPINGINSTRUCTIONS == 'Unit')
+        #                     )
+        #                  && (
+        #                         (jour.CreatedDateTime  >= _fromUtc && jour.CreatedDateTime <= _toUtc)
+        #                      || (jour.ModifiedDateTime >= _fromUtc && jour.ModifiedDateTime <= _toUtc)
+        #                     );
+        #            found = jour.RecId ? true : false;
+        #            break;
+        #
+        #        case Jay_DocExportDocSubType::Part:
+        #            // Part confirmations — Internal (non-Unit) or Part/Part_DPU
+        #            select firstOnly RecId from jour
+        #                where jour.DataAreaId == curext()
+        #                  && (
+        #                         jour.CustGroup == 'Internal'
+        #                      || jour.CustGroup == 'Part'
+        #                      || jour.CustGroup == 'Part_DPU'
+        #                     )
+        #                  && !((jour.CustGroup == 'Internal')
+        #                     && jour.MCASHIPPINGINSTRUCTIONS == 'Unit')
+        #                  && (
+        #                         (jour.CreatedDateTime  >= _fromUtc && jour.CreatedDateTime <= _toUtc)
+        #                      || (jour.ModifiedDateTime >= _fromUtc && jour.ModifiedDateTime <= _toUtc)
+        #                     );
+        #            found = jour.RecId ? true : false;
+        #            break;
+        #
+        #        case Jay_DocExportDocSubType::Vendor:
+        #            // Vendor confirmations
+        #            select firstOnly RecId from jour
+        #                where jour.DataAreaId == curext()
+        #                  && jour.CustGroup == 'Vendor'
+        #                  && (
+        #                         (jour.CreatedDateTime  >= _fromUtc && jour.CreatedDateTime <= _toUtc)
+        #                      || (jour.ModifiedDateTime >= _fromUtc && jour.ModifiedDateTime <= _toUtc)
+        #                     );
+        #            found = jour.RecId ? true : false;
+        #            break;
+        #
+        #        default:
+        #            break;
+        #    }
+        #
+        #    return found;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #enStageCertificateOfOrigin
+        #/// ======================================================================
+        #/// METHOD: enStageCertificateOfOrigin
+        #/// PURPOSE:
+        #///   Enqueue Certificates of Origin using TempDB staging in bounded batches.
+        #///   Handles large datasets, joining SalesTable → AMDeviceTable → AMDeviceTableMaster.
+        #/// ======================================================================
+        #public static void enStageCertificateOfOrigin(
+        #    Jay_DocExport_CtrlTbl _ctrlRecord,
+        #    utcDateTime            _fromUtc,
+        #    utcDateTime            _toUtc,
+        #    int                    _batchLimit)
+        #{
+        #    Jay_DocExportProdQueueStage prodStage;
+        #    Jay_DocExportHistQueueStage histStage;
+        #    SalesTable                  st;
+        #    AMDeviceTable               d;
+        #    AMDeviceTableMaster         e;
+        #    RecId                       firstRecId;
+        #    guid                        batchTag  = newGuid();
+        #    utcDateTime                 nowUtc    = DateTimeUtil::utcNow();
+        #    date                        fromDate  = DateTimeUtil::date(_fromUtc);
+        #    int64                       totalRows = 0;
+        #    int64                       processed = 0;
+        #    boolean                     isProduction = (_ctrlRecord.ExportPriority == Jay_DocExportQueuePriority::Production);
+        #
+        #    try
+        #    {
+        #        // ------------------------------------------------------------------
+        #        // Proof-of-life probe
+        #        // ------------------------------------------------------------------
+        #        select firstOnly st
+        #            join d
+        #                where d.DeviceId == st.AMDeviceId
+        #                  && d.DEL_PRODUCTIONDATE >= fromDate
+        #            join e
+        #                where e.MasterId == d.MasterId
+        #                  && (e.BodyId == 'MHA' || e.BodyId == 'MHB' || e.BodyId == 'MHC')
+        #          && st.DataAreaId == curext()
+        #          && st.SalesStatus == SalesStatus::Invoiced
+        #          && st.AMDeviceId  != ''
+        #          && st.ModifiedDateTime >= _fromUtc
+        #          && st.ModifiedDateTime <  _toUtc;
+        #
+        #        if (!st.RecId)
+        #            return;
+        #
+        #        firstRecId = st.RecId;
+        #
+        #        // ------------------------------------------------------------------
+        #        // Count total
+        #        // ------------------------------------------------------------------
+        #        select count(RecId)
+        #            from st
+        #                join d
+        #                    where d.DeviceId == st.AMDeviceId
+        #                      && d.DEL_PRODUCTIONDATE >= fromDate
+        #                join e
+        #                    where e.MasterId == d.MasterId
+        #                      && (e.BodyId == 'MHA' || e.BodyId == 'MHB' || e.BodyId == 'MHC')
+        #              && st.DataAreaId == curext()
+        #              && st.SalesStatus == SalesStatus::Invoiced
+        #              && st.AMDeviceId  != ''
+        #              && st.ModifiedDateTime >= _fromUtc
+        #              && st.ModifiedDateTime <  _toUtc;
+        #
+        #        totalRows = st.RecId;
+        #        info(strFmt("📄 [StageCOO] Found %1 Certificate of Origin candidates (%2 mode, batch=%3)",
+        #                    totalRows, enum2str(_ctrlRecord.ExportPriority), _batchLimit));
+        #
+        #        // ------------------------------------------------------------------
+        #        // Staging loop
+        #        // ------------------------------------------------------------------
+        #        ttsBegin;
+        #        while select RecId
+        #            from st
+        #                join d
+        #                    where d.DeviceId == st.AMDeviceId
+        #                      && d.DEL_PRODUCTIONDATE >= fromDate
+        #                join e
+        #                    where e.MasterId == d.MasterId
+        #                      && (e.BodyId == 'MHA' || e.BodyId == 'MHB' || e.BodyId == 'MHC')
+        #          && st.DataAreaId == curext()
+        #          && st.SalesStatus == SalesStatus::Invoiced
+        #          && st.AMDeviceId  != ''
+        #          && st.ModifiedDateTime >= _fromUtc
+        #          && st.ModifiedDateTime <  _toUtc
+        #          && st.RecId != firstRecId
+        #        {
+        #            if (isProduction)
+        #            {
+        #                prodStage.clear();
+        #                prodStage.SourceRecId      = st.RecId;
+        #                prodStage.BatchTag         = batchTag;
+        #                prodStage.CtrlRecId        = _ctrlRecord.RecId;
+        #                prodStage.ExportDocType    = Jay_DocExportDocType::CertificateOfOrigin;
+        #                prodStage.ExportDocSubType = Jay_DocExportDocSubType::All;
+        #                prodStage.QueueStatus      = Jay_DocExportQueueStatus::Queued;
+        #                prodStage.OrigQueueTime    = nowUtc;
+        #                prodStage.PrintDelay       = _ctrlRecord.PrintDelay;
+        #                prodStage.insert();
+        #            }
+        #            else
+        #            {
+        #                histStage.clear();
+        #                histStage.SourceRecId      = st.RecId;
+        #                histStage.BatchTag         = batchTag;
+        #                histStage.CtrlRecId        = _ctrlRecord.RecId;
+        #                histStage.ExportDocType    = Jay_DocExportDocType::CertificateOfOrigin;
+        #                histStage.ExportDocSubType = Jay_DocExportDocSubType::All;
+        #                histStage.QueueStatus      = Jay_DocExportQueueStatus::Queued;
+        #                histStage.OrigQueueTime    = nowUtc;
+        #                histStage.PrintDelay       = _ctrlRecord.PrintDelay;
+        #                histStage.insert();
+        #            }
+        #
+        #            processed++;
+        #
+        #            if ((processed mod _batchLimit) == 0)
+        #            {
+        #                ttsCommit;
+        #                ttsBegin;
+        #                info(strFmt("🧱 [StageCOO] %1 / %2 staged.", processed, totalRows));
+        #            }
+        #        }
+        #        ttsCommit;
+        #
+        #        // ------------------------------------------------------------------
+        #        // Promote & cleanup
+        #        // ------------------------------------------------------------------
+        #        if (isProduction)
+        #        {
+        #            Jay_enStageWorker::promoteStageToQueueByTag(Jay_DocExportQueuePriority::Production, batchTag);
+        #            ttsBegin;
+        #                delete_from prodStage where prodStage.BatchTag == batchTag;
+        #            ttsCommit;
+        #        }
+        #        else
+        #        {
+        #            Jay_enStageWorker::promoteStageToQueueByTag(Jay_DocExportQueuePriority::Historical, batchTag);
+        #            ttsBegin;
+        #                delete_from histStage where histStage.BatchTag == batchTag;
+        #            ttsCommit;
+        #        }
+        #
+        #        info(strFmt("✅ [StageCOO] Complete: %1 record(s) staged and promoted.", processed));
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        ttsAbort;
+        #        Jay_DocExportCtrlWorker::updateStatus(
+        #            _ctrlRecord.RecId, Jay_DocExportCtrlStatus::PartialComplete);
+        #        error(strFmt("❌ [StageCOO] Failed for CtrlRecId %1", _ctrlRecord.RecId));
+        #    }
+        #}
+        #
+      ENDSOURCE
+      SOURCE #enStageConfirmation
+        #public static void enStageConfirmation(
+        #    Jay_DocExport_CtrlTbl _ctrlRecord,
+        #    utcDateTime            _fromUtc,
+        #    utcDateTime            _toUtc)
+        #{
+        #    Jay_DocExportDocSubType subType  = _ctrlRecord.ExportDocSubType;
+        #    int                     batchLimit = Jay_ExportRuntimeSettings::maxStageBatchSize();
+        #
+        #    info(strFmt("📦 [EnStage] Confirmations %1 → %2 (%3 mode, batch=%4)",
+        #                DateTimeUtil::toStr(_fromUtc),
+        #                DateTimeUtil::toStr(_toUtc),
+        #                enum2str(_ctrlRecord.ExportPriority),
+        #                batchLimit));
+        #
+        #    // --- Early exit for specific subtypes with no data ---
+        #    if (subType != Jay_DocExportDocSubType::All
+        #        && !Jay_enStageWorker::ConfirmationSubtypeHasData(subType, _fromUtc, _toUtc))
+        #    {
+        #        info(strFmt("⏭ No confirmations found for subtype %1 in this window; skipping.",
+        #                    enum2str(subType)));
+        #        return;
+        #    }
+        #
+        #    switch (subType)
+        #    {
+        #        case Jay_DocExportDocSubType::Unit:
+        #            if (Jay_enStageWorker::ConfirmationSubtypeHasData(
+        #                    Jay_DocExportDocSubType::Unit, _fromUtc, _toUtc))
+        #            {
+        #                Jay_enStageWorker::enStageConfirmations_Unit(
+        #                    _ctrlRecord, _fromUtc, _toUtc , batchLimit);
+        #            }
+        #            break;
+        #
+        #        case Jay_DocExportDocSubType::Part:
+        #            if (Jay_enStageWorker::ConfirmationSubtypeHasData(
+        #                    Jay_DocExportDocSubType::Part, _fromUtc, _toUtc))
+        #            {
+        #                Jay_enStageWorker::enStageConfirmations_Parts(
+        #                    _ctrlRecord, _fromUtc, _toUtc , batchLimit );
+        #            }
+        #            break;
+        #
+        #        case Jay_DocExportDocSubType::Vendor:
+        #            if (Jay_enStageWorker::ConfirmationSubtypeHasData(
+        #                    Jay_DocExportDocSubType::Vendor, _fromUtc, _toUtc))
+        #            {
+        #                Jay_enStageWorker::enStageConfirmations_Vendor(
+        #                    _ctrlRecord, _fromUtc, _toUtc , batchLimit );
+        #            }
+        #            break;
+        #
+        #        case Jay_DocExportDocSubType::All:
+        #            if (Jay_enStageWorker::ConfirmationSubtypeHasData(
+        #                    Jay_DocExportDocSubType::Unit, _fromUtc, _toUtc))
+        #                Jay_enStageWorker::enStageConfirmations_Unit(
+        #                    _ctrlRecord, _fromUtc, _toUtc, batchLimit);
+        #
+        #            if (Jay_enStageWorker::ConfirmationSubtypeHasData(
+        #                    Jay_DocExportDocSubType::Part, _fromUtc, _toUtc))
+        #                Jay_enStageWorker::enStageConfirmations_Parts(
+        #                    _ctrlRecord, _fromUtc, _toUtc , batchLimit);
+        #
+        #            if (Jay_enStageWorker::ConfirmationSubtypeHasData(
+        #                    Jay_DocExportDocSubType::Vendor, _fromUtc, _toUtc))
+        #                Jay_enStageWorker::enStageConfirmations_Vendor(
+        #                    _ctrlRecord, _fromUtc, _toUtc , batchLimit );
+        #            break;
+        #
+        #        default:
+        #            warning(strFmt("⚠ Unknown Confirmation subtype: %1", enum2str(subType)));
+        #            break;
+        #    }
+        #}
+        #
+      ENDSOURCE
+      SOURCE #enStageConfirmations_Parts
+        #/// enStage Parts confirmations using TempDB staging with BatchTag isolation.
+        #/// Safe for high-volume historical or production runs.  Scales in bounded batches.
+        #public static void enStageConfirmations_Parts(
+        #    Jay_DocExport_CtrlTbl _ctrlRecord,
+        #    utcDateTime            _fromUtc,
+        #    utcDateTime            _toUtc,
+        #    int                    _batchLimit)   // Configurable from runtime settings
+        #{
+        #    Jay_DocExportProdQueueStage prodStage;
+        #    Jay_DocExportHistQueueStage histStage;
+        #    CustConfirmJour             confirmJour;
+        #    RecId                       firstRecId;
+        #    guid                        batchTag   = newGuid();
+        #    utcDateTime                 nowUtc     = DateTimeUtil::utcNow();
+        #    int64                       totalRows  = 0;
+        #    int64                       processed  = 0;
+        #    boolean                     isProduction =
+        #                                    (_ctrlRecord.ExportPriority == Jay_DocExportQueuePriority::Production);
+        #
+        #    info(strFmt("📦 [StageConfirm:Part] Begin Ctrl=%1, Window=%2→%3, Mode=%4, BatchLimit=%5",
+        #                _ctrlRecord.RecId,
+        #                DateTimeUtil::toStr(_fromUtc),
+        #                DateTimeUtil::toStr(_toUtc),
+        #                enum2str(_ctrlRecord.ExportPriority),
+        #                _batchLimit));
+        #
+        #    try
+        #    {
+        #        // --- Probe for at least one record to validate data exists ---
+        #        select firstOnly confirmJour
+        #            where confirmJour.DataAreaId == curext()
+        #              && (
+        #                     (confirmJour.CreatedDateTime  >= _fromUtc && confirmJour.CreatedDateTime <= _toUtc)
+        #                  || (confirmJour.ModifiedDateTime >= _fromUtc && confirmJour.ModifiedDateTime <= _toUtc)
+        #                 )
+        #              && (
+        #                     confirmJour.CustGroup == 'Internal'
+        #                  || confirmJour.CustGroup == 'Part'
+        #                  || confirmJour.CustGroup == 'Part_DPU'
+        #                 )
+        #              && !((confirmJour.CustGroup == 'Internal')
+        #                   && confirmJour.MCASHIPPINGINSTRUCTIONS == 'Unit');
+        #
+        #        if (!confirmJour.RecId)
+        #        {
+        #            info("⏭ [StageConfirm:Part] No matching confirmations found; skipping.");
+        #            return;
+        #        }
+        #
+        #        firstRecId = confirmJour.RecId;
+        #
+        #        // --- Count total matching rows for progress reporting ---
+        #        select count(RecId)
+        #            from confirmJour
+        #            where confirmJour.DataAreaId == curext()
+        #              && (
+        #                     (confirmJour.CreatedDateTime  >= _fromUtc && confirmJour.CreatedDateTime <= _toUtc)
+        #                  || (confirmJour.ModifiedDateTime >= _fromUtc && confirmJour.ModifiedDateTime <= _toUtc)
+        #                 )
+        #              && (
+        #                     confirmJour.CustGroup == 'Internal'
+        #                  || confirmJour.CustGroup == 'Part'
+        #                  || confirmJour.CustGroup == 'Part_DPU'
+        #                 )
+        #              && !((confirmJour.CustGroup == 'Internal')
+        #                   && confirmJour.MCASHIPPINGINSTRUCTIONS == 'Unit');
+        #
+        #        totalRows = confirmJour.RecId;   // count result
+        #        info(strFmt("📄 [StageConfirm:Part] Found %1 candidate confirmations.", totalRows));
+        #
+        #        // --- Bounded batch staging ---
+        #        ttsBegin;
+        #        while select RecId from confirmJour order by RecId
+        #            where confirmJour.DataAreaId == curext()
+        #              && (
+        #                     (confirmJour.CreatedDateTime  >= _fromUtc && confirmJour.CreatedDateTime <= _toUtc)
+        #                  || (confirmJour.ModifiedDateTime >= _fromUtc && confirmJour.ModifiedDateTime <= _toUtc)
+        #                 )
+        #              && (
+        #                     confirmJour.CustGroup == 'Internal'
+        #                  || confirmJour.CustGroup == 'Part'
+        #                  || confirmJour.CustGroup == 'Part_DPU'
+        #                 )
+        #              && !((confirmJour.CustGroup == 'Internal')
+        #                   && confirmJour.MCASHIPPINGINSTRUCTIONS == 'Unit')
+        #              && confirmJour.RecId != firstRecId
+        #        {
+        #            if (isProduction)
+        #            {
+        #                prodStage.clear();
+        #                prodStage.SourceRecId      = confirmJour.RecId;
+        #                prodStage.BatchTag         = batchTag;
+        #                prodStage.CtrlRecId        = _ctrlRecord.RecId;
+        #                prodStage.ExportDocType    = Jay_DocExportDocType::Confirmation;
+        #                prodStage.ExportDocSubType = Jay_DocExportDocSubType::Part;
+        #                prodStage.QueueStatus      = Jay_DocExportQueueStatus::Queued;
+        #                prodStage.OrigQueueTime    = nowUtc;
+        #                prodStage.PrintDelay       = _ctrlRecord.PrintDelay;
+        #                prodStage.insert();
+        #            }
+        #            else
+        #            {
+        #                histStage.clear();
+        #                histStage.SourceRecId      = confirmJour.RecId;
+        #                histStage.BatchTag         = batchTag;
+        #                histStage.CtrlRecId        = _ctrlRecord.RecId;
+        #                histStage.ExportDocType    = Jay_DocExportDocType::Confirmation;
+        #                histStage.ExportDocSubType = Jay_DocExportDocSubType::Part;
+        #                histStage.QueueStatus      = Jay_DocExportQueueStatus::Queued;
+        #                histStage.OrigQueueTime    = nowUtc;
+        #                histStage.PrintDelay       = _ctrlRecord.PrintDelay;
+        #                histStage.insert();
+        #            }
+        #
+        #            processed++;
+        #
+        #            // --- Commit every N rows ---
+        #            if ((processed mod _batchLimit) == 0)
+        #            {
+        #                ttsCommit;
+        #                ttsBegin;
+        #                info(strFmt("🧱 [StageConfirm:Part] %1 / %2 staged.", processed, totalRows));
+        #            }
+        #        }
+        #        ttsCommit;
+        #
+        #        // --- Promote and purge ---
+        #        if (isProduction)
+        #        {
+        #            Jay_enStageWorker::promoteStageToQueueByTag(
+        #                Jay_DocExportQueuePriority::Production, batchTag);
+        #            ttsBegin;
+        #                delete_from prodStage where prodStage.BatchTag == batchTag;
+        #            ttsCommit;
+        #        }
+        #        else
+        #        {
+        #            Jay_enStageWorker::promoteStageToQueueByTag(
+        #                Jay_DocExportQueuePriority::Historical, batchTag);
+        #            ttsBegin;
+        #                delete_from histStage where histStage.BatchTag == batchTag;
+        #            ttsCommit;
+        #        }
+        #
+        #        info(strFmt("✅ [StageConfirm:Part] Complete. %1 record(s) staged and promoted (BatchTag=%2).",
+        #                    processed, batchTag));
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        ttsAbort;
+        #        error(strFmt("❌ [StageConfirm:Part] Failure during staging for CtrlRecId %1.",
+        #                     _ctrlRecord.RecId));
+        #        Jay_DocExportCtrlWorker::updateStatus(
+        #            _ctrlRecord.RecId, Jay_DocExportCtrlStatus::PartialComplete);
+        #    }
+        #}
+        #
+      ENDSOURCE
+      SOURCE #enStageConfirmations_Unit
+        #/// enStage Unit confirmations using TempDB staging with BatchTag isolation.
+        #/// Safe for high-volume historical or production runs. Scales in bounded batches.
+        #public static void enStageConfirmations_Unit(
+        #    Jay_DocExport_CtrlTbl _ctrlRecord,
+        #    utcDateTime            _fromUtc,
+        #    utcDateTime            _toUtc,
+        #    int                    _batchLimit)   // Configurable from runtime settings
+        #{
+        #    Jay_DocExportProdQueueStage prodStage;
+        #    Jay_DocExportHistQueueStage histStage;
+        #    CustConfirmJour             confirmJour;
+        #    RecId                       firstRecId;
+        #    guid                        batchTag   = newGuid();
+        #    utcDateTime                 nowUtc     = DateTimeUtil::utcNow();
+        #    int64                       totalRows  = 0;
+        #    int64                       processed  = 0;
+        #    boolean                     isProduction =
+        #                                    (_ctrlRecord.ExportPriority == Jay_DocExportQueuePriority::Production);
+        #
+        #    info(strFmt("📦 [StageConfirm:Unit] Begin Ctrl=%1, Window=%2→%3, Mode=%4, BatchLimit=%5",
+        #                _ctrlRecord.RecId,
+        #                DateTimeUtil::toStr(_fromUtc),
+        #                DateTimeUtil::toStr(_toUtc),
+        #                enum2str(_ctrlRecord.ExportPriority),
+        #                _batchLimit));
+        #
+        #    try
+        #    {
+        #        // --- Proof-of-life record to validate existence and schema alignment ---
+        #        select firstOnly confirmJour
+        #            where confirmJour.DataAreaId == curext()
+        #              && (
+        #                     confirmJour.CustGroup == 'Unit'
+        #                  || confirmJour.CustGroup == 'Unit_PO'
+        #                  || (confirmJour.CustGroup == 'Internal'
+        #                      && confirmJour.MCASHIPPINGINSTRUCTIONS == 'Unit')
+        #                 )
+        #              && (
+        #                     (confirmJour.CreatedDateTime  >= _fromUtc && confirmJour.CreatedDateTime <= _toUtc)
+        #                  || (confirmJour.ModifiedDateTime >= _fromUtc && confirmJour.ModifiedDateTime <= _toUtc)
+        #                 );
+        #
+        #        if (!confirmJour.RecId)
+        #        {
+        #            info("⏭ [StageConfirm:Unit] No matching confirmations found; skipping.");
+        #            return;
+        #        }
+        #
+        #        firstRecId = confirmJour.RecId;
+        #
+        #        // --- Count total matching rows for logging/progress ---
+        #        select count(RecId)
+        #            from confirmJour
+        #            where confirmJour.DataAreaId == curext()
+        #              && (
+        #                     confirmJour.CustGroup == 'Unit'
+        #                  || confirmJour.CustGroup == 'Unit_PO'
+        #                  || (confirmJour.CustGroup == 'Internal'
+        #                      && confirmJour.MCASHIPPINGINSTRUCTIONS == 'Unit')
+        #                 )
+        #              && (
+        #                     (confirmJour.CreatedDateTime  >= _fromUtc && confirmJour.CreatedDateTime <= _toUtc)
+        #                  || (confirmJour.ModifiedDateTime >= _fromUtc && confirmJour.ModifiedDateTime <= _toUtc)
+        #                 );
+        #
+        #        totalRows = confirmJour.RecId; // count result
+        #        info(strFmt("📄 [StageConfirm:Unit] Found %1 candidate confirmations.", totalRows));
+        #
+        #        // --- Bounded batch staging ---
+        #        ttsBegin;
+        #        while select RecId from confirmJour order by RecId
+        #            where confirmJour.DataAreaId == curext()
+        #              && (
+        #                     confirmJour.CustGroup == 'Unit'
+        #                  || confirmJour.CustGroup == 'Unit_PO'
+        #                  || (confirmJour.CustGroup == 'Internal'
+        #                      && confirmJour.MCASHIPPINGINSTRUCTIONS == 'Unit')
+        #                 )
+        #              && (
+        #                     (confirmJour.CreatedDateTime  >= _fromUtc && confirmJour.CreatedDateTime <= _toUtc)
+        #                  || (confirmJour.ModifiedDateTime >= _fromUtc && confirmJour.ModifiedDateTime <= _toUtc)
+        #                 )
+        #              && confirmJour.RecId != firstRecId
+        #        {
+        #            if (isProduction)
+        #            {
+        #                prodStage.clear();
+        #                prodStage.SourceRecId      = confirmJour.RecId;
+        #                prodStage.BatchTag         = batchTag;
+        #                prodStage.CtrlRecId        = _ctrlRecord.RecId;
+        #                prodStage.ExportDocType    = Jay_DocExportDocType::Confirmation;
+        #                prodStage.ExportDocSubType = Jay_DocExportDocSubType::Unit;
+        #                prodStage.QueueStatus      = Jay_DocExportQueueStatus::Queued;
+        #                prodStage.OrigQueueTime    = nowUtc;
+        #                prodStage.PrintDelay       = _ctrlRecord.PrintDelay;
+        #                prodStage.insert();
+        #            }
+        #            else
+        #            {
+        #                histStage.clear();
+        #                histStage.SourceRecId      = confirmJour.RecId;
+        #                histStage.BatchTag         = batchTag;
+        #                histStage.CtrlRecId        = _ctrlRecord.RecId;
+        #                histStage.ExportDocType    = Jay_DocExportDocType::Confirmation;
+        #                histStage.ExportDocSubType = Jay_DocExportDocSubType::Unit;
+        #                histStage.QueueStatus      = Jay_DocExportQueueStatus::Queued;
+        #                histStage.OrigQueueTime    = nowUtc;
+        #                histStage.PrintDelay       = _ctrlRecord.PrintDelay;
+        #                histStage.insert();
+        #            }
+        #
+        #            processed++;
+        #
+        #            // Commit every N rows to prevent runaway transaction logs
+        #            if ((processed mod _batchLimit) == 0)
+        #            {
+        #                ttsCommit;
+        #                ttsBegin;
+        #                info(strFmt("🧱 [StageConfirm:Unit] %1 / %2 staged.", processed, totalRows));
+        #            }
+        #        }
+        #        ttsCommit;
+        #
+        #        // --- Promote to live queue and clean up ---
+        #        if (isProduction)
+        #        {
+        #            Jay_enStageWorker::promoteStageToQueueByTag(
+        #                Jay_DocExportQueuePriority::Production, batchTag);
+        #            ttsBegin;
+        #                delete_from prodStage where prodStage.BatchTag == batchTag;
+        #            ttsCommit;
+        #        }
+        #        else
+        #        {
+        #            Jay_enStageWorker::promoteStageToQueueByTag(
+        #                Jay_DocExportQueuePriority::Historical, batchTag);
+        #            ttsBegin;
+        #                delete_from histStage where histStage.BatchTag == batchTag;
+        #            ttsCommit;
+        #        }
+        #
+        #        info(strFmt("✅ [StageConfirm:Unit] Complete. %1 record(s) staged and promoted (BatchTag=%2).",
+        #                    processed, batchTag));
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        ttsAbort;
+        #        error(strFmt("❌ [StageConfirm:Unit] Failure during staging for CtrlRecId %1.",
+        #                     _ctrlRecord.RecId));
+        #        Jay_DocExportCtrlWorker::updateStatus(
+        #            _ctrlRecord.RecId, Jay_DocExportCtrlStatus::PartialComplete);
+        #    }
+        #}
+        #
+      ENDSOURCE
+      SOURCE #enStageConfirmations_Vendor
+        #/// enStage Vendor confirmations using TempDB staging with BatchTag isolation.
+        #/// Safe for high-volume historical or production runs. Scales in bounded batches.
+        #public static void enStageConfirmations_Vendor(
+        #    Jay_DocExport_CtrlTbl _ctrlRecord,
+        #    utcDateTime            _fromUtc,
+        #    utcDateTime            _toUtc,
+        #    int                    _batchLimit)   // Configurable runtime batch size
+        #{
+        #    Jay_DocExportProdQueueStage prodStage;
+        #    Jay_DocExportHistQueueStage histStage;
+        #    CustConfirmJour             confirmJour;
+        #    RecId                       firstRecId;
+        #    guid                        batchTag   = newGuid();
+        #    utcDateTime                 nowUtc     = DateTimeUtil::utcNow();
+        #    int64                       totalRows  = 0;
+        #    int64                       processed  = 0;
+        #    boolean                     isProduction =
+        #                                    (_ctrlRecord.ExportPriority == Jay_DocExportQueuePriority::Production);
+        #
+        #    info(strFmt("📦 [StageConfirm:Vendor] Begin Ctrl=%1, Window=%2→%3, Mode=%4, BatchLimit=%5",
+        #                _ctrlRecord.RecId,
+        #                DateTimeUtil::toStr(_fromUtc),
+        #                DateTimeUtil::toStr(_toUtc),
+        #                enum2str(_ctrlRecord.ExportPriority),
+        #                _batchLimit));
+        #
+        #    try
+        #    {
+        #        // --- Proof-of-life record to validate schema & existence ---
+        #        select firstOnly confirmJour
+        #            where confirmJour.DataAreaId == curext()
+        #              && confirmJour.CustGroup == 'Vendor'
+        #              && (
+        #                     (confirmJour.CreatedDateTime  >= _fromUtc && confirmJour.CreatedDateTime <= _toUtc)
+        #                  || (confirmJour.ModifiedDateTime >= _fromUtc && confirmJour.ModifiedDateTime <= _toUtc)
+        #                 );
+        #
+        #        if (!confirmJour.RecId)
+        #        {
+        #            info("⏭ [StageConfirm:Vendor] No matching confirmations found; skipping.");
+        #            return;
+        #        }
+        #
+        #        firstRecId = confirmJour.RecId;
+        #
+        #        // --- Count total for logging ---
+        #        select count(RecId)
+        #            from confirmJour
+        #            where confirmJour.DataAreaId == curext()
+        #              && confirmJour.CustGroup == 'Vendor'
+        #              && (
+        #                     (confirmJour.CreatedDateTime  >= _fromUtc && confirmJour.CreatedDateTime <= _toUtc)
+        #                  || (confirmJour.ModifiedDateTime >= _fromUtc && confirmJour.ModifiedDateTime <= _toUtc)
+        #                 );
+        #
+        #        totalRows = confirmJour.RecId;
+        #        info(strFmt("📄 [StageConfirm:Vendor] Found %1 candidate confirmations.", totalRows));
+        #
+        #        // --- Staging loop in bounded batches ---
+        #        ttsBegin;
+        #        while select RecId from confirmJour order by RecId
+        #            where confirmJour.DataAreaId == curext()
+        #              && confirmJour.CustGroup == 'Vendor'
+        #              && (
+        #                     (confirmJour.CreatedDateTime  >= _fromUtc && confirmJour.CreatedDateTime <= _toUtc)
+        #                  || (confirmJour.ModifiedDateTime >= _fromUtc && confirmJour.ModifiedDateTime <= _toUtc)
+        #                 )
+        #              && confirmJour.RecId != firstRecId
+        #        {
+        #            if (isProduction)
+        #            {
+        #                prodStage.clear();
+        #                prodStage.SourceRecId      = confirmJour.RecId;
+        #                prodStage.BatchTag         = batchTag;
+        #                prodStage.CtrlRecId        = _ctrlRecord.RecId;
+        #                prodStage.ExportDocType    = Jay_DocExportDocType::Confirmation;
+        #                prodStage.ExportDocSubType = Jay_DocExportDocSubType::Vendor;
+        #                prodStage.QueueStatus      = Jay_DocExportQueueStatus::Queued;
+        #                prodStage.OrigQueueTime    = nowUtc;
+        #                prodStage.PrintDelay       = _ctrlRecord.PrintDelay;
+        #                prodStage.insert();
+        #            }
+        #            else
+        #            {
+        #                histStage.clear();
+        #                histStage.SourceRecId      = confirmJour.RecId;
+        #                histStage.BatchTag         = batchTag;
+        #                histStage.CtrlRecId        = _ctrlRecord.RecId;
+        #                histStage.ExportDocType    = Jay_DocExportDocType::Confirmation;
+        #                histStage.ExportDocSubType = Jay_DocExportDocSubType::Vendor;
+        #                histStage.QueueStatus      = Jay_DocExportQueueStatus::Queued;
+        #                histStage.OrigQueueTime    = nowUtc;
+        #                histStage.PrintDelay       = _ctrlRecord.PrintDelay;
+        #                histStage.insert();
+        #            }
+        #
+        #            processed++;
+        #
+        #            // Commit periodically
+        #            if ((processed mod _batchLimit) == 0)
+        #            {
+        #                ttsCommit;
+        #                ttsBegin;
+        #                info(strFmt("🧱 [StageConfirm:Vendor] %1 / %2 staged.", processed, totalRows));
+        #            }
+        #        }
+        #        ttsCommit;
+        #
+        #        // --- Promote and purge ---
+        #        if (isProduction)
+        #        {
+        #            Jay_enStageWorker::promoteStageToQueueByTag(
+        #                Jay_DocExportQueuePriority::Production, batchTag);
+        #            ttsBegin;
+        #                delete_from prodStage where prodStage.BatchTag == batchTag;
+        #            ttsCommit;
+        #        }
+        #        else
+        #        {
+        #            Jay_enStageWorker::promoteStageToQueueByTag(
+        #                Jay_DocExportQueuePriority::Historical, batchTag);
+        #            ttsBegin;
+        #                delete_from histStage where histStage.BatchTag == batchTag;
+        #            ttsCommit;
+        #        }
+        #
+        #        info(strFmt("✅ [StageConfirm:Vendor] Complete. %1 record(s) staged and promoted (BatchTag=%2).",
+        #                    processed, batchTag));
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        ttsAbort;
+        #        error(strFmt("❌ [StageConfirm:Vendor] Failure during staging for CtrlRecId %1.",
+        #                     _ctrlRecord.RecId));
+        #        Jay_DocExportCtrlWorker::updateStatus(
+        #            _ctrlRecord.RecId, Jay_DocExportCtrlStatus::PartialComplete);
+        #    }
+        #}
+        #
+      ENDSOURCE
+      SOURCE #enStageController
+        #/// <summary>
+        #/// Entry point for enqueuing all document types per control record.
+        #/// Dynamically adjusts slice intervals to prevent excessive loop counts
+        #/// during large historical runs while retaining fine cadence for
+        #/// production-scale windows.
+        #/// </summary>
+        #public static Jay_DocExportCtrlStatus enStageController(RecId _controllerRecId)
+        #{
+        #    // --- Dynamic slice baseline ---
+        #    int      intervalMinutes = Jay_ExportRuntimeSettings::docQueueCadenceMin(); // default: 30
+        #    Jay_DocExport_CtrlTbl ctrlRecord;
+        #    utcDateTime cursorStart, cursorEnd;
+        #    int64   totalMinutes;
+        #    int     maxIntervalsAllowed = 2000;   // safety: don’t exceed ~2000 slices
+        #    int     adaptiveMinutes;
+        #
+        #    try
+        #    {
+        #        ctrlRecord = Jay_DocExportCtrlWorker::retrieve(_controllerRecId);
+        #        Jay_DocExportCtrlWorker::updateStatus(ctrlRecord.RecId, Jay_DocExportCtrlStatus::Enqueueing);
+        #
+        #        // --- Determine total range length ---
+        #        totalMinutes = DateTimeUtil::getDifference(ctrlRecord.ExportToUtc, ctrlRecord.ExportFromUtc) / 60;
+        #
+        #        // --- Adaptive adjustment ---
+        #        // keep total slices under 2000; widen interval if range is huge
+        #        adaptiveMinutes = max(intervalMinutes, totalMinutes div maxIntervalsAllowed);
+        #        intervalMinutes = max(intervalMinutes, adaptiveMinutes);
+        #
+        #        // Historical runs can go even wider (day-level)
+        #        if (ctrlRecord.ExportPriority == Jay_DocExportQueuePriority::Historical
+        #            && intervalMinutes < 1440)
+        #        {
+        #            // never slice finer than one day for years of history
+        #            intervalMinutes = max(intervalMinutes, 1440);
+        #        }
+        #
+        #        info(strFmt("⏱ Using dynamic slice size of %1 minute(s) for total range %2 minute(s).",
+        #                    intervalMinutes, totalMinutes));
+        #
+        #        // --- Core slicing loop ---
+        #        cursorStart = ctrlRecord.ExportFromUtc;
+        #        cursorEnd   = DateTimeUtil::addMinutes(cursorStart, intervalMinutes);
+        #
+        #        while (cursorStart < ctrlRecord.ExportToUtc)
+        #        {
+        #            if (cursorEnd > ctrlRecord.ExportToUtc)
+        #                cursorEnd = ctrlRecord.ExportToUtc;
+        #
+        #            try
+        #            {
+        #                switch (ctrlRecord.ExportDocType)
+        #                {
+        #                    case Jay_DocExportDocType::Confirmation:
+        #                        Jay_enStageWorker::enStageConfirmation(ctrlRecord, cursorStart, cursorEnd);
+        #                        break;
+        #                    case Jay_DocExportDocType::Invoice:
+        #                        Jay_enStageWorker::enStageInvoices(ctrlRecord, cursorStart, cursorEnd);
+        #                        break;
+        #                    // add others as implemented
+        #                    default:
+        #                        warning(strFmt("⚠ Unsupported ExportDocType %1", ctrlRecord.ExportDocType));
+        #                        break;
+        #                }
+        #            }
+        #            catch (Exception::Error)
+        #            {
+        #                warning(strFmt("⚠ Slice %1 → %2 failed; continuing.", cursorStart, cursorEnd));
+        #            }
+        #
+        #            cursorStart = cursorEnd;
+        #            cursorEnd   = DateTimeUtil::addMinutes(cursorStart, intervalMinutes);
+        #        }
+        #
+        #        // --- Finalize control record ---
+        #        ttsBegin;
+        #        select forUpdate ctrlRecord
+        #            where ctrlRecord.RecId == _controllerRecId;
+        #        if (ctrlRecord)
+        #        {
+        #            ctrlRecord.ExportAttempts++;
+        #            ctrlRecord.CtrlStatus = Jay_DocExportCtrlStatus::EnqueueComplete;
+        #            ctrlRecord.update();
+        #        }
+        #        ttsCommit;
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        error(strFmt("❌ enStageController failed for CtrlRecId %1", _controllerRecId));
+        #        ttsBegin;
+        #        select forUpdate ctrlRecord
+        #            where ctrlRecord.RecId == _controllerRecId;
+        #        if (ctrlRecord)
+        #        {
+        #            ctrlRecord.ExportAttempts++;
+        #            ctrlRecord.CtrlStatus = Jay_DocExportCtrlStatus::PartialComplete;
+        #            ctrlRecord.update();
+        #        }
+        #        ttsCommit;
+        #    }
+        #
+        #    Jay_DocExportCtrlWorker::updateStatus(_controllerRecId, Jay_DocExportCtrlStatus::EnqueueComplete);
+        #    return ctrlRecord.CtrlStatus;
+        #}
+      ENDSOURCE
+      SOURCE #enStageInvoices
+        #/// ======================================================================
+        #/// METHOD: enStageInvoices
+        #/// PURPOSE: Dispatch invoice enStaging by subtype, skipping empty subtypes.
+        #/// ======================================================================
+        #public static void enStageInvoices(
+        #    Jay_DocExport_CtrlTbl _ctrlRecord,
+        #    utcDateTime            _fromUtc,
+        #    utcDateTime            _toUtc)
+        #{
+        #    int batchLimit = Jay_ExportRuntimeSettings::maxStageBatchSize();
+        #
+        #    info(strFmt("📦 [EnStage] Invoices %1 → %2 (%3 mode, batch=%4)",
+        #                DateTimeUtil::toStr(_fromUtc),
+        #                DateTimeUtil::toStr(_toUtc),
+        #                enum2str(_ctrlRecord.ExportPriority),
+        #                batchLimit));
+        #
+        #    switch (_ctrlRecord.ExportDocSubType)
+        #    {
+        #        case Jay_DocExportDocSubType::Unit:
+        #            if (Jay_enStageWorker::InvoiceSubtypeHasData(Jay_DocExportDocSubType::Unit, _fromUtc, _toUtc))
+        #                Jay_enStageWorker::enStageInvoices_Unit(_ctrlRecord, _fromUtc, _toUtc, batchLimit);
+        #            break;
+        #
+        #        case Jay_DocExportDocSubType::Part:
+        #            if (Jay_enStageWorker::InvoiceSubtypeHasData(Jay_DocExportDocSubType::Part, _fromUtc, _toUtc))
+        #                Jay_enStageWorker::enStageInvoices_Parts(_ctrlRecord, _fromUtc, _toUtc, batchLimit);
+        #            break;
+        #
+        #        case Jay_DocExportDocSubType::Vendor:
+        #            if (Jay_enStageWorker::InvoiceSubtypeHasData(Jay_DocExportDocSubType::Vendor, _fromUtc, _toUtc))
+        #                Jay_enStageWorker::enStageInvoices_Vendor(_ctrlRecord, _fromUtc, _toUtc, batchLimit);
+        #            break;
+        #
+        #        case Jay_DocExportDocSubType::All:
+        #            if (Jay_enStageWorker::InvoiceSubtypeHasData(Jay_DocExportDocSubType::Unit, _fromUtc, _toUtc))
+        #                Jay_enStageWorker::enStageInvoices_Unit(_ctrlRecord, _fromUtc, _toUtc, batchLimit);
+        #
+        #            if (Jay_enStageWorker::InvoiceSubtypeHasData(Jay_DocExportDocSubType::Part, _fromUtc, _toUtc))
+        #                Jay_enStageWorker::enStageInvoices_Parts(_ctrlRecord, _fromUtc, _toUtc, batchLimit);
+        #
+        #            if (Jay_enStageWorker::InvoiceSubtypeHasData(Jay_DocExportDocSubType::Vendor, _fromUtc, _toUtc))
+        #                Jay_enStageWorker::enStageInvoices_Vendor(_ctrlRecord, _fromUtc, _toUtc, batchLimit);
+        #            break;
+        #
+        #        default:
+        #            warning(strFmt("⚠ No handler implemented for Invoice SubType=%1",
+        #                           _ctrlRecord.ExportDocSubType));
+        #            break;
+        #    }
+        #}
+        #
+      ENDSOURCE
+      SOURCE #enStageInvoices_Parts
+        #/// ======================================================================
+        #/// METHOD: enStageInvoices_Parts
+        #/// PURPOSE:
+        #///   Enqueue Parts invoices using TempDB staging in bounded batches.
+        #///   Safe for massive historical or long production windows.
+        #/// ======================================================================
+        #public static void enStageInvoices_Parts(
+        #    Jay_DocExport_CtrlTbl _ctrlRecord,
+        #    utcDateTime            _fromUtc,
+        #    utcDateTime            _toUtc,
+        #    int                    _batchLimit)  // new param
+        #{
+        #    Jay_DocExportProdQueueStage prodStage;
+        #    Jay_DocExportHistQueueStage histStage;
+        #    CustInvoiceJour             invoiceJour;
+        #    RecId                       firstRecId;
+        #    guid                        batchTag  = newGuid();
+        #    utcDateTime                 nowUtc    = DateTimeUtil::utcNow();
+        #    int64                       totalRows = 0;
+        #    int64                       processed = 0;
+        #    boolean                     isProduction = (_ctrlRecord.ExportPriority == Jay_DocExportQueuePriority::Production);
+        #
+        #    try
+        #    {
+        #        // --- Quick probe for any matching records ---
+        #        select firstOnly invoiceJour
+        #            where invoiceJour.DataAreaId == curext()
+        #              && (
+        #                     (invoiceJour.CreatedDateTime  >= _fromUtc && invoiceJour.CreatedDateTime <= _toUtc)
+        #                  || (invoiceJour.ModifiedDateTime >= _fromUtc && invoiceJour.ModifiedDateTime <= _toUtc)
+        #                 )
+        #              && (
+        #                     invoiceJour.CustGroup == 'Part'
+        #                  || invoiceJour.CustGroup == 'Part_DPU'
+        #                  || (invoiceJour.CustGroup == 'Internal' && invoiceJour.MCAAMDEVICEBRANDID == '')
+        #                 );
+        #
+        #        if (!invoiceJour.RecId)
+        #            return;
+        #
+        #        firstRecId = invoiceJour.RecId;
+        #
+        #        // --- Count total matching rows ---
+        #        select count(RecId)
+        #            from invoiceJour
+        #            where invoiceJour.DataAreaId == curext()
+        #              && (
+        #                     (invoiceJour.CreatedDateTime  >= _fromUtc && invoiceJour.CreatedDateTime <= _toUtc)
+        #                  || (invoiceJour.ModifiedDateTime >= _fromUtc && invoiceJour.ModifiedDateTime <= _toUtc)
+        #                 )
+        #              && (
+        #                     invoiceJour.CustGroup == 'Part'
+        #                  || invoiceJour.CustGroup == 'Part_DPU'
+        #                  || (invoiceJour.CustGroup == 'Internal' && invoiceJour.MCAAMDEVICEBRANDID == '')
+        #                 );
+        #
+        #        totalRows = invoiceJour.RecId; // AX loads the count into the selected field
+        #
+        #        info(strFmt("📄 [StageParts] Found %1 invoices (%2 mode, batch=%3)",
+        #                    totalRows, enum2str(_ctrlRecord.ExportPriority), _batchLimit));
+        #
+        #        // --- Iterate through rows in bounded chunks ---
+        #        ttsBegin;
+        #        while select RecId
+        #            from invoiceJour order by RecId
+        #            where invoiceJour.DataAreaId == curext()
+        #              && (
+        #                     (invoiceJour.CreatedDateTime  >= _fromUtc && invoiceJour.CreatedDateTime <= _toUtc)
+        #                  || (invoiceJour.ModifiedDateTime >= _fromUtc && invoiceJour.ModifiedDateTime <= _toUtc)
+        #                 )
+        #              && (
+        #                     invoiceJour.CustGroup == 'Part'
+        #                  || invoiceJour.CustGroup == 'Part_DPU'
+        #                  || (invoiceJour.CustGroup == 'Internal' && invoiceJour.MCAAMDEVICEBRANDID == '')
+        #                 )
+        #              && invoiceJour.RecId != firstRecId
+        #
+        #        {
+        #            if (isProduction)
+        #            {
+        #                prodStage.clear();
+        #                prodStage.SourceRecId      = invoiceJour.RecId;
+        #                prodStage.BatchTag         = batchTag;
+        #                prodStage.CtrlRecId        = _ctrlRecord.RecId;
+        #                prodStage.ExportDocType    = Jay_DocExportDocType::Invoice;
+        #                prodStage.ExportDocSubType = Jay_DocExportDocSubType::Part;
+        #                prodStage.QueueStatus      = Jay_DocExportQueueStatus::Queued;
+        #                prodStage.OrigQueueTime    = nowUtc;
+        #                prodStage.PrintDelay       = _ctrlRecord.PrintDelay;
+        #                prodStage.insert();
+        #            }
+        #            else
+        #            {
+        #                histStage.clear();
+        #                histStage.SourceRecId      = invoiceJour.RecId;
+        #                histStage.BatchTag         = batchTag;
+        #                histStage.CtrlRecId        = _ctrlRecord.RecId;
+        #                histStage.ExportDocType    = Jay_DocExportDocType::Invoice;
+        #                histStage.ExportDocSubType = Jay_DocExportDocSubType::Part;
+        #                histStage.QueueStatus      = Jay_DocExportQueueStatus::Queued;
+        #                histStage.OrigQueueTime    = nowUtc;
+        #                histStage.PrintDelay       = _ctrlRecord.PrintDelay;
+        #                histStage.insert();
+        #            }
+        #
+        #            processed++;
+        #
+        #            // Commit every N rows to prevent huge transactions
+        #            if ((processed mod _batchLimit) == 0)
+        #            {
+        #                ttsCommit;
+        #                ttsBegin;
+        #                info(strFmt("🧱 [StageParts] %1 / %2 staged.", processed, totalRows));
+        #            }
+        #        }
+        #        ttsCommit;
+        #
+        #        // --- Promote staged records ---
+        #        if (isProduction)
+        #        {
+        #            Jay_enStageWorker::promoteStageToQueueByTag(Jay_DocExportQueuePriority::Production, batchTag);
+        #            ttsBegin;
+        #                delete_from prodStage where prodStage.BatchTag == batchTag;
+        #            ttsCommit;
+        #        }
+        #        else
+        #        {
+        #            Jay_enStageWorker::promoteStageToQueueByTag(Jay_DocExportQueuePriority::Historical, batchTag);
+        #            ttsBegin;
+        #                delete_from histStage where histStage.BatchTag == batchTag;
+        #            ttsCommit;
+        #        }
+        #
+        #        info(strFmt("✅ [StageParts] Complete: %1 record(s) staged and promoted.", processed));
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        ttsAbort;
+        #        Jay_DocExportCtrlWorker::updateStatus(
+        #            _ctrlRecord.RecId, Jay_DocExportCtrlStatus::PartialComplete);
+        #        error(strFmt("❌ [StageParts] Failed for CtrlRecId %1", _ctrlRecord.RecId));
+        #    }
+        #}
+        #
+      ENDSOURCE
+      SOURCE #enStageInvoices_Unit
+        #/// ======================================================================
+        #/// METHOD: enStageInvoices_Unit
+        #/// PURPOSE:
+        #///   Enqueue Unit invoices using TempDB staging in bounded batches.
+        #///   Safe for large windows and consistent with enStageInvoices_Parts.
+        #/// ======================================================================
+        #public static void enStageInvoices_Unit(
+        #    Jay_DocExport_CtrlTbl _ctrlRecord,
+        #    utcDateTime            _fromUtc,
+        #    utcDateTime            _toUtc,
+        #    int                    _batchLimit)
+        #{
+        #    Jay_DocExportProdQueueStage prodStage;
+        #    Jay_DocExportHistQueueStage histStage;
+        #    CustInvoiceJour             invoiceJour;
+        #    RecId                       firstRecId;
+        #    guid                        batchTag  = newGuid();
+        #    utcDateTime                 nowUtc    = DateTimeUtil::utcNow();
+        #    int64                       totalRows = 0;
+        #    int64                       processed = 0;
+        #    boolean                     isProduction = (_ctrlRecord.ExportPriority == Jay_DocExportQueuePriority::Production);
+        #
+        #    try
+        #    {
+        #        // --- Probe for any matches ---
+        #        select firstOnly invoiceJour
+        #            where invoiceJour.DataAreaId == curext()
+        #              && (
+        #                     (invoiceJour.CreatedDateTime  >= _fromUtc && invoiceJour.CreatedDateTime <= _toUtc)
+        #                  || (invoiceJour.ModifiedDateTime >= _fromUtc && invoiceJour.ModifiedDateTime <= _toUtc)
+        #                 )
+        #              && (
+        #                     invoiceJour.CustGroup == 'Unit'
+        #                  || invoiceJour.CustGroup == 'Unit_PO'
+        #                  || (invoiceJour.CustGroup == 'Internal' && invoiceJour.MCAAMDEVICEBRANDID != '')
+        #                 );
+        #
+        #        if (!invoiceJour.RecId)
+        #            return;
+        #
+        #        firstRecId = invoiceJour.RecId;
+        #
+        #        // --- Count total ---
+        #        select count(RecId)
+        #            from invoiceJour
+        #            where invoiceJour.DataAreaId == curext()
+        #              && (
+        #                     (invoiceJour.CreatedDateTime  >= _fromUtc && invoiceJour.CreatedDateTime <= _toUtc)
+        #                  || (invoiceJour.ModifiedDateTime >= _fromUtc && invoiceJour.ModifiedDateTime <= _toUtc)
+        #                 )
+        #              && (
+        #                     invoiceJour.CustGroup == 'Unit'
+        #                  || invoiceJour.CustGroup == 'Unit_PO'
+        #                  || (invoiceJour.CustGroup == 'Internal' && invoiceJour.MCAAMDEVICEBRANDID != '')
+        #                 );
+        #
+        #        totalRows = invoiceJour.RecId;
+        #        info(strFmt("📄 [StageUnit] Found %1 invoices (%2 mode, batch=%3)",
+        #                    totalRows, enum2str(_ctrlRecord.ExportPriority), _batchLimit));
+        #
+        #        // --- Loop through rows in bounded chunks ---
+        #        ttsBegin;
+        #        while select RecId
+        #            from invoiceJour order by RecId
+        #            where invoiceJour.DataAreaId == curext()
+        #              && (
+        #                     (invoiceJour.CreatedDateTime  >= _fromUtc && invoiceJour.CreatedDateTime <= _toUtc)
+        #                  || (invoiceJour.ModifiedDateTime >= _fromUtc && invoiceJour.ModifiedDateTime <= _toUtc)
+        #                 )
+        #              && (
+        #                     invoiceJour.CustGroup == 'Unit'
+        #                  || invoiceJour.CustGroup == 'Unit_PO'
+        #                  || (invoiceJour.CustGroup == 'Internal' && invoiceJour.MCAAMDEVICEBRANDID != '')
+        #                 )
+        #              && invoiceJour.RecId != firstRecId
+        #        {
+        #            if (isProduction)
+        #            {
+        #                prodStage.clear();
+        #                prodStage.SourceRecId      = invoiceJour.RecId;
+        #                prodStage.BatchTag         = batchTag;
+        #                prodStage.CtrlRecId        = _ctrlRecord.RecId;
+        #                prodStage.ExportDocType    = Jay_DocExportDocType::Invoice;
+        #                prodStage.ExportDocSubType = Jay_DocExportDocSubType::Unit;
+        #                prodStage.QueueStatus      = Jay_DocExportQueueStatus::Queued;
+        #                prodStage.OrigQueueTime    = nowUtc;
+        #                prodStage.PrintDelay       = _ctrlRecord.PrintDelay;
+        #                prodStage.insert();
+        #            }
+        #            else
+        #            {
+        #                histStage.clear();
+        #                histStage.SourceRecId      = invoiceJour.RecId;
+        #                histStage.BatchTag         = batchTag;
+        #                histStage.CtrlRecId        = _ctrlRecord.RecId;
+        #                histStage.ExportDocType    = Jay_DocExportDocType::Invoice;
+        #                histStage.ExportDocSubType = Jay_DocExportDocSubType::Unit;
+        #                histStage.QueueStatus      = Jay_DocExportQueueStatus::Queued;
+        #                histStage.OrigQueueTime    = nowUtc;
+        #                histStage.PrintDelay       = _ctrlRecord.PrintDelay;
+        #                histStage.insert();
+        #            }
+        #
+        #            processed++;
+        #
+        #            if ((processed mod _batchLimit) == 0)
+        #            {
+        #                ttsCommit;
+        #                ttsBegin;
+        #                info(strFmt("🧱 [StageUnit] %1 / %2 staged.", processed, totalRows));
+        #            }
+        #        }
+        #        ttsCommit;
+        #
+        #        // --- Promote staged records ---
+        #        if (isProduction)
+        #        {
+        #            Jay_enStageWorker::promoteStageToQueueByTag(Jay_DocExportQueuePriority::Production, batchTag);
+        #            ttsBegin;
+        #                delete_from prodStage where prodStage.BatchTag == batchTag;
+        #            ttsCommit;
+        #        }
+        #        else
+        #        {
+        #            Jay_enStageWorker::promoteStageToQueueByTag(Jay_DocExportQueuePriority::Historical, batchTag);
+        #            ttsBegin;
+        #                delete_from histStage where histStage.BatchTag == batchTag;
+        #            ttsCommit;
+        #        }
+        #
+        #        info(strFmt("✅ [StageUnit] Complete: %1 record(s) staged and promoted.", processed));
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        ttsAbort;
+        #        Jay_DocExportCtrlWorker::updateStatus(
+        #            _ctrlRecord.RecId, Jay_DocExportCtrlStatus::PartialComplete);
+        #        error(strFmt("❌ [StageUnit] Failed for CtrlRecId %1", _ctrlRecord.RecId));
+        #    }
+        #}
+        #
+      ENDSOURCE
+      SOURCE #enStageInvoices_Vendor
+        #/// ======================================================================
+        #/// METHOD: enStageInvoices_Vendor
+        #/// PURPOSE:
+        #///   Enqueue Vendor invoices using TempDB staging in bounded batches.
+        #///   Safe for large time windows and consistent with Unit/Parts patterns.
+        #/// ======================================================================
+        #public static void enStageInvoices_Vendor(
+        #    Jay_DocExport_CtrlTbl _ctrlRecord,
+        #    utcDateTime            _fromUtc,
+        #    utcDateTime            _toUtc,
+        #    int                    _batchLimit)
+        #{
+        #    Jay_DocExportProdQueueStage prodStage;
+        #    Jay_DocExportHistQueueStage histStage;
+        #    CustInvoiceJour             invoiceJour;
+        #    RecId                       firstRecId;
+        #    guid                        batchTag  = newGuid();
+        #    utcDateTime                 nowUtc    = DateTimeUtil::utcNow();
+        #    int64                       totalRows = 0;
+        #    int64                       processed = 0;
+        #    boolean                     isProduction = (_ctrlRecord.ExportPriority == Jay_DocExportQueuePriority::Production);
+        #
+        #    try
+        #    {
+        #        // --- Quick probe for matching records ---
+        #        select firstOnly invoiceJour
+        #            where invoiceJour.DataAreaId == curext()
+        #              && invoiceJour.CustGroup == 'Vendor'
+        #              && (
+        #                     (invoiceJour.CreatedDateTime  >= _fromUtc && invoiceJour.CreatedDateTime <= _toUtc)
+        #                  || (invoiceJour.ModifiedDateTime >= _fromUtc && invoiceJour.ModifiedDateTime <= _toUtc)
+        #                 );
+        #
+        #        if (!invoiceJour.RecId)
+        #            return;
+        #
+        #        firstRecId = invoiceJour.RecId;
+        #
+        #        // --- Count total records ---
+        #        select count(RecId)
+        #            from invoiceJour
+        #            where invoiceJour.DataAreaId == curext()
+        #              && invoiceJour.CustGroup == 'Vendor'
+        #              && (
+        #                     (invoiceJour.CreatedDateTime  >= _fromUtc && invoiceJour.CreatedDateTime <= _toUtc)
+        #                  || (invoiceJour.ModifiedDateTime >= _fromUtc && invoiceJour.ModifiedDateTime <= _toUtc)
+        #                 );
+        #
+        #        totalRows = invoiceJour.RecId;
+        #        info(strFmt("📄 [StageVendor] Found %1 invoices (%2 mode, batch=%3)",
+        #                    totalRows, enum2str(_ctrlRecord.ExportPriority), _batchLimit));
+        #
+        #        // --- Iterate through rows in bounded chunks ---
+        #        ttsBegin;
+        #        while select RecId
+        #            from invoiceJour order by RecId
+        #            where invoiceJour.DataAreaId == curext()
+        #              && invoiceJour.CustGroup == 'Vendor'
+        #              && (
+        #                     (invoiceJour.CreatedDateTime  >= _fromUtc && invoiceJour.CreatedDateTime <= _toUtc)
+        #                  || (invoiceJour.ModifiedDateTime >= _fromUtc && invoiceJour.ModifiedDateTime <= _toUtc)
+        #                 )
+        #              && invoiceJour.RecId != firstRecId
+        #        {
+        #            if (isProduction)
+        #            {
+        #                prodStage.clear();
+        #                prodStage.SourceRecId      = invoiceJour.RecId;
+        #                prodStage.BatchTag         = batchTag;
+        #                prodStage.CtrlRecId        = _ctrlRecord.RecId;
+        #                prodStage.ExportDocType    = Jay_DocExportDocType::Invoice;
+        #                prodStage.ExportDocSubType = Jay_DocExportDocSubType::Vendor;
+        #                prodStage.QueueStatus      = Jay_DocExportQueueStatus::Queued;
+        #                prodStage.OrigQueueTime    = nowUtc;
+        #                prodStage.PrintDelay       = _ctrlRecord.PrintDelay;
+        #                prodStage.insert();
+        #            }
+        #            else
+        #            {
+        #                histStage.clear();
+        #                histStage.SourceRecId      = invoiceJour.RecId;
+        #                histStage.BatchTag         = batchTag;
+        #                histStage.CtrlRecId        = _ctrlRecord.RecId;
+        #                histStage.ExportDocType    = Jay_DocExportDocType::Invoice;
+        #                histStage.ExportDocSubType = Jay_DocExportDocSubType::Vendor;
+        #                histStage.QueueStatus      = Jay_DocExportQueueStatus::Queued;
+        #                histStage.OrigQueueTime    = nowUtc;
+        #                histStage.PrintDelay       = _ctrlRecord.PrintDelay;
+        #                histStage.insert();
+        #            }
+        #
+        #            processed++;
+        #
+        #            if ((processed mod _batchLimit) == 0)
+        #            {
+        #                ttsCommit;
+        #                ttsBegin;
+        #                info(strFmt("🧱 [StageVendor] %1 / %2 staged.", processed, totalRows));
+        #            }
+        #        }
+        #        ttsCommit;
+        #
+        #        // --- Promote staged records ---
+        #        if (isProduction)
+        #        {
+        #            Jay_enStageWorker::promoteStageToQueueByTag(Jay_DocExportQueuePriority::Production, batchTag);
+        #            ttsBegin;
+        #                delete_from prodStage where prodStage.BatchTag == batchTag;
+        #            ttsCommit;
+        #        }
+        #        else
+        #        {
+        #            Jay_enStageWorker::promoteStageToQueueByTag(Jay_DocExportQueuePriority::Historical, batchTag);
+        #            ttsBegin;
+        #                delete_from histStage where histStage.BatchTag == batchTag;
+        #            ttsCommit;
+        #        }
+        #
+        #        info(strFmt("✅ [StageVendor] Complete: %1 record(s) staged and promoted.", processed));
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        ttsAbort;
+        #        Jay_DocExportCtrlWorker::updateStatus(
+        #            _ctrlRecord.RecId, Jay_DocExportCtrlStatus::PartialComplete);
+        #        error(strFmt("❌ [StageVendor] Failed for CtrlRecId %1", _ctrlRecord.RecId));
+        #    }
+        #}
+        #
+      ENDSOURCE
+      SOURCE #enStageMSRP
+        #/// ======================================================================
+        #/// METHOD: enStageMSRP
+        #/// PURPOSE:
+        #///   Enqueue MSRP sheets using TempDB staging in bounded batches.
+        #///   Safe for massive SalesTable windows and consistent with invoice logic.
+        #/// ======================================================================
+        #public static void enStageMSRP(
+        #    Jay_DocExport_CtrlTbl _ctrlRecord,
+        #    utcDateTime            _fromUtc,
+        #    utcDateTime            _toUtc,
+        #    int                    _batchLimit)
+        #{
+        #    Jay_DocExportProdQueueStage prodStage;
+        #    Jay_DocExportHistQueueStage histStage;
+        #    SalesTable                  salesTable;
+        #    RecId                       firstRecId;
+        #    guid                        batchTag  = newGuid();
+        #    utcDateTime                 nowUtc    = DateTimeUtil::utcNow();
+        #    int64                       totalRows = 0;
+        #    int64                       processed = 0;
+        #    boolean                     isProduction = (_ctrlRecord.ExportPriority == Jay_DocExportQueuePriority::Production);
+        #
+        #    try
+        #    {
+        #        // --- Probe for any matching salesTable records ---
+        #        select firstOnly salesTable
+        #            where salesTable.DataAreaId == curext()
+        #              && salesTable.AMDeviceId != ''
+        #              && (
+        #                     (salesTable.CreatedDateTime  >= _fromUtc && salesTable.CreatedDateTime <= _toUtc)
+        #                  || (salesTable.ModifiedDateTime >= _fromUtc && salesTable.ModifiedDateTime <= _toUtc)
+        #                 );
+        #
+        #        if (!salesTable.RecId)
+        #            return;
+        #
+        #        firstRecId = salesTable.RecId;
+        #
+        #        // --- Count total matching rows ---
+        #        select count(RecId)
+        #            from salesTable
+        #            where salesTable.DataAreaId == curext()
+        #              && salesTable.AMDeviceId != ''
+        #              && (
+        #                     (salesTable.CreatedDateTime  >= _fromUtc && salesTable.CreatedDateTime <= _toUtc)
+        #                  || (salesTable.ModifiedDateTime >= _fromUtc && salesTable.ModifiedDateTime <= _toUtc)
+        #                 );
+        #
+        #        totalRows = salesTable.RecId;
+        #        info(strFmt("📄 [StageMSRP] Found %1 SalesTable records (%2 mode, batch=%3)",
+        #                    totalRows, enum2str(_ctrlRecord.ExportPriority), _batchLimit));
+        #
+        #        // --- Iterate through bounded chunks ---
+        #        ttsBegin;
+        #        while select RecId, AMDeviceId
+        #            from salesTable order by RecId
+        #            where salesTable.DataAreaId == curext()
+        #              && salesTable.AMDeviceId != ''
+        #              && (
+        #                     (salesTable.CreatedDateTime  >= _fromUtc && salesTable.CreatedDateTime <= _toUtc)
+        #                  || (salesTable.ModifiedDateTime >= _fromUtc && salesTable.ModifiedDateTime <= _toUtc)
+        #                 )
+        #              && salesTable.RecId != firstRecId
+        #        {
+        #            if (isProduction)
+        #            {
+        #                prodStage.clear();
+        #                prodStage.SourceRecId      = salesTable.RecId;
+        #                prodStage.BatchTag         = batchTag;
+        #                prodStage.CtrlRecId        = _ctrlRecord.RecId;
+        #                prodStage.ExportDocType    = Jay_DocExportDocType::MSRP;
+        #                prodStage.ExportDocSubType = Jay_DocExportDocSubType::All;
+        #                prodStage.QueueStatus      = Jay_DocExportQueueStatus::Queued;
+        #                prodStage.OrigQueueTime    = nowUtc;
+        #                prodStage.PrintDelay       = _ctrlRecord.PrintDelay;
+        #                prodStage.insert();
+        #            }
+        #            else
+        #            {
+        #                histStage.clear();
+        #                histStage.SourceRecId      = salesTable.RecId;
+        #                histStage.BatchTag         = batchTag;
+        #                histStage.CtrlRecId        = _ctrlRecord.RecId;
+        #                histStage.ExportDocType    = Jay_DocExportDocType::MSRP;
+        #                histStage.ExportDocSubType = Jay_DocExportDocSubType::All;
+        #                histStage.QueueStatus      = Jay_DocExportQueueStatus::Queued;
+        #                histStage.OrigQueueTime    = nowUtc;
+        #                histStage.PrintDelay       = _ctrlRecord.PrintDelay;
+        #                histStage.insert();
+        #            }
+        #
+        #            processed++;
+        #
+        #            if ((processed mod _batchLimit) == 0)
+        #            {
+        #                ttsCommit;
+        #                ttsBegin;
+        #                info(strFmt("🧱 [StageMSRP] %1 / %2 staged.", processed, totalRows));
+        #            }
+        #        }
+        #        ttsCommit;
+        #
+        #        // --- Promote staged records ---
+        #        if (isProduction)
+        #        {
+        #            Jay_enStageWorker::promoteStageToQueueByTag(Jay_DocExportQueuePriority::Production, batchTag);
+        #            ttsBegin;
+        #                delete_from prodStage where prodStage.BatchTag == batchTag;
+        #            ttsCommit;
+        #        }
+        #        else
+        #        {
+        #            Jay_enStageWorker::promoteStageToQueueByTag(Jay_DocExportQueuePriority::Historical, batchTag);
+        #            ttsBegin;
+        #                delete_from histStage where histStage.BatchTag == batchTag;
+        #            ttsCommit;
+        #        }
+        #
+        #        info(strFmt("✅ [StageMSRP] Complete: %1 record(s) staged and promoted.", processed));
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        ttsAbort;
+        #        Jay_DocExportCtrlWorker::updateStatus(
+        #            _ctrlRecord.RecId, Jay_DocExportCtrlStatus::PartialComplete);
+        #        error(strFmt("❌ [StageMSRP] Failed for CtrlRecId %1", _ctrlRecord.RecId));
+        #    }
+        #}
+        #
+      ENDSOURCE
+      SOURCE #enStagePurchaseOrders
+        #/// ======================================================================
+        #/// METHOD: enStagePurchaseOrders
+        #/// PURPOSE:
+        #///   Enqueue Purchase Orders using TempDB staging in bounded batches.
+        #///   Consistent with all other staging methods.
+        #/// ======================================================================
+        #public static void enStagePurchaseOrders(
+        #    Jay_DocExport_CtrlTbl _ctrlRecord,
+        #    utcDateTime            _fromUtc,
+        #    utcDateTime            _toUtc,
+        #    int                    _batchLimit)
+        #{
+        #    Jay_DocExportProdQueueStage prodStage;
+        #    Jay_DocExportHistQueueStage histStage;
+        #    PurchTable                  purchTable;
+        #    RecId                       firstRecId;
+        #    guid                        batchTag  = newGuid();
+        #    utcDateTime                 nowUtc    = DateTimeUtil::utcNow();
+        #    int64                       totalRows = 0;
+        #    int64                       processed = 0;
+        #    boolean                     isProduction = (_ctrlRecord.ExportPriority == Jay_DocExportQueuePriority::Production);
+        #
+        #    try
+        #    {
+        #        // --- Probe for relevant POs ---
+        #        select firstOnly purchTable
+        #            where purchTable.DataAreaId == curext()
+        #              && (
+        #                     (purchTable.CreatedDateTime  >= _fromUtc && purchTable.CreatedDateTime <= _toUtc)
+        #                  || (purchTable.ModifiedDateTime >= _fromUtc && purchTable.ModifiedDateTime <= _toUtc)
+        #                 )
+        #              && (purchTable.PurchStatus == PurchStatus::Backorder
+        #               || purchTable.PurchStatus == PurchStatus::Received
+        #               || purchTable.PurchStatus == PurchStatus::Invoiced);
+        #
+        #        if (!purchTable.RecId)
+        #            return;
+        #
+        #        firstRecId = purchTable.RecId;
+        #
+        #        // --- Count total ---
+        #        select count(RecId)
+        #            from purchTable
+        #            where purchTable.DataAreaId == curext()
+        #              && (
+        #                     (purchTable.CreatedDateTime  >= _fromUtc && purchTable.CreatedDateTime <= _toUtc)
+        #                  || (purchTable.ModifiedDateTime >= _fromUtc && purchTable.ModifiedDateTime <= _toUtc)
+        #                 )
+        #              && (purchTable.PurchStatus == PurchStatus::Backorder
+        #               || purchTable.PurchStatus == PurchStatus::Received
+        #               || purchTable.PurchStatus == PurchStatus::Invoiced);
+        #
+        #        totalRows = purchTable.RecId;
+        #        info(strFmt("📄 [StagePO] Found %1 purchase orders (%2 mode, batch=%3)",
+        #                    totalRows, enum2str(_ctrlRecord.ExportPriority), _batchLimit));
+        #
+        #        // --- Bounded staging loop ---
+        #        ttsBegin;
+        #        while select RecId
+        #            from purchTable order by RecId
+        #            where purchTable.DataAreaId == curext()
+        #              && (
+        #                     (purchTable.CreatedDateTime  >= _fromUtc && purchTable.CreatedDateTime <= _toUtc)
+        #                  || (purchTable.ModifiedDateTime >= _fromUtc && purchTable.ModifiedDateTime <= _toUtc)
+        #                 )
+        #              && (purchTable.PurchStatus == PurchStatus::Backorder
+        #               || purchTable.PurchStatus == PurchStatus::Received
+        #               || purchTable.PurchStatus == PurchStatus::Invoiced)
+        #              && purchTable.RecId != firstRecId
+        #        {
+        #            if (isProduction)
+        #            {
+        #                prodStage.clear();
+        #                prodStage.SourceRecId      = purchTable.RecId;
+        #                prodStage.BatchTag         = batchTag;
+        #                prodStage.CtrlRecId        = _ctrlRecord.RecId;
+        #                prodStage.ExportDocType    = Jay_DocExportDocType::PurchaseOrder;
+        #                prodStage.ExportDocSubType = Jay_DocExportDocSubType::All;
+        #                prodStage.QueueStatus      = Jay_DocExportQueueStatus::Queued;
+        #                prodStage.OrigQueueTime    = nowUtc;
+        #                prodStage.PrintDelay       = _ctrlRecord.PrintDelay;
+        #                prodStage.insert();
+        #            }
+        #            else
+        #            {
+        #                histStage.clear();
+        #                histStage.SourceRecId      = purchTable.RecId;
+        #                histStage.BatchTag         = batchTag;
+        #                histStage.CtrlRecId        = _ctrlRecord.RecId;
+        #                histStage.ExportDocType    = Jay_DocExportDocType::PurchaseOrder;
+        #                histStage.ExportDocSubType = Jay_DocExportDocSubType::All;
+        #                histStage.QueueStatus      = Jay_DocExportQueueStatus::Queued;
+        #                histStage.OrigQueueTime    = nowUtc;
+        #                histStage.PrintDelay       = _ctrlRecord.PrintDelay;
+        #                histStage.insert();
+        #            }
+        #
+        #            processed++;
+        #
+        #            if ((processed mod _batchLimit) == 0)
+        #            {
+        #                ttsCommit;
+        #                ttsBegin;
+        #                info(strFmt("🧱 [StagePO] %1 / %2 staged.", processed, totalRows));
+        #            }
+        #        }
+        #        ttsCommit;
+        #
+        #        // --- Promote & cleanup ---
+        #        if (isProduction)
+        #        {
+        #            Jay_enStageWorker::promoteStageToQueueByTag(Jay_DocExportQueuePriority::Production, batchTag);
+        #            ttsBegin;
+        #                delete_from prodStage where prodStage.BatchTag == batchTag;
+        #            ttsCommit;
+        #        }
+        #        else
+        #        {
+        #            Jay_enStageWorker::promoteStageToQueueByTag(Jay_DocExportQueuePriority::Historical, batchTag);
+        #            ttsBegin;
+        #                delete_from histStage where histStage.BatchTag == batchTag;
+        #            ttsCommit;
+        #        }
+        #
+        #        info(strFmt("✅ [StagePO] Complete: %1 record(s) staged and promoted.", processed));
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        ttsAbort;
+        #        Jay_DocExportCtrlWorker::updateStatus(
+        #            _ctrlRecord.RecId, Jay_DocExportCtrlStatus::PartialComplete);
+        #        error(strFmt("❌ [StagePO] Failed for CtrlRecId %1", _ctrlRecord.RecId));
+        #    }
+        #}
+        #
+      ENDSOURCE
+      SOURCE #InvoiceSubtypeHasData
+        #/// <summary>
+        #/// Determines if any invoices exist for the given subtype filter
+        #/// within the specified UTC window.
+        #/// Used by enStageInvoices() to skip empty subtypes.
+        #/// </summary>
+        #private static boolean InvoiceSubtypeHasData(
+        #    Jay_DocExportDocSubType _subType,
+        #    utcDateTime              _fromUtc,
+        #    utcDateTime              _toUtc)
+        #{
+        #    CustInvoiceJour jour;
+        #    boolean         found = false;
+        #
+        #    switch (_subType)
+        #    {
+        #        case Jay_DocExportDocSubType::Unit:
+        #            select firstOnly RecId from jour
+        #                where jour.DataAreaId == curext()
+        #                  && (
+        #                         (jour.CreatedDateTime  >= _fromUtc && jour.CreatedDateTime <= _toUtc)
+        #                      || (jour.ModifiedDateTime >= _fromUtc && jour.ModifiedDateTime <= _toUtc)
+        #                     )
+        #                  && jour.CustGroup == 'Unit';
+        #            found = jour.RecId ? true : false;
+        #            break;
+        #
+        #        case Jay_DocExportDocSubType::Part:
+        #            select firstOnly RecId from jour
+        #                where jour.DataAreaId == curext()
+        #                  && (
+        #                         (jour.CreatedDateTime  >= _fromUtc && jour.CreatedDateTime <= _toUtc)
+        #                      || (jour.ModifiedDateTime >= _fromUtc && jour.ModifiedDateTime <= _toUtc)
+        #                     )
+        #                  && (
+        #                         jour.CustGroup == 'Part'
+        #                      || jour.CustGroup == 'Part_DPU'
+        #                      || (jour.CustGroup == 'Internal' && jour.MCAAMDEVICEBRANDID == '')
+        #                     );
+        #            found = jour.RecId ? true : false;
+        #            break;
+        #
+        #        case Jay_DocExportDocSubType::Vendor:
+        #            select firstOnly RecId from jour
+        #                where jour.DataAreaId == curext()
+        #                  && (
+        #                         (jour.CreatedDateTime  >= _fromUtc && jour.CreatedDateTime <= _toUtc)
+        #                      || (jour.ModifiedDateTime >= _fromUtc && jour.ModifiedDateTime <= _toUtc)
+        #                     )
+        #                  && jour.CustGroup like 'Vendor*';
+        #            found = jour.RecId ? true : false;
+        #            break;
+        #
+        #        default:
+        #            break;
+        #    }
+        #
+        #    return found;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #promoteStageToQueueByTag
+        #/// <summary>
+        #/// Promotes staged records to queue by BatchTag.
+        #/// Mirrors stage schema fields (including PrintDelay).
+        #/// </summary>
+        #public static void promoteStageToQueueByTag(
+        #    Jay_DocExportQueuePriority _priority,
+        #    guid                       _batchTag)
+        #{
+        #    Jay_DocExportProdQueue      prod;
+        #    Jay_DocExportHistQueue      hist;
+        #    Jay_DocExportProdQueueStage prodStage;
+        #    Jay_DocExportHistQueueStage histStage;
+        #
+        #    if (_priority == Jay_DocExportQueuePriority::Production)
+        #    {
+        #        ttsBegin;
+        #            insert_recordset prod
+        #                (CtrlRecId,
+        #                 ExportDocType,
+        #                 ExportDocSubType,
+        #                 SourceRecId,
+        #                 RefId1,
+        #                 RefId2,
+        #                 RefId3,
+        #                 RefId4,
+        #                 QueueStatus,
+        #                 OrigQueueTime,
+        #                 PrintDelay,
+        #                 BatchTag)
+        #                select
+        #                    CtrlRecId,
+        #                    ExportDocType,
+        #                    ExportDocSubType,
+        #                    SourceRecId,
+        #                    RefId1,
+        #                    RefId2,
+        #                    RefId3,
+        #                    RefId4,
+        #                    QueueStatus,
+        #                    OrigQueueTime,
+        #                    PrintDelay,
+        #                    BatchTag
+        #                from prodStage
+        #                where prodStage.BatchTag == _batchTag;
+        #        ttsCommit;
+        #    }
+        #    else
+        #    {
+        #        ttsBegin;
+        #            insert_recordset hist
+        #                (CtrlRecId,
+        #                 ExportDocType,
+        #                 ExportDocSubType,
+        #                 SourceRecId,
+        #                 RefId1,
+        #                 RefId2,
+        #                 RefId3,
+        #                 RefId4,
+        #                 QueueStatus,
+        #                 OrigQueueTime,
+        #                 PrintDelay,
+        #                 BatchTag)
+        #                select
+        #                    CtrlRecId,
+        #                    ExportDocType,
+        #                    ExportDocSubType,
+        #                    SourceRecId,
+        #                    RefId1,
+        #                    RefId2,
+        #                    RefId3,
+        #                    RefId4,
+        #                    QueueStatus,
+        #                    OrigQueueTime,
+        #                    PrintDelay,
+        #                    BatchTag
+        #                from histStage
+        #                where histStage.BatchTag == _batchTag;
+        #        ttsCommit;
+        #    }
+        #
+        #    info(strFmt("🚚 promoteStageToQueueByTag → %1 queue for BatchTag %2 complete.",
+        #                enum2str(_priority), _batchTag));
+        #}
+        #
+      ENDSOURCE
+    ENDMETHODS
+  ENDCLASS
+
+***Element: END

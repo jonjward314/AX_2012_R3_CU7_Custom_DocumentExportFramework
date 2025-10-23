@@ -1,0 +1,131 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: CLS
+
+; Microsoft Dynamics AX Class: Jay_ReprintFailuresSweep unloaded
+; --------------------------------------------------------------------------------
+  CLSVERSION 1
+  
+  CLASS #Jay_ReprintFailuresSweep
+    PROPERTIES
+      Name                #Jay_ReprintFailuresSweep
+      Extends             #RunBaseBatch
+      Origin              #{A9751E39-11EE-4E7A-93F7-252B00B1E194}
+    ENDPROPERTIES
+    
+    METHODS
+      SOURCE #classDeclaration
+        #class Jay_ReprintFailuresSweep extends RunBaseBatch
+        #{
+        #    #define.CurrentVersion(1)
+        #    #localmacro.CurrentList
+        #    #endmacro
+        #}
+        #
+        #
+      ENDSOURCE
+      SOURCE #description
+        #// =======================================================================
+        #//  Jay_ReprintFailuresSweep
+        #//  Purpose : Requeues failed exports older than the retry threshold
+        #//            (default 24h) and restarts processors for their controls.
+        #//  Context : Intended for nightly or on-demand maintenance.
+        #//  Notes   : Batch-safe (RunBaseBatch).  RevverAdmin-only.
+        #// =======================================================================
+        #
+        #public Description description()
+        #{
+        #    return "Requeue failed exports older than threshold (default 24 h) and start processors.";
+        #}
+        #
+        #
+      ENDSOURCE
+      SOURCE #pack
+        #public container pack()
+        #{
+        #    return [#CurrentVersion];
+        #}
+        #
+      ENDSOURCE
+      SOURCE #run
+        #public void run()
+        #{
+        #    Jay_DocExportProdQueue  pq;
+        #    Jay_DocExportHistQueue  hq;
+        #    Set                     ctrlSet = new Set(Types::Int64);
+        #    SetEnumerator           e;
+        #    int                     hours;
+        #    utcDateTime             cutoff;
+        #
+        #    Jay_PrintOpsSecurity::requireRevverAdmin();
+        #
+        #    hours  = Jay_ExportRuntimeSettings::failedHours();
+        #    cutoff = DateTimeUtil::addHours(DateTimeUtil::utcNow(), -hours);
+        #
+        #    ttsBegin;
+        #    while select forUpdate pq
+        #        where pq.QueueStatus == Jay_DocExportQueueStatus::FailedExport
+        #          && pq.LastAttemptedDateTime <= cutoff
+        #    {
+        #        pq.QueueStatus            = Jay_DocExportQueueStatus::Queued;
+        #        pq.ExportAttempts         = 0;
+        #        pq.LastAttemptedDateTime  = DateTimeUtil::minValue();
+        #        pq.update();
+        #        ctrlSet.add(pq.CtrlRecid);
+        #    }
+        #    ttsCommit;
+        #
+        #    ttsBegin;
+        #    while select forUpdate hq
+        #        where hq.QueueStatus == Jay_DocExportQueueStatus::FailedExport
+        #          && hq.LastAttemptedDateTime <= cutoff
+        #    {
+        #        hq.QueueStatus            = Jay_DocExportQueueStatus::Queued;
+        #        hq.ExportAttempts         = 0;
+        #        hq.LastAttemptedDateTime  = DateTimeUtil::minValue();
+        #        hq.update();
+        #        ctrlSet.add(hq.CtrlRecId);
+        #    }
+        #    ttsCommit;
+        #
+        #    e = ctrlSet.getEnumerator();
+        #    while (e.moveNext())
+        #    {
+        #        Jay_QueueProcessorBatch::start_QueueProcessor(any2Int64(e.current()));
+        #    }
+        #
+        #    info(strFmt("Requeued failed items for %1 control batch(es).", ctrlSet.elements()));
+        #}
+        #
+        #
+        #
+      ENDSOURCE
+      SOURCE #unpack
+        #public boolean unpack(container _packed)
+        #{
+        #    Version v = conPeek(_packed,1);
+        #    return (v == #CurrentVersion);
+        #}
+        #
+        #
+      ENDSOURCE
+      SOURCE #main
+        #public static void main(Args _args)
+        #{
+        #    Jay_ReprintFailuresSweep job = new Jay_ReprintFailuresSweep();
+        #
+        #    if (BatchHeader::isExecutingInBatch())
+        #    {
+        #        job.run();   // silent when executing as batch
+        #    }
+        #    else if (job.prompt())       // shows dialog for manual launch
+        #    {
+        #        job.run();
+        #    }
+        #}
+      ENDSOURCE
+    ENDMETHODS
+  ENDCLASS
+
+***Element: END

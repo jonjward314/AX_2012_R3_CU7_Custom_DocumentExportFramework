@@ -1,0 +1,64 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: DBE
+
+; Microsoft Dynamics AX Enumtype : Jay_DocExportDocSubType unloaded
+; --------------------------------------------------------------------------------
+  ENUMTYPEVERSION 1
+  
+  ENUMTYPE #Jay_DocExportDocSubType
+    PROPERTIES
+      Name                #Jay_DocExportDocSubType
+      UseEnumValue        #Yes
+      Origin              #{16F6D6ED-6962-4019-9021-26683BE790F8}
+    ENDPROPERTIES
+    
+    TYPEELEMENTS
+      #Motorized
+      PROPERTIES
+        Name                #Motorized
+        Label               #Motorized
+        EnumValue           #4
+      ENDPROPERTIES
+      
+      #Unit
+      PROPERTIES
+        Name                #Unit
+        Label               #Unit
+        EnumValue           #0
+      ENDPROPERTIES
+      
+      #Part
+      PROPERTIES
+        Name                #Part
+        Label               #Part
+        EnumValue           #1
+      ENDPROPERTIES
+      
+      #Vendor
+      PROPERTIES
+        Name                #Vendor
+        Label               #Vendor
+        EnumValue           #2
+      ENDPROPERTIES
+      
+      #Towable
+      PROPERTIES
+        Name                #Towable
+        Label               #Towable
+        EnumValue           #3
+      ENDPROPERTIES
+      
+      #All
+      PROPERTIES
+        Name                #All
+        Label               #All
+        EnumValue           #5
+      ENDPROPERTIES
+      
+    ENDTYPEELEMENTS
+  ENDENUMTYPE
+  
+
+***Element: END
