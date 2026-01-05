@@ -1,0 +1,42 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: CLS
+
+; Microsoft Dynamics AX Class: Jay_RunMode_Continuous unloaded
+; --------------------------------------------------------------------------------
+  CLSVERSION 1
+  
+  CLASS #Jay_RunMode_Continuous
+    PROPERTIES
+      Name                #Jay_RunMode_Continuous
+      Extends             #Jay_RunMode
+      Origin              #{3B79573D-BF5B-463A-AF31-438F4DE5C90D}
+    ENDPROPERTIES
+    
+    METHODS
+      SOURCE #childStartTimeUtc
+        #public utcDateTime childStartTimeUtc(Jay_ScanCtrl _parent)
+        #{
+        #    // Continuous mode: child starts immediately after parent completes (2-min safety):contentReference[oaicite:22]{index=22}:contentReference[oaicite:23]{index=23}
+        #    return DateTimeUtil::addMinutes(DateTimeUtil::utcNow(), 2);
+        #}
+      ENDSOURCE
+      SOURCE #classDeclaration
+        #public class Jay_RunMode_Continuous extends Jay_RunMode
+        #{
+        #}
+      ENDSOURCE
+      SOURCE #nextStartTimeUtc
+        #public utcDateTime nextStartTimeUtc(utcDateTime    _baseTime,
+        #                                    int            _scanValue,
+        #                                    Jay_CadenceUnit _scanUnit)
+        #{
+        #    // Continuous mode: always schedule the next run as soon as possible (safety buffer):contentReference[oaicite:21]{index=21}
+        #    return DateTimeUtil::addMinutes(DateTimeUtil::utcNow(), 2);
+        #}
+      ENDSOURCE
+    ENDMETHODS
+  ENDCLASS
+
+***Element: END

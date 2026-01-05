@@ -1,0 +1,36 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: DBE
+
+; Microsoft Dynamics AX Enumtype : Jay_ScanDirection unloaded
+; --------------------------------------------------------------------------------
+  ENUMTYPEVERSION 1
+  
+  ENUMTYPE #Jay_ScanDirection
+    PROPERTIES
+      Name                #Jay_ScanDirection
+      UseEnumValue        #Yes
+      Origin              #{E7438DAE-1C59-44D5-9F0C-B89D050A7452}
+    ENDPROPERTIES
+    
+    TYPEELEMENTS
+      #Forward
+      PROPERTIES
+        Name                #Forward
+        Label               #Forward
+        EnumValue           #1
+      ENDPROPERTIES
+      
+      #Backward
+      PROPERTIES
+        Name                #Backward
+        Label               #Backward
+        EnumValue           #2
+      ENDPROPERTIES
+      
+    ENDTYPEELEMENTS
+  ENDENUMTYPE
+  
+
+***Element: END

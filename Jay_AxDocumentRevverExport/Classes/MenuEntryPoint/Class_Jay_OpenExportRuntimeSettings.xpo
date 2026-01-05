@@ -1,0 +1,38 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: CLS
+
+; Microsoft Dynamics AX Class: Jay_OpenExportRuntimeSettings unloaded
+; --------------------------------------------------------------------------------
+  CLSVERSION 1
+  
+  CLASS #Jay_OpenExportRuntimeSettings
+    PROPERTIES
+      Name                #Jay_OpenExportRuntimeSettings
+      Origin              #{95817D94-2132-4040-B30D-A854CFA00EA9}
+    ENDPROPERTIES
+    
+    METHODS
+      SOURCE #classDeclaration
+        #public class Jay_OpenExportRuntimeSettings
+        #{
+        #}
+      ENDSOURCE
+      SOURCE #main
+        #public static void main(Args _args)
+        #{
+        #    SysTableBrowser browser;
+        #
+        #    browser = new SysTableBrowser();
+        #    browser.setAllowEdit(true);
+        #    browser.setAllowCreate(false);
+        #    browser.setAllowDelete(false);
+        #
+        #    browser.run(tableNum(Jay_ExportRuntimeSettingsTable));
+        #}
+      ENDSOURCE
+    ENDMETHODS
+  ENDCLASS
+
+***Element: END

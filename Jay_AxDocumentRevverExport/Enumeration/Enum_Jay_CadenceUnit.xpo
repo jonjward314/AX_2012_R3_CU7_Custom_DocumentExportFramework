@@ -1,0 +1,64 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: DBE
+
+; Microsoft Dynamics AX Enumtype : Jay_CadenceUnit unloaded
+; --------------------------------------------------------------------------------
+  ENUMTYPEVERSION 1
+  
+  ENUMTYPE #Jay_CadenceUnit
+    PROPERTIES
+      Name                #Jay_CadenceUnit
+      UseEnumValue        #Yes
+      Origin              #{A77567F1-B19C-47C9-9BA8-C6C559DA4AB7}
+    ENDPROPERTIES
+    
+    TYPEELEMENTS
+      #Year
+      PROPERTIES
+        Name                #Year
+        Label               #Year
+        EnumValue           #1
+      ENDPROPERTIES
+      
+      #Month
+      PROPERTIES
+        Name                #Month
+        Label               #Month
+        EnumValue           #2
+      ENDPROPERTIES
+      
+      #Week
+      PROPERTIES
+        Name                #Week
+        Label               #Week
+        EnumValue           #3
+      ENDPROPERTIES
+      
+      #Day
+      PROPERTIES
+        Name                #Day
+        Label               #Day
+        EnumValue           #4
+      ENDPROPERTIES
+      
+      #Hour
+      PROPERTIES
+        Name                #Hour
+        Label               #Hour
+        EnumValue           #5
+      ENDPROPERTIES
+      
+      #Minute
+      PROPERTIES
+        Name                #Minute
+        Label               #Minute
+        EnumValue           #6
+      ENDPROPERTIES
+      
+    ENDTYPEELEMENTS
+  ENDENUMTYPE
+  
+
+***Element: END

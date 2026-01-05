@@ -1,0 +1,275 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: DBT
+
+; Microsoft Dynamics AX Table : Jay_SliceCtrl unloaded
+; --------------------------------------------------------------------------------
+  TABLEVERSION 1
+  
+  TABLE #Jay_SliceCtrl
+    EnforceFKRelation 1
+    PROPERTIES
+      Name                #Jay_SliceCtrl
+      CreateRecIdIndex    #Yes
+      PrimaryIndex        #SurrogateKey
+      ClusterIndex        #SurrogateKey
+      ModifiedBy          #Yes
+      ModifiedTransactionId #Yes
+      CreatedDateTime     #Yes
+      CreatedBy           #Yes
+      Origin              #{CFAE7A97-2460-4CBE-88AD-34239C6A9532}
+    ENDPROPERTIES
+    
+    FIELDS
+      FIELD #AbortReason
+        STRING
+        PROPERTIES
+          Name                #AbortReason
+          Table               #Jay_SliceCtrl
+          Origin              #{8C28CC9C-A9FF-4AD0-B209-410E89C39409}
+          ExtendedDataType    #Description
+          StringSize          #60
+        ENDPROPERTIES
+        
+      FIELD #ActualBatches
+        INT
+        PROPERTIES
+          Name                #ActualBatches
+          Table               #Jay_SliceCtrl
+          Origin              #{8FDC017B-5C85-46E8-BE2F-8F6859577197}
+        ENDPROPERTIES
+        
+      FIELD #ActualDocs
+        INT
+        PROPERTIES
+          Name                #ActualDocs
+          Table               #Jay_SliceCtrl
+          Origin              #{8253586B-76B7-44F3-8126-E6F20AEE42DC}
+        ENDPROPERTIES
+        
+      FIELD #DocSubType
+        ENUM
+        PROPERTIES
+          Name                #DocSubType
+          Table               #Jay_SliceCtrl
+          Origin              #{7D55C6B5-AAB3-47D7-9500-45E8EE2CF71C}
+          EnumType            #Jay_ExportDocSubType
+        ENDPROPERTIES
+        
+      FIELD #DocType
+        ENUM
+        PROPERTIES
+          Name                #DocType
+          Table               #Jay_SliceCtrl
+          Origin              #{BB7855E5-0FA4-4E41-96EE-753C7C7BDCF5}
+          EnumType            #Jay_ExportDocType
+        ENDPROPERTIES
+        
+      FIELD #EnqueueBatchHeaderId
+        INT64
+        PROPERTIES
+          Name                #EnqueueBatchHeaderId
+          Table               #Jay_SliceCtrl
+          Origin              #{D03735B0-B401-4FDA-98EA-0E9662B7BACC}
+          ExtendedDataType    #RecId
+        ENDPROPERTIES
+        
+      FIELD #FromUtc
+        DATETIME
+        PROPERTIES
+          Name                #FromUtc
+          Label               #Window Start (UTC)
+          Table               #Jay_SliceCtrl
+          Origin              #{3F580499-ACC2-4552-BD51-BC72AC09BBA5}
+        ENDPROPERTIES
+        
+      FIELD #ParentScanId
+        INT64
+        PROPERTIES
+          Name                #ParentScanId
+          Table               #Jay_SliceCtrl
+          Origin              #{99C46333-CA1A-40A5-9F41-5BA15E6B62B5}
+        ENDPROPERTIES
+        
+      FIELD #PredictedBatches
+        INT
+        PROPERTIES
+          Name                #PredictedBatches
+          Table               #Jay_SliceCtrl
+          Origin              #{AB2D2493-21D2-46ED-A734-DD77E2361E28}
+        ENDPROPERTIES
+        
+      FIELD #PredictedDocs
+        INT
+        PROPERTIES
+          Name                #PredictedDocs
+          Table               #Jay_SliceCtrl
+          Origin              #{22057F35-E3B8-4451-A0B5-6515E7115C01}
+        ENDPROPERTIES
+        
+      FIELD #ProofStampUtc
+        DATETIME
+        PROPERTIES
+          Name                #ProofStampUtc
+          Table               #Jay_SliceCtrl
+          Origin              #{A5E6F87F-7221-4FD6-B167-6F499CAEE5E7}
+        ENDPROPERTIES
+        
+      FIELD #QueueType
+        ENUM
+        PROPERTIES
+          Name                #QueueType
+          Label               #Queue Type
+          Table               #Jay_SliceCtrl
+          Origin              #{7AF07556-C595-4DAF-A153-A436E55334B5}
+          EnumType            #Jay_ExportQueueType
+        ENDPROPERTIES
+        
+      FIELD #RetryCount
+        INT
+        PROPERTIES
+          Name                #RetryCount
+          Table               #Jay_SliceCtrl
+          Origin              #{CB7DE691-5C76-4713-BDCB-485425993873}
+        ENDPROPERTIES
+        
+      FIELD #RunDurationMs
+        INT64
+        PROPERTIES
+          Name                #RunDurationMs
+          Table               #Jay_SliceCtrl
+          Origin              #{9503B84A-AC15-4A56-B186-183739096046}
+        ENDPROPERTIES
+        
+      FIELD #SliceStatus
+        ENUM
+        PROPERTIES
+          Name                #SliceStatus
+          Table               #Jay_SliceCtrl
+          Origin              #{08136498-01F6-44C2-B85A-5967AE331B46}
+          EnumType            #Jay_SliceStatus
+        ENDPROPERTIES
+        
+      FIELD #SourceTableId
+        INT64
+        PROPERTIES
+          Name                #SourceTableId
+          Table               #Jay_SliceCtrl
+          Origin              #{B87B269F-BBCC-49F5-B729-BD7F8B3B7AA7}
+        ENDPROPERTIES
+        
+      FIELD #TotalDocs
+        INT
+        PROPERTIES
+          Name                #TotalDocs
+          Label               #Estimated Total Documents
+          Table               #Jay_SliceCtrl
+          Origin              #{11D021AD-B683-4600-9763-94EFE5CF5F0A}
+        ENDPROPERTIES
+        
+      FIELD #ToUtc
+        DATETIME
+        PROPERTIES
+          Name                #ToUtc
+          Label               #Window End (UTC)
+          Table               #Jay_SliceCtrl
+          Origin              #{9893DEB3-DDA5-408D-8897-F1F978FF89EF}
+        ENDPROPERTIES
+        
+      FIELD #Variance
+        REAL
+        PROPERTIES
+          Name                #Variance
+          Table               #Jay_SliceCtrl
+          Origin              #{93E4B64E-5D71-46A6-9AE6-2ED989228BAE}
+          ExtendedDataType    #Amount
+        ENDPROPERTIES
+        
+      FIELD #VariancePct
+        REAL
+        PROPERTIES
+          Name                #VariancePct
+          Table               #Jay_SliceCtrl
+          Origin              #{F7FBC148-8FC9-4E95-A684-FDF920340D0C}
+          ExtendedDataType    #Percent
+        ENDPROPERTIES
+        
+    ENDFIELDS
+    GROUPS
+    ENDGROUPS
+    
+    INDICES
+      #Idx
+      PROPERTIES
+        Name                #Idx
+        Origin              #{E7C4B084-C2ED-425C-A832-9AB61B87ED34}
+      ENDPROPERTIES
+      
+      INDEXFIELDS
+        #FromUtc
+        #QueueType
+        #ToUtc
+      ENDINDEXFIELDS
+      
+    ENDINDICES
+    FULLTEXTINDICES
+    ENDFULLTEXTINDICES
+    REFERENCES
+      REFERENCE #Jay_ScanCtrl_Relation
+        PROPERTIES
+          Name                #Jay_ScanCtrl_Relation
+          Table               #Jay_ScanCtrl
+          UseDefaultRoleNames #Yes
+        ENDPROPERTIES
+        
+        FIELDREFERENCES
+          REFERENCETYPE NORMAL
+          PROPERTIES
+            Field               #ParentScanId
+            RelatedField        #RecId
+          ENDPROPERTIES
+          
+        ENDFIELDREFERENCES
+      ENDREFERENCE
+    ENDREFERENCES
+    
+    DELETEACTIONS
+      #Jay_BatchCtrl(Jay_SliceCtrl_Relation)
+      PROPERTIES
+        Table               #Jay_BatchCtrl
+        DeleteAction        #Cascade
+        Relation            #Jay_SliceCtrl_Relation
+      ENDPROPERTIES
+      
+    ENDDELETEACTIONS
+    
+    METHODS
+      SOURCE #find
+        #public static Jay_SliceCtrl find(RecId _sliceRecId, boolean _forUpdate = false)
+        #{
+        #    Jay_SliceCtrl slice;
+        #
+        #    if (!_sliceRecId)
+        #        return null;
+        #
+        #    if (_forUpdate)
+        #    {
+        #        select firstOnly forUpdate slice
+        #            where slice.RecId == _sliceRecId;
+        #    }
+        #    else
+        #    {
+        #        select firstOnly slice
+        #            where slice.RecId == _sliceRecId;
+        #    }
+        #
+        #    return slice;
+        #}
+        #
+      ENDSOURCE
+    ENDMETHODS
+  ENDTABLE
+  
+
+***Element: END

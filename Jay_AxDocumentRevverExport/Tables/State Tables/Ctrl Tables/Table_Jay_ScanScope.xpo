@@ -1,0 +1,95 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: DBT
+
+; Microsoft Dynamics AX Table : Jay_ScanScope unloaded
+; --------------------------------------------------------------------------------
+  TABLEVERSION 1
+  
+  TABLE #Jay_ScanScope
+    EnforceFKRelation 1
+    PROPERTIES
+      Name                #Jay_ScanScope
+      CreateRecIdIndex    #Yes
+      PrimaryIndex        #SurrogateKey
+      ClusterIndex        #SurrogateKey
+      Origin              #{9B95CD25-56E7-4167-B811-49F46AF645AB}
+    ENDPROPERTIES
+    
+    FIELDS
+      FIELD #DocSubType
+        ENUM
+        PROPERTIES
+          Name                #DocSubType
+          Label               #Document Sub Type
+          Table               #Jay_ScanScope
+          Origin              #{902333CE-C6A4-4B15-818F-5AF087B7BB13}
+          EnumType            #Jay_ExportDocSubType
+        ENDPROPERTIES
+        
+      FIELD #DocType
+        ENUM
+        PROPERTIES
+          Name                #DocType
+          Label               #Document Type
+          Table               #Jay_ScanScope
+          Origin              #{1181557D-801A-4688-A5E0-B6FBA43E5820}
+          EnumType            #Jay_ExportDocType
+        ENDPROPERTIES
+        
+      FIELD #Include
+        ENUM
+        PROPERTIES
+          Name                #Include
+          Table               #Jay_ScanScope
+          Origin              #{533BD02B-2186-4E5F-AD5B-9B715BE06001}
+          EnumType            #NoYes
+        ENDPROPERTIES
+        
+      FIELD #ParentScanId
+        INT64
+        PROPERTIES
+          Name                #ParentScanId
+          Label               #PArent Scan Id
+          Table               #Jay_ScanScope
+          Origin              #{A21D985C-741E-4C84-BF5B-309903F4ACE5}
+          ExtendedDataType    #RecId
+        ENDPROPERTIES
+        
+    ENDFIELDS
+    GROUPS
+    ENDGROUPS
+    
+    INDICES
+    ENDINDICES
+    FULLTEXTINDICES
+    ENDFULLTEXTINDICES
+    REFERENCES
+      REFERENCE #ParentScan
+        PROPERTIES
+          Name                #ParentScan
+          Table               #Jay_ScanCtrl
+          UseDefaultRoleNames #Yes
+        ENDPROPERTIES
+        
+        FIELDREFERENCES
+          REFERENCETYPE NORMAL
+          PROPERTIES
+            Field               #ParentScanId
+            RelatedField        #RecId
+          ENDPROPERTIES
+          
+        ENDFIELDREFERENCES
+      ENDREFERENCE
+    ENDREFERENCES
+    
+    DELETEACTIONS
+    ENDDELETEACTIONS
+    
+    METHODS
+    ENDMETHODS
+  ENDTABLE
+  
+
+***Element: END

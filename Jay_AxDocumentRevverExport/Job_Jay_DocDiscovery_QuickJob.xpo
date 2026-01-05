@@ -1,0 +1,229 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: JOB
+
+; Microsoft Dynamics AX Job: Jay_DocDiscovery_QuickJob unloaded
+; --------------------------------------------------------------------------------
+  JOBVERSION 1
+  
+  SOURCE #Jay_DocDiscovery_QuickJob
+    #static void Jay_DocDiscovery_QuickJob(Args _args)
+    #{
+    #    // Construct dates properly
+    #    date fromDate = mkDate(24, 10, 2025);
+    #    date toDate   = mkDate(31, 10, 2025);
+    #
+    #    // Midnight at start → 23:59:59 at end
+    #    utcDateTime fromUtc = DateTimeUtil::newDateTime(fromDate, 0);
+    #    utcDateTime toUtc   = DateTimeUtil::newDateTime(toDate,   86399);
+    #
+    #    //----------------------------------------------------------------------
+    #    // Counters
+    #    //----------------------------------------------------------------------
+    #    int poCount, confPart, confUnit, confVendor;
+    #    int invPart, invUnit, invVendor;
+    #    int msrpCount, cooCount;
+    #
+    #    //----------------------------------------------------------------------
+    #    // TEMP VARIABLES
+    #    //----------------------------------------------------------------------
+    #    PurchTable          purch;
+    #    CustConfirmJour     c;
+    #    CustInvoiceJour     ij;
+    #    SalesTable          st;
+    #    AMDeviceTable       d;
+    #    AMDeviceTableMaster m;
+    #
+    #    //----------------------------------------------------------------------
+    #    // PURCHASE ORDERS
+    #    //----------------------------------------------------------------------
+    #    while select purch
+    #        where purch.DataAreaId == curext()
+    #          && (
+    #                (purch.CreatedDateTime  >= fromUtc && purch.CreatedDateTime  < toUtc)
+    #             || (purch.ModifiedDateTime >= fromUtc && purch.ModifiedDateTime < toUtc)
+    #             )
+    #          && (
+    #                purch.PurchStatus == PurchStatus::Backorder
+    #             || purch.PurchStatus == PurchStatus::Received
+    #             || purch.PurchStatus == PurchStatus::Invoiced
+    #             )
+    #    {
+    #        poCount++;
+    #    }
+    #
+    #    //----------------------------------------------------------------------
+    #    // CONFIRMATION — PART
+    #    //----------------------------------------------------------------------
+    #    while select c
+    #        where c.DataAreaId == curext()
+    #          && (
+    #                (c.CreatedDateTime  >= fromUtc && c.CreatedDateTime  < toUtc)
+    #             || (c.ModifiedDateTime >= fromUtc && c.ModifiedDateTime < toUtc)
+    #             )
+    #          && (
+    #                c.CustGroup == 'Internal'
+    #             || c.CustGroup == 'Part'
+    #             || c.CustGroup == 'Part_DPU'
+    #             )
+    #          && !(c.CustGroup=='Internal' && c.MCASHIPPINGINSTRUCTIONS=='Unit')
+    #    {
+    #        confPart++;
+    #    }
+    #
+    #    //----------------------------------------------------------------------
+    #    // CONFIRMATION — UNIT
+    #    //----------------------------------------------------------------------
+    #    while select c
+    #        where c.DataAreaId == curext()
+    #          && (
+    #                (c.CreatedDateTime  >= fromUtc && c.CreatedDateTime  < toUtc)
+    #             || (c.ModifiedDateTime >= fromUtc && c.ModifiedDateTime < toUtc)
+    #             )
+    #          && (
+    #                c.CustGroup=='Unit'
+    #             || c.CustGroup=='Unit_PO'
+    #             || (c.CustGroup=='Internal' && c.MCASHIPPINGINSTRUCTIONS=='Unit')
+    #             )
+    #    {
+    #        confUnit++;
+    #    }
+    #
+    #    //----------------------------------------------------------------------
+    #    // CONFIRMATION — VENDOR
+    #    //----------------------------------------------------------------------
+    #    while select c
+    #        where c.DataAreaId == curext()
+    #          && (
+    #                (c.CreatedDateTime  >= fromUtc && c.CreatedDateTime  < toUtc)
+    #             || (c.ModifiedDateTime >= fromUtc && c.ModifiedDateTime < toUtc)
+    #             )
+    #          && c.CustGroup=='Vendor'
+    #    {
+    #        confVendor++;
+    #    }
+    #
+    #    //----------------------------------------------------------------------
+    #    // INVOICE — PART
+    #    //----------------------------------------------------------------------
+    #    while select ij
+    #        where ij.DataAreaId == curext()
+    #          && (
+    #                (ij.CreatedDateTime  >= fromUtc && ij.CreatedDateTime  < toUtc)
+    #             || (ij.ModifiedDateTime >= fromUtc && ij.ModifiedDateTime < toUtc)
+    #             )
+    #          && (
+    #                ij.CustGroup=='Part'
+    #             || ij.CustGroup=='Part_DPU'
+    #             || (ij.CustGroup=='Internal' && ij.MCAAMDEVICEBRANDID=='')
+    #             )
+    #    {
+    #        invPart++;
+    #    }
+    #
+    #    //----------------------------------------------------------------------
+    #    // INVOICE — UNIT
+    #    //----------------------------------------------------------------------
+    #    while select ij
+    #        where ij.DataAreaId == curext()
+    #          && (
+    #                (ij.CreatedDateTime  >= fromUtc && ij.CreatedDateTime  < toUtc)
+    #             || (ij.ModifiedDateTime >= fromUtc && ij.ModifiedDateTime < toUtc)
+    #             )
+    #          && (
+    #                ij.CustGroup=='Unit'
+    #             || ij.CustGroup=='Unit_PO'
+    #             || (ij.CustGroup=='Internal' && ij.MCAAMDEVICEBRANDID != '')
+    #             )
+    #    {
+    #        invUnit++;
+    #    }
+    #
+    #    //----------------------------------------------------------------------
+    #    // INVOICE — VENDOR
+    #    //----------------------------------------------------------------------
+    #    while select ij
+    #        where ij.DataAreaId == curext()
+    #          && (
+    #                (ij.CreatedDateTime  >= fromUtc && ij.CreatedDateTime  < toUtc)
+    #             || (ij.ModifiedDateTime >= fromUtc && ij.ModifiedDateTime < toUtc)
+    #             )
+    #          && ij.CustGroup=='Vendor'
+    #    {
+    #        invVendor++;
+    #    }
+    #
+    #    //----------------------------------------------------------------------
+    #    // MSRP
+    #    //----------------------------------------------------------------------
+    #    while select st
+    #        where st.DataAreaId == curext()
+    #          && st.SalesStatus == SalesStatus::Invoiced
+    #          && st.AMDeviceId != ""
+    #          && st.SalesPoolId == "UNIT"
+    #          && (
+    #                (st.CreatedDateTime  >= fromUtc && st.CreatedDateTime  < toUtc)
+    #             || (st.ModifiedDateTime >= fromUtc && st.ModifiedDateTime < toUtc)
+    #             )
+    #    {
+    #        msrpCount++;
+    #    }
+    #
+    #    //----------------------------------------------------------------------
+    #    // CERTIFICATE OF ORIGIN (COO)
+    #    //----------------------------------------------------------------------
+    #    while select st
+    #        join d where d.DeviceId == st.AMDeviceId
+    #        join m where m.MasterId == d.MasterId
+    #                 && (
+    #                        m.BodyId=='MHA'
+    #                     || m.BodyId=='MHB'
+    #                     || m.BodyId=='MHC'
+    #                     )
+    #          && st.DataAreaId == curext()
+    #          && st.SalesStatus == SalesStatus::Invoiced
+    #          && st.AMDeviceId != ""
+    #          && st.SalesPoolId == "UNIT"
+    #          && (
+    #                (st.CreatedDateTime  >= fromUtc && st.CreatedDateTime  < toUtc)
+    #             || (st.ModifiedDateTime >= fromUtc && st.ModifiedDateTime < toUtc)
+    #             )
+    #    {
+    #        cooCount++;
+    #    }
+    #
+    #    //----------------------------------------------------------------------
+    #    // FINAL REPORT
+    #    //----------------------------------------------------------------------
+    #    info(strFmt(
+    #        "DOCUMENT DISCOVERY REPORT\n" +
+    #        "Window: %1 → %2\n\n" +
+    #        "Purchase Orders:   %3\n\n" +
+    #        "Confirmations:\n" +
+    #        "  • Part:   %4\n" +
+    #        "  • Unit:   %5\n" +
+    #        "  • Vendor: %6\n\n" +
+    #        "Invoices:\n" +
+    #        "  • Part:   %7\n" +
+    #        "  • Unit:   %8\n" +
+    #        "  • Vendor: %9\n\n" +
+    #        "MSRP:                %10\n" +
+    #        "Certificates Origin: %11",
+    #        DateTimeUtil::toStr(fromUtc),
+    #        DateTimeUtil::toStr(toUtc),
+    #        poCount,
+    #        confPart, confUnit, confVendor,
+    #        invPart, invUnit, invVendor,
+    #        msrpCount,
+    #        cooCount
+    #    ));
+    #}
+    #
+  ENDSOURCE
+  PROPERTIES
+    Origin              #{139E609F-9060-44B5-89F1-6364559C334E}
+  ENDPROPERTIES
+  
+
+***Element: END

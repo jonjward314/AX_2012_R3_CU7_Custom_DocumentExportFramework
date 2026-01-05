@@ -1,0 +1,93 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: CLS
+
+; Microsoft Dynamics AX Class: Jay_ScanMetadataService unloaded
+; --------------------------------------------------------------------------------
+  CLSVERSION 1
+  
+  CLASS #Jay_ScanMetadataService
+    PROPERTIES
+      Name                #Jay_ScanMetadataService
+      Origin              #{C6A78F90-A35A-4800-898D-D2379A790FB2}
+    ENDPROPERTIES
+    
+    METHODS
+      SOURCE #classDeclaration
+        #public class Jay_ScanMetadataService
+        #        {
+        #            // Service for managing scan metadata (e.g. horizon calculations and storage)
+        #        }
+      ENDSOURCE
+      SOURCE #computeHorizon
+        #public static utcDateTime computeHorizon(Jay_ScanCtrl _scan)
+        #{
+        #    utcDateTime horizonUtc;
+        #    int signedVal;
+        #
+        #    if (!_scan.RecId)
+        #    {
+        #        return DateTimeUtil::maxValue();
+        #    }
+        #    // Use existing stored Horizon if available:contentReference[oaicite:44]{index=44}
+        #    if (_scan.Horizon)
+        #    {
+        #        return _scan.Horizon;
+        #    }
+        #
+        #
+        #    // Compute absolute horizon based on user inputs (HorizonValue and unit):contentReference[oaicite:45]{index=45}
+        #    if (_scan.HorizonValue > 0)
+        #    {
+        #        signedVal = (_scan.Direction == Jay_ScanDirection::Forward)
+        #                    ? _scan.HorizonValue
+        #                    : -_scan.HorizonValue;
+        #        horizonUtc = Jay_CadenceModel::addCadence(_scan.ScanStartDateTime,
+        #                                                    signedVal,
+        #                                                    _scan.HorizonUnit);
+        #    }
+        #    else
+        #    {
+        #        horizonUtc = DateTimeUtil::maxValue();
+        #    }
+        #    // Persist the computed horizon in the record (only once):contentReference[oaicite:46]{index=46}
+        #    if (!_scan.Horizon)
+        #    {
+        #        ttsBegin;
+        #        select forUpdate _scan where _scan.RecId == _scan.RecId;
+        #        _scan.Horizon = horizonUtc;
+        #        _scan.update();
+        #        ttsCommit;
+        #    }
+        #    return horizonUtc;
+        #}
+      ENDSOURCE
+      SOURCE #computeHorizonStatic
+        #public static utcDateTime computeHorizonStatic(utcDateTime     _scanStartDateTime,
+        #                                                int             _horizonValue,
+        #                                                Jay_CadenceUnit _horizonUnit,
+        #                                                Jay_ScanDirection _direction)
+        #{
+        #    utcDateTime horizonUtc;
+        #    int signedVal;
+        #    if (_horizonValue > 0)
+        #    {
+        #        signedVal = (_direction == Jay_ScanDirection::Forward)
+        #                    ? _horizonValue
+        #                    : -_horizonValue;
+        #        horizonUtc = Jay_CadenceModel::addCadence(_scanStartDateTime,
+        #                                                    signedVal,
+        #                                                    _horizonUnit);
+        #    }
+        #    else
+        #    {
+        #        horizonUtc = DateTimeUtil::maxValue();
+        #    }
+        #    return horizonUtc;
+        #}
+      ENDSOURCE
+    ENDMETHODS
+  ENDCLASS
+
+***Element: END

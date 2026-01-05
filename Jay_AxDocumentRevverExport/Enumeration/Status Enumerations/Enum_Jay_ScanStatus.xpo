@@ -1,0 +1,85 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: DBE
+
+; Microsoft Dynamics AX Enumtype : Jay_ScanStatus unloaded
+; --------------------------------------------------------------------------------
+  ENUMTYPEVERSION 1
+  
+  ENUMTYPE #Jay_ScanStatus
+    PROPERTIES
+      Name                #Jay_ScanStatus
+      UseEnumValue        #Yes
+      Origin              #{C4A38698-FF0E-456C-A9EC-0739F06C9060}
+    ENDPROPERTIES
+    
+    TYPEELEMENTS
+      #Pending
+      PROPERTIES
+        Name                #Pending
+        Label               #Pending
+        EnumValue           #0
+      ENDPROPERTIES
+      
+      #Running
+      PROPERTIES
+        Name                #Running
+        Label               #Running
+        EnumValue           #1
+      ENDPROPERTIES
+      
+      #Deferred
+      PROPERTIES
+        Name                #Deferred
+        Label               #Deferred
+        EnumValue           #5
+      ENDPROPERTIES
+      
+      #Completed
+      PROPERTIES
+        Name                #Completed
+        Label               #Completed
+        EnumValue           #6
+      ENDPROPERTIES
+      
+      #Failed
+      PROPERTIES
+        Name                #Failed
+        Label               #Failed
+        EnumValue           #7
+      ENDPROPERTIES
+      
+      #Enqueued
+      PROPERTIES
+        Name                #Enqueued
+        Label               #Enqueued
+        EnumValue           #2
+      ENDPROPERTIES
+      
+      #Printed
+      PROPERTIES
+        Name                #Printed
+        Label               #Printed
+        EnumValue           #3
+      ENDPROPERTIES
+      
+      #Partial
+      PROPERTIES
+        Name                #Partial
+        Label               #Partial
+        EnumValue           #4
+      ENDPROPERTIES
+      
+      #Consumed
+      PROPERTIES
+        Name                #Consumed
+        Label               #Consumed
+        EnumValue           #8
+      ENDPROPERTIES
+      
+    ENDTYPEELEMENTS
+  ENDENUMTYPE
+  
+
+***Element: END

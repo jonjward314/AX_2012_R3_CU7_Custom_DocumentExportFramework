@@ -1,0 +1,138 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: CLS
+
+; Microsoft Dynamics AX Class: Jay_Timesnap unloaded
+; --------------------------------------------------------------------------------
+  CLSVERSION 1
+  
+  CLASS #Jay_Timesnap
+    PROPERTIES
+      Name                #Jay_Timesnap
+      Origin              #{4C78318F-9B56-43B5-98C4-2C36FB29CC4D}
+    ENDPROPERTIES
+    
+    METHODS
+      SOURCE #classDeclaration
+        #/**************************************************************************************************************
+        # * Class: Jay_Timesnap
+        # * Project: Jay_DocExportFramework
+        # * Author: Jon Ward / Jayco IT
+        # *
+        # * Purpose:
+        # *  Time-boundary normalization helper — aligns UTC timestamps to scan cadence.
+        # *  Replaces legacy docQueueCadenceMin() dependency with passable cadence parameters.
+        # *
+        # * Usage:
+        # *  Jay_Timesnap::currentMark(CadenceUnit::Minute, 15);
+        # *  Jay_Timesnap::nextMark(CadenceUnit::Hour, 1);
+        # *  Jay_Timesnap::floorToHour(DateTimeUtil::utcNow());
+        # *
+        # * Environment: Server
+        # **************************************************************************************************************/
+        #class Jay_Timesnap
+        #{
+        #
+        #}
+        #
+      ENDSOURCE
+      SOURCE #ceilToHour
+        #public static utcDateTime ceilToHour(utcDateTime _utc)
+        #{
+        #    utcDateTime floored = Jay_Timesnap::floorToHour(_utc);
+        #    return (floored == _utc) ? _utc : DateTimeUtil::addHours(floored, 1);
+        #}
+      ENDSOURCE
+      SOURCE #currentMark
+        #public static utcDateTime currentMark(Jay_CadenceUnit _unit, int _value)
+        #{
+        #    int Jay_CadenceMin  = Jay_Timesnap::toMinutes(_unit, _value);
+        #    utcDateTime now = DateTimeUtil::utcNow();
+        #    TimeOfDay   tod = DateTimeUtil::time(now);
+        #    int minutes     = tod div 60;
+        #    int currentMark = (minutes div Jay_CadenceMin) * Jay_CadenceMin;
+        #
+        #    return DateTimeUtil::newDateTime(
+        #        DateTimeUtil::date(now),
+        #        currentMark * 60,
+        #        0
+        #    );
+        #}
+      ENDSOURCE
+      SOURCE #floorToHour
+        #public static utcDateTime floorToHour(utcDateTime _utc)
+        #{
+        #    // DateTimeUtil::time() returns a TimeOfDay value (seconds since midnight)
+        #    TimeOfDay tod = DateTimeUtil::time(_utc);
+        #    int hour      = tod div 3600;     // full hours elapsed
+        #    int floored   = hour * 3600;      // seconds at start of that hour
+        #
+        #    return DateTimeUtil::newDateTime(
+        #        DateTimeUtil::date(_utc),
+        #        floored,
+        #        DateTimeUtil::getUserPreferredTimeZone()
+        #    );
+        #}
+      ENDSOURCE
+      SOURCE #nextMark
+        #public static utcDateTime nextMark(Jay_CadenceUnit _unit, int _value)
+        #{
+        #    int Jay_CadenceMin  = Jay_Timesnap::toMinutes(_unit, _value);
+        #    utcDateTime now = DateTimeUtil::utcNow();
+        #    TimeOfDay   tod = DateTimeUtil::time(now);
+        #    int minutes     = tod div 60;
+        #    int nextMark    = (((minutes div Jay_CadenceMin) + 1) * Jay_CadenceMin);
+        #
+        #    if (nextMark >= 1440)
+        #    {
+        #        return DateTimeUtil::newDateTime(
+        #            DateTimeUtil::date(DateTimeUtil::addDays(now, 1)),
+        #            0,
+        #            0
+        #        );
+        #    }
+        #
+        #    return DateTimeUtil::newDateTime(
+        #        DateTimeUtil::date(now),
+        #        nextMark * 60,
+        #        0
+        #    );
+        #}
+      ENDSOURCE
+      SOURCE #prevMark
+        #public static utcDateTime prevMark(Jay_CadenceUnit _unit, int _value)
+        #{
+        #    int cadenceMin  = Jay_Timesnap::toMinutes(_unit, _value);
+        #    utcDateTime now = DateTimeUtil::utcNow();
+        #    TimeOfDay   tod = DateTimeUtil::time(now);
+        #    int minutes     = tod div 60;
+        #    int prevMark    = (minutes div cadenceMin) * cadenceMin;
+        #
+        #    return DateTimeUtil::newDateTime(
+        #        DateTimeUtil::date(now),
+        #        prevMark * 60,
+        #        0
+        #    );
+        #}
+      ENDSOURCE
+      SOURCE #toMinutes
+        # private static int toMinutes(Jay_CadenceUnit _unit, int _value)
+        #    {
+        #        switch (_unit)
+        #        {
+        #            case Jay_CadenceUnit::Year:   return _value * 525600;
+        #            case Jay_CadenceUnit::Month:  return _value * 43800;
+        #            case Jay_CadenceUnit::Week:   return _value * 10080;
+        #            case Jay_CadenceUnit::Day:    return _value * 1440;
+        #            case Jay_CadenceUnit::Hour:   return _value * 60;
+        #            case Jay_CadenceUnit::Minute: return _value;
+        #            default: return _value;
+        #        }
+        #    }
+        #
+      ENDSOURCE
+    ENDMETHODS
+  ENDCLASS
+
+***Element: END

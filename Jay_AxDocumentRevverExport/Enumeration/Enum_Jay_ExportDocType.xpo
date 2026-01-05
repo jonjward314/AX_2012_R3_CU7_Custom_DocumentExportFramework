@@ -1,0 +1,64 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: DBE
+
+; Microsoft Dynamics AX Enumtype : Jay_ExportDocType unloaded
+; --------------------------------------------------------------------------------
+  ENUMTYPEVERSION 1
+  
+  ENUMTYPE #Jay_ExportDocType
+    PROPERTIES
+      Name                #Jay_ExportDocType
+      UseEnumValue        #Yes
+      Origin              #{8C329FBF-926C-48C0-9B0C-48B6A11436CE}
+    ENDPROPERTIES
+    
+    TYPEELEMENTS
+      #Confirmation
+      PROPERTIES
+        Name                #Confirmation
+        Label               #Confirmation
+        EnumValue           #0
+      ENDPROPERTIES
+      
+      #Invoice
+      PROPERTIES
+        Name                #Invoice
+        Label               #Invoice
+        EnumValue           #1
+      ENDPROPERTIES
+      
+      #PurchaseOrder
+      PROPERTIES
+        Name                #PurchaseOrder
+        Label               #PurchaseOrder
+        EnumValue           #2
+      ENDPROPERTIES
+      
+      #MSRP
+      PROPERTIES
+        Name                #MSRP
+        Label               #MSRP
+        EnumValue           #3
+      ENDPROPERTIES
+      
+      #CertificateOfOrigin
+      PROPERTIES
+        Name                #CertificateOfOrigin
+        Label               #CertificateOfOrigin
+        EnumValue           #4
+      ENDPROPERTIES
+      
+      #All
+      PROPERTIES
+        Name                #All
+        Label               #All
+        EnumValue           #5
+      ENDPROPERTIES
+      
+    ENDTYPEELEMENTS
+  ENDENUMTYPE
+  
+
+***Element: END

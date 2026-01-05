@@ -1,0 +1,250 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: DBT
+
+; Microsoft Dynamics AX Table : Jay_DocExportHistQueue_Temp unloaded
+; --------------------------------------------------------------------------------
+  TABLEVERSION 1
+  
+  TABLE #Jay_DocExportHistQueue_Temp
+    EnforceFKRelation 1
+    PROPERTIES
+      Name                #Jay_DocExportHistQueue_Temp
+      CreateRecIdIndex    #Yes
+      PrimaryIndex        #SurrogateKey
+      ModifiedDateTime    #Yes
+      CreatedDateTime     #Yes
+      Origin              #{DBE1B8EE-2284-403B-9D4E-62834BFBB06C}
+    ENDPROPERTIES
+    
+    FIELDS
+      FIELD #Attempts
+        INT
+        PROPERTIES
+          Name                #Attempts
+          Label               #Retry Attempts
+          Table               #Jay_DocExportHistQueue_Temp
+          Origin              #{1568A879-5318-483B-9C2E-D837F0C41028}
+        ENDPROPERTIES
+        
+      FIELD #BatchTag
+        GUID
+        PROPERTIES
+          Name                #BatchTag
+          Label               #Batch Tag
+          Table               #Jay_DocExportHistQueue_Temp
+          Origin              #{725408A7-832B-4407-87FB-AE04E52CACB7}
+        ENDPROPERTIES
+        
+      FIELD #DocRecId
+        INT64
+        PROPERTIES
+          Name                #DocRecId
+          Label               #Document RecId
+          Table               #Jay_DocExportHistQueue_Temp
+          Origin              #{6B9BBBBC-17C7-4450-A73A-B63773A55E1C}
+        ENDPROPERTIES
+        
+      FIELD #DocSubType
+        ENUM
+        PROPERTIES
+          Name                #DocSubType
+          Label               #Document SubType
+          Table               #Jay_DocExportHistQueue_Temp
+          Origin              #{0CDD9A9C-57A2-4FFA-BD2F-0B304E21BB15}
+          EnumType            #Jay_ExportDocSubType
+        ENDPROPERTIES
+        
+      FIELD #DocTableId
+        INT
+        PROPERTIES
+          Name                #DocTableId
+          Label               #Document Table Id
+          Table               #Jay_DocExportHistQueue_Temp
+          Origin              #{7203C2E9-B431-463B-AB8E-D9D64742FC53}
+        ENDPROPERTIES
+        
+      FIELD #DocType
+        ENUM
+        PROPERTIES
+          Name                #DocType
+          Label               #Document Type
+          Table               #Jay_DocExportHistQueue_Temp
+          Origin              #{02737513-D3BB-4CB6-856A-6D56EEB68811}
+          EnumType            #Jay_ExportDocType
+        ENDPROPERTIES
+        
+      FIELD #ErrorMessage
+        STRING
+        PROPERTIES
+          Name                #ErrorMessage
+          Label               #Error Message
+          Table               #Jay_DocExportHistQueue_Temp
+          Origin              #{21B1FFB6-C96E-43CB-8DD2-60417EBE96EE}
+          ExtendedDataType    #Notes
+          StringSize          #(Memo)
+        ENDPROPERTIES
+        
+      FIELD #LastAttemptUtc
+        DATETIME
+        PROPERTIES
+          Name                #LastAttemptUtc
+          Label               #Last Attempt (UTC)
+          Table               #Jay_DocExportHistQueue_Temp
+          Origin              #{15CBBD31-28D8-4E5D-96EB-8D492E830E3F}
+        ENDPROPERTIES
+        
+      FIELD #OrigQueueTime
+        DATETIME
+        PROPERTIES
+          Name                #OrigQueueTime
+          Label               #Original Queue Time
+          Table               #Jay_DocExportHistQueue_Temp
+          Origin              #{305AC149-4832-451A-9C1C-1F0AA64036A3}
+        ENDPROPERTIES
+        
+      FIELD #ParentBatchRecId
+        INT64
+        PROPERTIES
+          Name                #ParentBatchRecId
+          Label               #Parent Batch RecId
+          Table               #Jay_DocExportHistQueue_Temp
+          Origin              #{EE3426D3-1FE1-4DE4-B8AE-D1063D69D20E}
+          ExtendedDataType    #RecId
+        ENDPROPERTIES
+        
+      FIELD #ParentScanId
+        INT64
+        PROPERTIES
+          Name                #ParentScanId
+          Label               #Parent Scan RecId
+          Table               #Jay_DocExportHistQueue_Temp
+          Origin              #{809882A2-1074-4A85-B26A-13C4BC157627}
+          ExtendedDataType    #RecId
+        ENDPROPERTIES
+        
+      FIELD #QueueType
+        ENUM
+        PROPERTIES
+          Name                #QueueType
+          Label               #Queue Type
+          Table               #Jay_DocExportHistQueue_Temp
+          Origin              #{5D1AA6DD-E240-4EF2-809F-3F0D7A580F94}
+          EnumType            #Jay_ExportQueueType
+        ENDPROPERTIES
+        
+      FIELD #RangeFromUTC
+        DATETIME
+        PROPERTIES
+          Name                #RangeFromUTC
+          Label               #Range From (UTC)
+          Table               #Jay_DocExportHistQueue_Temp
+          Origin              #{AE457399-BD42-4716-84DC-5A4246D66220}
+        ENDPROPERTIES
+        
+      FIELD #RangeToUTC
+        DATETIME
+        PROPERTIES
+          Name                #RangeToUTC
+          Label               #Range To (UTC)
+          Table               #Jay_DocExportHistQueue_Temp
+          Origin              #{01766992-4235-4B78-AC27-0E1447FD53C0}
+        ENDPROPERTIES
+        
+      FIELD #SliceId
+        INT64
+        PROPERTIES
+          Name                #SliceId
+          Label               #Slice RecId
+          Table               #Jay_DocExportHistQueue_Temp
+          Origin              #{C18C3FB3-F2F9-4EC1-9B31-E4E738F82A5A}
+          ExtendedDataType    #RefRecId
+        ENDPROPERTIES
+        
+      FIELD #SPID
+        INT
+        PROPERTIES
+          Name                #SPID
+          Table               #Jay_DocExportHistQueue_Temp
+          Origin              #{E42BD29F-6236-490D-B9A9-2F580A2DF3E2}
+        ENDPROPERTIES
+        
+      FIELD #Status
+        ENUM
+        PROPERTIES
+          Name                #Status
+          Label               #Enumerated Status
+          Table               #Jay_DocExportHistQueue_Temp
+          Origin              #{1F49E4EC-C67A-4966-AA6A-6761BE14870B}
+          EnumType            #Jay_ExportQueueStatus
+        ENDPROPERTIES
+        
+    ENDFIELDS
+    GROUPS
+    ENDGROUPS
+    
+    INDICES
+      #Index_ParentBatchRecid
+      PROPERTIES
+        Name                #Index_ParentBatchRecid
+        Origin              #{C06B0BC2-9D15-430A-8989-5F145FCCAB36}
+      ENDPROPERTIES
+      
+      INDEXFIELDS
+        #ParentBatchRecId
+      ENDINDEXFIELDS
+      
+      #Index_DocRef
+      PROPERTIES
+        Name                #Index_DocRef
+        Origin              #{DF750063-702B-4F88-B87C-6A702592B136}
+      ENDPROPERTIES
+      
+      INDEXFIELDS
+        #DocRecId
+        #DocTableId
+      ENDINDEXFIELDS
+      
+      #Index_SliceScan
+      PROPERTIES
+        Name                #Index_SliceScan
+        Origin              #{EB1181B9-53A5-48AF-B3B9-3C1597A017DF}
+      ENDPROPERTIES
+      
+      INDEXFIELDS
+        #SliceId
+        #ParentScanId
+      ENDINDEXFIELDS
+      
+    ENDINDICES
+    FULLTEXTINDICES
+    ENDFULLTEXTINDICES
+    REFERENCES
+      REFERENCE #Jay_BatchCtrl_Relation
+        PROPERTIES
+          Name                #Jay_BatchCtrl_Relation
+          Table               #Jay_BatchCtrl
+          UseDefaultRoleNames #Yes
+        ENDPROPERTIES
+        
+        FIELDREFERENCES
+          REFERENCETYPE NORMAL
+          PROPERTIES
+            Field               #ParentBatchRecId
+            RelatedField        #RecId
+          ENDPROPERTIES
+          
+        ENDFIELDREFERENCES
+      ENDREFERENCE
+    ENDREFERENCES
+    
+    DELETEACTIONS
+    ENDDELETEACTIONS
+    
+    METHODS
+    ENDMETHODS
+  ENDTABLE
+  
+
+***Element: END

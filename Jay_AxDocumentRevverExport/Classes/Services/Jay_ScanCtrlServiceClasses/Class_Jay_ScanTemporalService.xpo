@@ -1,0 +1,102 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: CLS
+
+; Microsoft Dynamics AX Class: Jay_ScanTemporalService unloaded
+; --------------------------------------------------------------------------------
+  CLSVERSION 1
+  
+  CLASS #Jay_ScanTemporalService
+    PROPERTIES
+      Name                #Jay_ScanTemporalService
+      Origin              #{0D30FF5E-BB9E-4AB6-A9DA-574DB709884A}
+    ENDPROPERTIES
+    
+    METHODS
+      SOURCE #classDeclaration
+        #public class Jay_ScanTemporalService
+        #{
+        #    // Service for time-based calculations (intervals, ranges, etc.)
+        #}
+      ENDSOURCE
+      SOURCE #computeInitialRange
+        #public static container computeInitialRange(utcDateTime      _startUtc,
+        #                                            Jay_ScanDirection _direction,
+        #                                            Jay_ExportQueueType _queueType,
+        #                                            int              _scanValue,
+        #                                            Jay_CadenceUnit  _scanUnit,
+        #                                            int              _lengthValue,
+        #                                            Jay_CadenceUnit  _lengthUnit)
+        #{
+        #    utcDateTime rangeFromUtc, rangeToUtc;
+        #    int windowMinutes;
+        #    // Choose window length based on queue type (Length for historical, Scan for production):contentReference[oaicite:24]{index=24}
+        #    if (_queueType == Jay_ExportQueueType::Historical && _lengthValue > 0)
+        #    {
+        #        windowMinutes = abs(_lengthValue) * Jay_CadenceModel::unitToMinutes(_lengthUnit);
+        #    }
+        #    else
+        #    {
+        #        windowMinutes = abs(_scanValue) * Jay_CadenceModel::unitToMinutes(_scanUnit);
+        #    }
+        #    // Compute initial RangeFrom and RangeTo based on direction:contentReference[oaicite:25]{index=25}
+        #    if (_direction == Jay_ScanDirection::Forward)
+        #    {
+        #        rangeFromUtc = _startUtc;
+        #        rangeToUtc   = DateTimeUtil::addMinutes(rangeFromUtc, windowMinutes);
+        #    }
+        #    else
+        #    {
+        #        rangeToUtc   = _startUtc;
+        #        rangeFromUtc = DateTimeUtil::addMinutes(rangeToUtc, -windowMinutes);
+        #    }
+        #    return [rangeFromUtc, rangeToUtc];
+        #}
+      ENDSOURCE
+      SOURCE #computeNextIntervalStart
+        #public static utcDateTime computeNextIntervalStart(utcDateTime      _currentStartUtc,
+        #                                                    int              _scanValue,
+        #                                                    Jay_CadenceUnit  _scanUnit,
+        #                                                    Jay_ScanDirection _direction)
+        #{
+        #    // Calculate the next interval start by adding cadence unit in the scan direction:contentReference[oaicite:26]{index=26}
+        #      int signedVal;
+        #    if (!_currentStartUtc)
+        #    {
+        #        return DateTimeUtil::minValue();
+        #    }
+        #    if (_scanValue == 0)
+        #    {
+        #        return _currentStartUtc;
+        #    }
+        #    signedVal = (_direction == Jay_ScanDirection::Forward) ? _scanValue : -_scanValue;
+        #    return Jay_CadenceModel::addCadence(_currentStartUtc, signedVal, _scanUnit);
+        #}
+      ENDSOURCE
+      SOURCE #safeAddCadence
+        #public static utcDateTime safeAddCadence(utcDateTime _anchor, int _value, Jay_CadenceUnit _unit)
+        #{
+        #    // Calendar-aware add; falls back to simple minutes if addCadence makes no progress:contentReference[oaicite:27]{index=27}:contentReference[oaicite:28]{index=28}
+        #    utcDateTime result      = Jay_CadenceModel::addCadence(_anchor, _value, _unit);
+        #    int         fallbackMins;
+        #    // If result didn't advance (or went in wrong direction), use absolute minutes instead
+        #    if (result == _anchor || (_value != 0 && ((_value > 0 && result <= _anchor) || (_value < 0 && result >= _anchor))))
+        #    {
+        #        fallbackMins = Jay_CadenceModel::toMinutes(abs(_value), _unit, _anchor);
+        #        if (_value < 0)
+        #        {
+        #            result = DateTimeUtil::addMinutes(_anchor, -fallbackMins);
+        #        }
+        #        else
+        #        {
+        #            result = DateTimeUtil::addMinutes(_anchor, fallbackMins);
+        #        }
+        #    }
+        #    return result;
+        #}
+      ENDSOURCE
+    ENDMETHODS
+  ENDCLASS
+
+***Element: END

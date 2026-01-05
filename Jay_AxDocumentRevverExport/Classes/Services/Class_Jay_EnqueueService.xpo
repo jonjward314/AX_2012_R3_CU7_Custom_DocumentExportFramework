@@ -1,0 +1,621 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: CLS
+
+; Microsoft Dynamics AX Class: Jay_EnqueueService unloaded
+; --------------------------------------------------------------------------------
+  CLSVERSION 1
+  
+  CLASS #Jay_EnqueueService
+    PROPERTIES
+      Name                #Jay_EnqueueService
+      Origin              #{7F1704E1-45D8-406A-BDF0-89B67B0ABA1C}
+    ENDPROPERTIES
+    
+    METHODS
+      SOURCE #classDeclaration
+        #public class Jay_EnqueueService
+        #{
+        #
+        #}
+        #
+      ENDSOURCE
+      SOURCE #bulkStageFromSlice
+        #public static void bulkStageFromSlice(Jay_SliceCtrl _slice, container _recIds)
+        #{
+        #    Jay_DocExportProdQueue_Temp    prodStage;
+        #    Jay_DocExportHistQueue_Temp    histStage;
+        #    Jay_BatchCtrl                  batchCtrl;
+        #    Jay_ExportRuntimeSettingsTable settings;
+        #
+        #    int          cap, total, startIndex, endIndex;
+        #    int          j, stagedCount, predicted;
+        #    RecId        recId, batchId, seedRecId;
+        #    boolean      isProd;
+        #    utcDateTime  nowUtc = DateTimeUtil::utcNow();
+        #    container    batchRecs;
+        #
+        #    settings   = Jay_ExportRuntimeSettingsTable::findOrCreate();
+        #    cap        = settings.MaxDocumentCountPerBatch ? settings.MaxDocumentCountPerBatch : 5000;
+        #    total      = conLen(_recIds);
+        #    isProd     = (_slice.QueueType == Jay_ExportQueueType::Production);
+        #    startIndex = 1;
+        #
+        #    info(strFmt("Stage: Slice %1 staging %2 recIds (cap=%3).",
+        #                _slice.RecId, total, cap));
+        #
+        #    if (total == 0)
+        #    {
+        #        info(strFmt("Stage: Slice %1 has no recIds.", _slice.RecId));
+        #        return;
+        #    }
+        #
+        #    while (startIndex <= total)
+        #    {
+        #        endIndex = startIndex + (cap - 1);
+        #        if (endIndex > total)
+        #            endIndex = total;
+        #
+        #        predicted = endIndex - startIndex + 1;
+        #
+        #        // Create batch entry
+        #        ttsBegin;
+        #        batchCtrl.clear();
+        #        batchCtrl.Status           = Jay_BatchStatus::Pending;
+        #        batchCtrl.QueueType        = _slice.QueueType;
+        #        batchCtrl.ParentSliceRecId = _slice.RecId;
+        #        batchCtrl.PredictedDocs    = predicted;
+        #        batchCtrl.ActualDocs       = 0;
+        #        batchCtrl.HealthStatus     = Jay_HealthStatus::Healthy;
+        #        batchCtrl.insert();
+        #        ttsCommit;
+        #
+        #        batchId       = batchCtrl.RecId;
+        #        stagedCount   = 0;
+        #
+        #        // HEARTBEAT SEED
+        #        seedRecId = conPeek(_recIds, startIndex);
+        #
+        #        try
+        #        {
+        #            Jay_EnqueueService::safeEnqueueFromSlice(_slice, seedRecId, batchId, nowUtc);
+        #        }
+        #        catch
+        #        {
+        #            warning(strFmt("Stage: Safe enqueue failed for seed RecId %1", seedRecId));
+        #        }
+        #
+        #        // Remove seedRecId from list
+        #        batchRecs = Jay_EnqueueService::removeRecIdFromContainer(_recIds, seedRecId);
+        #
+        #        // Stage remaining rows into TempDB
+        #        ttsBegin;
+        #        for (j = 1; j <= conLen(batchRecs); j++)
+        #        {
+        #            recId = conPeek(batchRecs, j);
+        #// ─────────────────────────────────────────────
+        #// STAGING ROW (diagnostic: log values before insert)
+        #// ─────────────────────────────────────────────
+        #if (isProd)
+        #{
+        #    prodStage.clear();
+        #
+        #    prodStage.DocTableId       = _slice.SourceTableId;
+        #    prodStage.DocRecId         = recId;
+        #    prodStage.DocType          = _slice.DocType;
+        #    prodStage.DocSubType       = _slice.DocSubType;
+        #    prodStage.QueueType        = _slice.QueueType;
+        #    prodStage.ParentScanId     = _slice.ParentScanId;
+        #    prodStage.SliceId          = _slice.RecId;
+        #    prodStage.ParentBatchRecId = batchId;
+        #    prodStage.RangeFromUTC     = _slice.FromUTC;
+        #    prodStage.RangeToUTC       = _slice.ToUTC;
+        #    prodStage.OrigQueueTime    = nowUtc;
+        #    prodStage.Status           = Jay_ExportQueueStatus::Queued;
+        #
+        #    // 🔍 DIAGNOSTIC LOG BEFORE INSERT
+        #    info(strFmt(
+        #        "STAGE(PROD) → RecId=%1 | Batch=%2 | Slice=%3 | TableId=%4 (%5) | "
+        #        + "DocType=%6/%7 | ParentScan=%8 | From=%9 To=%10",
+        #        recId,
+        #        batchId,
+        #        _slice.RecId,
+        #        _slice.SourceTableId,
+        #        tableId2Name(_slice.SourceTableId),
+        #        enum2str(_slice.DocType),
+        #        enum2str(_slice.DocSubType),
+        #        _slice.ParentScanId,
+        #        DateTimeUtil::toStr(_slice.FromUTC),
+        #        DateTimeUtil::toStr(_slice.ToUTC)
+        #    ));
+        #
+        #    prodStage.insert();
+        #}
+        #else
+        #{
+        #    histStage.clear();
+        #
+        #    histStage.DocTableId       = _slice.SourceTableId;
+        #    histStage.DocRecId         = recId;
+        #    histStage.DocType          = _slice.DocType;
+        #    histStage.DocSubType       = _slice.DocSubType;
+        #    histStage.QueueType        = _slice.QueueType;
+        #    histStage.ParentScanId     = _slice.ParentScanId;
+        #    histStage.SliceId          = _slice.RecId;
+        #    histStage.ParentBatchRecId = batchId;
+        #    histStage.RangeFromUTC     = _slice.FromUTC;
+        #    histStage.RangeToUTC       = _slice.ToUTC;
+        #    histStage.OrigQueueTime    = nowUtc;
+        #    histStage.Status           = Jay_ExportQueueStatus::Queued;
+        #
+        #    // 🔍 DIAGNOSTIC LOG BEFORE INSERT
+        #    info(strFmt(
+        #        "STAGE(HIST) → RecId=%1 | Batch=%2 | Slice=%3 | TableId=%4 (%5) | "
+        #        + "DocType=%6/%7 | ParentScan=%8 | From=%9 To=%10",
+        #        recId,
+        #        batchId,
+        #        _slice.RecId,
+        #        _slice.SourceTableId,
+        #        tableId2Name(_slice.SourceTableId),
+        #        enum2str(_slice.DocType),
+        #        enum2str(_slice.DocSubType),
+        #        _slice.ParentScanId,
+        #        DateTimeUtil::toStr(_slice.FromUTC),
+        #        DateTimeUtil::toStr(_slice.ToUTC)
+        #    ));
+        #
+        #    histStage.insert();
+        #}
+        #
+        #
+        #            stagedCount++;
+        #        }
+        #        ttsCommit;
+        #
+        #        info(strFmt("Stage: Batch %1 staged %2 of %3 records (slice %4).",
+        #                    batchId, stagedCount, predicted, _slice.RecId));
+        #
+        #        // PROMOTE BATCH OUT OF STAGING
+        #        Jay_EnqueueService::promoteStageToQueueByBatch(batchId, _slice.QueueType);
+        #
+        #        startIndex = endIndex + 1;
+        #    }
+        #
+        #    info(strFmt("Stage: Completed staging slice %1 (%2 recIds).",
+        #                _slice.RecId, total));
+        #}
+        #
+      ENDSOURCE
+      SOURCE #enqueueSlice
+        #public static boolean enqueueSlice(RecId _sliceRecId)
+        #{
+        #    Jay_SliceCtrl                  sliceRO = Jay_SliceCtrl::find(_sliceRecId);
+        #    Jay_SliceCtrl                  sliceUpd;
+        #    Jay_DocHandler_Base            handler;
+        #    Jay_ExportRuntimeSettingsTable settings;
+        #    container                      recIds;
+        #    int                            countRecIds;
+        #    boolean                        ok = true;
+        #    str                            tag;
+        #
+        #    if (!sliceRO.RecId)
+        #        return false;
+        #
+        #    tag = strFmt("[Slice %1 | %2 → %3 | %4/%5]",
+        #                 sliceRO.RecId,
+        #                 DateTimeUtil::toStr(sliceRO.FromUTC),
+        #                 DateTimeUtil::toStr(sliceRO.ToUTC),
+        #                 enum2str(sliceRO.DocType),
+        #                 enum2str(sliceRO.DocSubType));
+        #
+        #    info(strFmt("%1 BEGIN enqueueSlice()", tag));
+        #
+        #    try
+        #    {
+        #        handler  = Jay_DocHandler_Base::construct(sliceRO.DocType);
+        #        handler.init(sliceRO);
+        #
+        #        recIds      = handler.enumerateRecIds();
+        #        countRecIds = conLen(recIds);
+        #
+        #        info(strFmt("%1 Enumerated %2 RecIds.", tag, countRecIds));
+        #
+        #        if (countRecIds == 0)
+        #        {
+        #            ttsBegin;
+        #            select forUpdate sliceUpd
+        #                where sliceUpd.RecId == _sliceRecId;
+        #
+        #            sliceUpd.SliceStatus = Jay_SliceStatus::Completed;
+        #            sliceUpd.ActualDocs  = 0;
+        #            sliceUpd.update();
+        #            ttsCommit;
+        #
+        #            info(strFmt("%1 COMPLETED (empty slice).", tag));
+        #            return true;
+        #        }
+        #
+        #        // Staging path (fast)
+        #        settings = Jay_ExportRuntimeSettingsTable::findOrCreate();
+        #
+        #        if (settings.EnqueueType == Jay_EnqueueType::Fast)
+        #        {
+        #            Jay_EnqueueService::enqueueViaStage(sliceRO, recIds);
+        #        }
+        #        else
+        #        {
+        #            Jay_EnqueueService::enqueueViaLegacy(sliceRO, recIds);
+        #        }
+        #
+        #        ttsBegin;
+        #        select forUpdate sliceUpd
+        #            where sliceUpd.RecId == _sliceRecId;
+        #
+        #        sliceUpd.SliceStatus = Jay_SliceStatus::Completed;
+        #        sliceUpd.ActualDocs  = countRecIds;
+        #        sliceUpd.update();
+        #        ttsCommit;
+        #
+        #        info(strFmt("%1 COMPLETED successfully (%2 docs).",
+        #                    tag, countRecIds));
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        ok = false;
+        #
+        #        ttsBegin;
+        #        select forUpdate sliceUpd
+        #            where sliceUpd.RecId == _sliceRecId;
+        #        sliceUpd.RetryCount++;  // ← critical fix
+        #        sliceUpd.SliceStatus = Jay_SliceStatus::Failed;
+        #        sliceUpd.update();
+        #        ttsCommit;
+        #
+        #        error(strFmt("%1 FAILED enqueueSlice().", tag));
+        #        sleep(1000);
+        #    }
+        #
+        #    return ok;
+        #}
+      ENDSOURCE
+      SOURCE #enqueueViaLegacy
+        #public static void enqueueViaLegacy(Jay_SliceCtrl _slice, container _recIds)
+        #{
+        #    // ─── Declarations ────────────────────────────────────────────────────────────
+        #    int          i, j;
+        #    int          total, cap;
+        #    int          startIndex, endIndex;
+        #    int          stagedInBatch, moved, predicted;
+        #    RecId        recId, batchId;
+        #    Jay_BatchCtrl batchCtrl;
+        #    Jay_DocExportProdQueue prodQueue;
+        #    Jay_DocExportHistQueue histQueue;
+        #    Jay_ExportRuntimeSettingsTable settings;
+        #    utcDateTime  nowUtc;
+        #    boolean      isProd;
+        #    ;
+        #
+        #    // ─── Initialization ─────────────────────────────────────────────────────────
+        #    settings   = Jay_ExportRuntimeSettingsTable::findOrCreate();
+        #    cap        = settings.MaxDocumentCountPerBatch ? settings.MaxDocumentCountPerBatch : 5000;
+        #    nowUtc     = DateTimeUtil::utcNow();
+        #    total      = conLen(_recIds);
+        #    isProd     = (_slice.QueueType == Jay_ExportQueueType::Production);
+        #    startIndex = 1;
+        #
+        #    if (total == 0)
+        #    {
+        #        info(strFmt("enqueueViaLegacy: nothing to enqueue for slice %1.", _slice.RecId));
+        #        return;
+        #    }
+        #
+        #    info(strFmt("enqueueViaLegacy: processing %1 record(s) (cap=%2 per batch).", total, cap));
+        #
+        #    // ─── Main batching loop ─────────────────────────────────────────────────────
+        #    while (startIndex <= total)
+        #    {
+        #        endIndex = startIndex + (cap - 1);
+        #        if (endIndex > total)
+        #            endIndex = total;
+        #
+        #        predicted = endIndex - startIndex + 1;
+        #
+        #        // --- Create batch control record -----------------------------------------
+        #        ttsBegin;
+        #        batchCtrl.clear();
+        #        batchCtrl.Status           = Jay_BatchStatus::Pending;
+        #        batchCtrl.QueueType        = _slice.QueueType;
+        #        batchCtrl.ParentSliceRecId = _slice.RecId;
+        #        batchCtrl.PredictedDocs    = predicted;
+        #        batchCtrl.ActualDocs       = 0;
+        #        batchCtrl.HealthStatus     = Jay_HealthStatus::Healthy; // optimistic
+        #        batchCtrl.insert();
+        #        ttsCommit;
+        #
+        #        batchId       = batchCtrl.RecId;
+        #        stagedInBatch = 0;
+        #
+        #        info(strFmt("enqueueViaLegacy: starting slow enqueue batch %1 (%2 docs).", batchId, predicted));
+        #
+        #        // --- Perform per-record enqueue safely ----------------------------------
+        #        for (j = startIndex; j <= endIndex; j++)
+        #        {
+        #            recId = conPeek(_recIds, j);
+        #            try
+        #            {
+        #                Jay_EnqueueService::safeEnqueueFromSlice(_slice, recId, batchId, nowUtc);
+        #                stagedInBatch++;
+        #            }
+        #            catch (Exception::Error)
+        #            {
+        #                warning(strFmt("enqueueViaLegacy: failed to enqueue RecId %1 (slice %2).",
+        #                               recId, _slice.RecId));
+        #            }
+        #        }
+        #
+        #        // --- Verify count of actually enqueued docs -----------------------------
+        #        if (isProd)
+        #        {
+        #            select count(RecId) from prodQueue
+        #                where prodQueue.ParentBatchRecId == batchId;
+        #            moved = prodQueue.RecId;
+        #        }
+        #        else
+        #        {
+        #            select count(RecId) from histQueue
+        #                where histQueue.ParentBatchRecId == batchId;
+        #            moved = histQueue.RecId;
+        #        }
+        #
+        #        // --- Update batch control and finalize health ---------------------------
+        #        ttsBegin;
+        #        select forupdate batchCtrl where batchCtrl.RecId == batchId;
+        #        if (batchCtrl.RecId)
+        #        {
+        #            batchCtrl.ActualDocs     = moved;
+        #            batchCtrl.Status         = Jay_BatchStatus::Queued;
+        #            batchCtrl.HealthStatus   = (moved == predicted)
+        #                                        ? Jay_HealthStatus::Healthy
+        #                                        : Jay_HealthStatus::Degraded;
+        #            batchCtrl.PrintedDocs    = 0;
+        #            batchCtrl.AbortReason    = '';
+        #            batchCtrl.update();
+        #        }
+        #        ttsCommit;
+        #
+        #        info(strFmt("✅ enqueueViaLegacy: batch %1 complete (%2/%3 records).",
+        #                    batchId, moved, predicted));
+        #
+        #        // --- Notify arbitration if healthy --------------------------------------
+        #        if (batchCtrl.HealthStatus == Jay_HealthStatus::Healthy)
+        #        {
+        #            Jay_ArbitrationService::notifyBatchReady(batchId, _slice.QueueType);
+        #        }
+        #        else
+        #        {
+        #            warning(strFmt("enqueueViaLegacy: batch %1 degraded (%2 vs %3).",
+        #                           batchId, moved, predicted));
+        #        }
+        #
+        #        // --- Advance index window -----------------------------------------------
+        #        startIndex = endIndex + 1;
+        #    }
+        #
+        #    info(strFmt("enqueueViaLegacy: completed enqueue for slice %1 (%2 total records).",
+        #                _slice.RecId, total));
+        #}
+        #
+      ENDSOURCE
+      SOURCE #enqueueViaStage
+        #//--------------------------------------------------------------------------
+        #
+        #// Helper: send container of RecIds to the “fast” TempDB enStage worker
+        #public static void enqueueViaStage(Jay_SliceCtrl _slice, container _recIds)
+        #{
+        #    Jay_EnqueueService::bulkStageFromSlice(_slice, _recIds);
+        #}
+      ENDSOURCE
+      SOURCE #promoteStageToQueueByBatch
+        #public static void promoteStageToQueueByBatch(RecId _batchRecId, Jay_ExportQueueType _queueType)
+        #{
+        #    Jay_DocExportProdQueue_Temp stageProd;
+        #    Jay_DocExportHistQueue_Temp stageHist;
+        #    Jay_DocExportProdQueue      prodQueue;
+        #    Jay_DocExportHistQueue      histQueue;
+        #    int64                       moved = 0;
+        #    boolean                     isProd;
+        #
+        #    isProd = (_queueType == Jay_ExportQueueType::Production);
+        #
+        #    if (isProd)
+        #    {
+        #        // 1 — BULK INSERT
+        #        ttsBegin;
+        #        insert_recordset prodQueue
+        #            (DocTableId, DocRecId, DocType, DocSubType,
+        #             QueueType, ParentScanId, SliceId, ParentBatchRecId,
+        #             RangeFromUTC, RangeToUTC, OrigQueueTime, Status)
+        #        select
+        #            DocTableId, DocRecId, DocType, DocSubType,
+        #            _queueType, ParentScanId, SliceId, ParentBatchRecId,
+        #            RangeFromUTC, RangeToUTC, OrigQueueTime, Status
+        #            from stageProd
+        #            where stageProd.ParentBatchRecId == _batchRecId;
+        #        ttsCommit;
+        #
+        #        moved = prodQueue.RowCount();
+        #
+        #        // 2 — DRAIN STAGING
+        #        ttsBegin;
+        #        delete_from stageProd
+        #            where stageProd.ParentBatchRecId == _batchRecId;
+        #        ttsCommit;
+        #    }
+        #    else
+        #    {
+        #        // 1 — BULK INSERT
+        #        ttsBegin;
+        #        insert_recordset histQueue
+        #            (DocTableId, DocRecId, DocType, DocSubType,
+        #             QueueType, ParentScanId, SliceId, ParentBatchRecId,
+        #             RangeFromUTC, RangeToUTC, OrigQueueTime, Status)
+        #        select
+        #            DocTableId, DocRecId, DocType, DocSubType,
+        #            _queueType, ParentScanId, SliceId, ParentBatchRecId,
+        #            RangeFromUTC, RangeToUTC, OrigQueueTime, Status
+        #            from stageHist
+        #            where stageHist.ParentBatchRecId == _batchRecId;
+        #        ttsCommit;
+        #
+        #        moved = histQueue.RowCount();
+        #
+        #        // 2 — DRAIN STAGING
+        #        ttsBegin;
+        #        delete_from stageHist
+        #            where stageHist.ParentBatchRecId == _batchRecId;
+        #        ttsCommit;
+        #    }
+        #
+        #    // 3 — ARBITRATION NOTIFY
+        #    Jay_ArbitrationService::notifyBatchReady(_batchRecId, _queueType);
+        #
+        #    info(strFmt("Promoted %1 staged rows for batch %2 (%3).",
+        #                moved, _batchRecId, enum2str(_queueType)));
+        #}
+        #
+      ENDSOURCE
+      SOURCE #removeRecIdFromContainer
+        #private static container removeRecIdFromContainer(container _c, RecId _remove)
+        #{
+        #    container result = conNull();
+        #    int       i, counter;
+        #
+        #    counter = conLen(_c);
+        #
+        #    for (i = 1; i <= counter; i++)
+        #    {
+        #        if (conPeek(_c, i) != _remove)
+        #        {
+        #            result += conPeek(_c, i);
+        #        }
+        #    }
+        #
+        #    return result;
+        #}
+      ENDSOURCE
+      SOURCE #safeEnqueueFromSlice
+        #public static void safeEnqueueFromSlice(Jay_SliceCtrl _slice, RecId _docRecId, RecId _batchRecId, utcDateTime _nowUtc)
+        #{
+        #    // ─── Declarations (AX requires top-of-method) ────────────────────────────────
+        #    Jay_DocExportProdQueue prodQueue;
+        #    Jay_DocExportHistQueue histQueue;
+        #    boolean                isProd;
+        #    ;
+        #
+        #    // ─── Initialization ──────────────────────────────────────────────────────────
+        #    isProd = (_slice.QueueType == Jay_ExportQueueType::Production);
+        #
+        #    // ─── Defensive guard ─────────────────────────────────────────────────────────
+        #    if (!_slice.RecId || !_docRecId)
+        #    {
+        #        warning("safeEnqueueFromSlice: invalid slice or document reference.");
+        #        return;
+        #    }
+        #
+        #    // ─── Perform safe single-row enqueue ─────────────────────────────────────────
+        #    if (isProd)
+        #    {
+        #        select firstOnly forUpdate prodQueue
+        #            where prodQueue.DocTableId == _slice.SourceTableId
+        #              && prodQueue.DocRecId   == _docRecId
+        #              && prodQueue.QueueType  == _slice.QueueType;
+        #
+        #        if (!prodQueue.RecId)
+        #        {
+        #            ttsBegin;
+        #            prodQueue.clear();
+        #            prodQueue.DocTableId       = _slice.SourceTableId;
+        #            prodQueue.DocRecId         = _docRecId;
+        #            prodQueue.QueueType        = _slice.QueueType;
+        #            prodQueue.ParentScanId     = _slice.ParentScanId;
+        #            prodQueue.SliceId          = _slice.RecId;
+        #            prodQueue.ParentBatchRecId = _batchRecId;
+        #            prodQueue.RangeFromUTC     = _slice.FromUTC;
+        #            prodQueue.RangeToUTC       = _slice.ToUTC;
+        #            prodQueue.OrigQueueTime    = _nowUtc;
+        #            prodQueue.Status           = Jay_ExportQueueStatus::Queued;
+        #            prodQueue.Attempts         = 0;
+        #            prodQueue.LastAttemptUtc   = DateTimeUtil::minValue();
+        #            prodQueue.DocType      = _slice.DocType;
+        #            prodQueue.DocSubType   = _slice.DocSubType;
+        #            prodQueue.insert();
+        #            ttsCommit;
+        #        }
+        #        else
+        #        {
+        #            // optional refresh if outdated window
+        #            if (prodQueue.RangeFromUTC < _slice.FromUTC)
+        #            {
+        #                ttsBegin;
+        #                prodQueue.Status         = Jay_ExportQueueStatus::Queued;
+        #                prodQueue.ParentBatchRecId = _batchRecId;
+        #                prodQueue.OrigQueueTime  = _nowUtc;
+        #                prodQueue.Attempts       = 0;
+        #                prodQueue.update();
+        #                ttsCommit;
+        #            }
+        #        }
+        #    }
+        #    else
+        #    {
+        #        select firstOnly forUpdate histQueue
+        #            where histQueue.DocTableId == _slice.SourceTableId
+        #              && histQueue.DocRecId   == _docRecId
+        #              && histQueue.QueueType  == _slice.QueueType;
+        #
+        #        if (!histQueue.RecId)
+        #        {
+        #            ttsBegin;
+        #            histQueue.clear();
+        #            histQueue.DocTableId       = _slice.SourceTableId;
+        #            histQueue.DocRecId         = _docRecId;
+        #            histQueue.QueueType        = _slice.QueueType;
+        #            histQueue.ParentScanId     = _slice.ParentScanId;
+        #            histQueue.SliceId          = _slice.RecId;
+        #            histQueue.ParentBatchRecId = _batchRecId;
+        #            histQueue.RangeFromUTC     = _slice.FromUTC;
+        #            histQueue.RangeToUTC       = _slice.ToUTC;
+        #            histQueue.OrigQueueTime    = _nowUtc;
+        #            histQueue.Status           = Jay_ExportQueueStatus::Queued;
+        #            histQueue.Attempts         = 0;
+        #            histQueue.LastAttemptUtc   = DateTimeUtil::minValue();
+        #            histQueue.DocType      = _slice.DocType;
+        #            histQueue.DocSubType   = _slice.DocSubType;
+        #            histQueue.insert();
+        #            ttsCommit;
+        #        }
+        #        else
+        #        {
+        #            if (histQueue.RangeFromUTC < _slice.FromUTC)
+        #            {
+        #                ttsBegin;
+        #                histQueue.Status         = Jay_ExportQueueStatus::Queued;
+        #                histQueue.ParentBatchRecId = _batchRecId;
+        #                histQueue.OrigQueueTime  = _nowUtc;
+        #                histQueue.Attempts       = 0;
+        #                histQueue.update();
+        #                ttsCommit;
+        #            }
+        #        }
+        #    }
+        #
+        #    info(strFmt("🩵 safeEnqueueFromSlice: ensured presence of DocRecId %1 in %2 queue (batch %3).",
+        #                _docRecId, enum2str(_slice.QueueType), _batchRecId));
+        #}
+        #
+      ENDSOURCE
+    ENDMETHODS
+  ENDCLASS
+
+***Element: END

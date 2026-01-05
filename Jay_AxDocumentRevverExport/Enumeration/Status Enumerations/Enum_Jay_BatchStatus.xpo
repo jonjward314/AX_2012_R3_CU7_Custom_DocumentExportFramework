@@ -1,0 +1,72 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: DBE
+
+; Microsoft Dynamics AX Enumtype : Jay_BatchStatus unloaded
+; --------------------------------------------------------------------------------
+  ENUMTYPEVERSION 1
+  
+  ENUMTYPE #Jay_BatchStatus
+    PROPERTIES
+      Name                #Jay_BatchStatus
+      Label               #Batch Status
+      UseEnumValue        #Yes
+      Origin              #{B0E7AB19-7B9A-4F83-8D26-9C72AF4C7924}
+    ENDPROPERTIES
+    
+    TYPEELEMENTS
+      #Pending
+      PROPERTIES
+        Name                #Pending
+        Label               #Pending
+        EnumValue           #0
+      ENDPROPERTIES
+      
+      #Running
+      PROPERTIES
+        Name                #Running
+        Label               #Running
+        EnumValue           #1
+      ENDPROPERTIES
+      
+      #Deferred
+      PROPERTIES
+        Name                #Deferred
+        Label               #Deferred
+        EnumValue           #2
+      ENDPROPERTIES
+      
+      #Completed
+      PROPERTIES
+        Name                #Completed
+        Label               #Completed
+        EnumValue           #3
+      ENDPROPERTIES
+      
+      #Failed
+      PROPERTIES
+        Name                #Failed
+        Label               #Failed
+        EnumValue           #4
+      ENDPROPERTIES
+      
+      #Staged
+      PROPERTIES
+        Name                #Staged
+        Label               #Staged
+        EnumValue           #5
+      ENDPROPERTIES
+      
+      #Queued
+      PROPERTIES
+        Name                #Queued
+        Label               #Queued
+        EnumValue           #6
+      ENDPROPERTIES
+      
+    ENDTYPEELEMENTS
+  ENDENUMTYPE
+  
+
+***Element: END

@@ -1,0 +1,151 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: JOB
+
+; Microsoft Dynamics AX Job: notifyBatchReady unloaded
+; --------------------------------------------------------------------------------
+  JOBVERSION 1
+  
+  SOURCE #notifyBatchReady
+    #public static server void notifyBatchReady()
+    #{
+    #    Jay_ExportRuntimeSettingsTable settings =
+    #        Jay_ExportRuntimeSettingsTable::findOrCreate();
+    #
+    #    Jay_PrintGovernorState s = Jay_PrintGovernorState::findOrCreate();
+    #
+    #    Jay_DocExportProdQueue  prod;
+    #    Jay_DocExportHistQueue  hist;
+    #    Jay_BatchCtrl           batchCtrl;
+    #    Jay_SliceCtrl           slice;
+    #    BatchHeader             header;
+    #    Batch                   batch;
+    #    Jay_ArbitrationBatch    job;
+    #
+    #    utcDateTime nowUtc  = DateTimeUtil::utcNow();
+    #    utcDateTime runTime = DateTimeUtil::addMinutes(nowUtc, 1);
+    #
+    #    RecId candidateBatchId = 0;
+    #    Jay_ExportQueueType candidateQueue;
+    #    int maxAttempts = settings.MaxAllowedPrintAttempts;
+    #
+    #    //────────────────────────────────────────────────────
+    #    // 0. Heal governor
+    #    //────────────────────────────────────────────────────
+    #    Jay_PrintOrchestratorService::ensureGovernorNotStuck();
+    #
+    #    //────────────────────────────────────────────────────
+    #    // 1. Abort if already pending or printing
+    #    //────────────────────────────────────────────────────
+    #    if (s.PendingPrintCycle == NoYes::Yes)
+    #        return;
+    #
+    #    if (s.IsPrinting == NoYes::Yes)
+    #        return;
+    #
+    #    //────────────────────────────────────────────────────
+    #    // 2. Try Production first
+    #    //────────────────────────────────────────────────────
+    #    select firstOnly prod
+    #        order by prod.OrigQueueTime
+    #        where (prod.Status == Jay_ExportQueueStatus::Queued
+    #            || prod.Status == Jay_ExportQueueStatus::FailedExport)
+    #           && prod.Attempts < maxAttempts;
+    #
+    #    if (prod.RecId)
+    #    {
+    #        candidateBatchId = prod.ParentBatchRecId;
+    #        candidateQueue   = Jay_ExportQueueType::Production;
+    #    }
+    #    else
+    #    {
+    #        //────────────────────────────────────────────────
+    #        // 3. Try Historical
+    #        //────────────────────────────────────────────────
+    #        select firstOnly hist
+    #            order by hist.OrigQueueTime
+    #            where (hist.Status == Jay_ExportQueueStatus::Queued
+    #                || hist.Status == Jay_ExportQueueStatus::FailedExport)
+    #               && hist.Attempts < maxAttempts;
+    #
+    #        if (hist.RecId)
+    #        {
+    #            candidateBatchId = hist.ParentBatchRecId;
+    #            candidateQueue   = Jay_ExportQueueType::Historical;
+    #        }
+    #    }
+    #
+    #    //────────────────────────────────────────────────────
+    #    // 4. Nothing to do
+    #    //────────────────────────────────────────────────────
+    #    if (!candidateBatchId)
+    #        return;
+    #
+    #    //────────────────────────────────────────────────────
+    #    // 5. Load BatchCtrl + Slice
+    #    //────────────────────────────────────────────────────
+    #    select firstOnly batchCtrl
+    #        where batchCtrl.RecId == candidateBatchId;
+    #
+    #    if (!batchCtrl.RecId)
+    #        return;
+    #
+    #    slice = Jay_SliceCtrl::find(batchCtrl.ParentSliceRecId);
+    #    if (!slice.RecId)
+    #        return;
+    #
+    #    //────────────────────────────────────────────────────
+    #    // 6. Claim PendingPrintCycle
+    #    //────────────────────────────────────────────────────
+    #    if (!Jay_PrintOrchestratorService::setPendingPrintCycle())
+    #        return;
+    #
+    #    //────────────────────────────────────────────────────
+    #    // 7. Avoid duplicates
+    #    //────────────────────────────────────────────────────
+    #    if (Jay_PrintOrchestratorService::printCycleBatchExists())
+    #        return;
+    #
+    #    //────────────────────────────────────────────────────
+    #    // 8. Schedule new PrintCycle batch
+    #    //────────────────────────────────────────────────────
+    #    job = new Jay_ArbitrationBatch();
+    #    job.parmFunctionName(
+    #        enum2str(Jay_ArbitrationBatchFunctions::RequestProcessPrintQueue));
+    #    job.parmQueueType(candidateQueue);
+    #    job.parmSliceIdentifier(slice.RecId);
+    #    job.parmScanIdentifier(slice.ParentScanId);
+    #
+    #    header = BatchHeader::construct();
+    #    header.parmCaption(Jay_PrintOrchestratorService::printCycleCaption());
+    #    header.parmStartDateTime(runTime);
+    #    header.addTask(job);
+    #    header.save();
+    #
+    #    //────────────────────────────────────────────────────
+    #    // 9. Tag batch record
+    #    //────────────────────────────────────────────────────
+    #    ttsBegin;
+    #    select forUpdate batch where batch.RecId == header.parmBatchHeaderId();
+    #
+    #    if (batch.RecId)
+    #    {
+    #        batch.GroupId    = settings.BatchGroupName;
+    #        batch.ExecutedBy = settings.Username;
+    #        batch.update();
+    #    }
+    #    ttsCommit;
+    #
+    #    info(strFmt("notifyBatchReady: Scheduled PrintCycle for Batch %1 (%2)",
+    #                candidateBatchId,
+    #                enum2str(candidateQueue)));
+    #}
+    #
+  ENDSOURCE
+  PROPERTIES
+    Origin              #{7E98490D-9EF4-4329-AB31-FD195D05D358}
+  ENDPROPERTIES
+  
+
+***Element: END

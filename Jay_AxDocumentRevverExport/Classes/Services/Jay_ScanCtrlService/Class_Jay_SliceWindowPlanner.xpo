@@ -1,0 +1,230 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: CLS
+
+; Microsoft Dynamics AX Class: Jay_SliceWindowPlanner unloaded
+; --------------------------------------------------------------------------------
+  CLSVERSION 1
+  
+  CLASS #Jay_SliceWindowPlanner
+    PROPERTIES
+      Name                #Jay_SliceWindowPlanner
+      Origin              #{5D5A92F6-73A7-4B10-9306-1292DA4B6F31}
+    ENDPROPERTIES
+    
+    METHODS
+      SOURCE #classDeclaration
+        #public class Jay_SliceWindowPlanner{}
+      ENDSOURCE
+      SOURCE #formatCoarseWithRemainder
+        #/// e.g., (14 days window) -> "14 Day(s) + 0 min", (1 month-ish by ladder) -> "1 Month(s) + 4320 min"
+        #public static str formatCoarseWithRemainder(int64 _totalMinutes)
+        #{
+        #    container c = Jay_CadenceModel::minutesToBestUnitCoarse(_totalMinutes);
+        #    int64     val   = conPeek(c,1);
+        #    Jay_CadenceUnit u = conPeek(c,2);
+        #    int64     rem   = conPeek(c,3);
+        #
+        #    return strFmt("%1 %2(s)%3",
+        #                  val,
+        #                  enum2str(u),
+        #                  rem ? strFmt(" + %1 min", rem) : "");
+        #}
+      ENDSOURCE
+      SOURCE #partitionMinutesExact
+        #/// Partition minutes exactly into N buckets (sum == _totalMinutes)
+        #/// Example: total=10, count=3 → [4,3,3]
+        #public static container partitionMinutesExact(int64 _totalMinutes, int _count)
+        #{
+        #    // ─── Declarations ─────────────────────────────────────────────────────
+        #    container outCon;
+        #    int       i;
+        #    int64     baseLen;
+        #    int64     extra;
+        #
+        #    // ─── Logic ────────────────────────────────────────────────────────────
+        #    if (_count <= 0)
+        #        return outCon;
+        #
+        #    baseLen = _totalMinutes div _count;
+        #    extra   = _totalMinutes mod _count;
+        #
+        #    for (i = 1; i <= _count; i++)
+        #    {
+        #        outCon += baseLen + (i <= extra ? 1 : 0);
+        #    }
+        #
+        #    return outCon;
+        #}
+      ENDSOURCE
+      SOURCE #planSlicesForRange
+        #public static List planSlicesForRange(
+        #    utcDateTime _rangeFromUtc,
+        #    utcDateTime _rangeToUtc,
+        #    int         _docTypeCount,
+        #    int         _docSubTypeCount)
+        #{
+        #    List            slices = new List(Types::Container);
+        #    int64           totalMinutes;
+        #    container       coarse;
+        #    Jay_CadenceUnit displayUnit;
+        #    int64           coarseRem;
+        #    int64           sliceMinutes;
+        #    int             sliceCount;
+        #    container       partition;
+        #    utcDateTime     cursorFrom, cursorTo;
+        #    int             i;
+        #    int64           allocatedMinutes;
+        #    int64           partMinutes;
+        #
+        #    // ───────────────────────────────────────────────────────────────
+        #    // 0. Validate + normalize
+        #    // ───────────────────────────────────────────────────────────────
+        #    if (_rangeFromUtc == DateTimeUtil::minValue()
+        #     || _rangeToUtc   == DateTimeUtil::minValue()
+        #     || _rangeFromUtc >= _rangeToUtc)
+        #    {
+        #        return slices;
+        #    }
+        #
+        #    totalMinutes = Jay_CadenceModel::minutesInRange(_rangeFromUtc, _rangeToUtc);
+        #    if (totalMinutes <= 0)
+        #        return slices;
+        #
+        #    // ───────────────────────────────────────────────────────────────
+        #    // 1. Cosmetic metadata (not used for slicing logic)
+        #    // ───────────────────────────────────────────────────────────────
+        #    coarse      = Jay_CadenceModel::minutesToBestUnitCoarse(totalMinutes);
+        #    displayUnit = conPeek(coarse, 2);
+        #    coarseRem   = conPeek(coarse, 3);
+        #
+        #    // ───────────────────────────────────────────────────────────────
+        #    // 2. Tiered heuristic for sliceMinutes
+        #    //    (Stable, predictable, avoids combinatorial explosion)
+        #    // ───────────────────────────────────────────────────────────────
+        #
+        #    if (totalMinutes <= 60)            sliceMinutes = 15;       // 15 min windows
+        #    else if (totalMinutes <= 360)      sliceMinutes = 30;       // 30 min
+        #    else if (totalMinutes <= 1440)     sliceMinutes = 120;      // 2 hours
+        #    else if (totalMinutes <= 10080)    sliceMinutes = 720;      // 12 hours
+        #    else if (totalMinutes <= 43200)    sliceMinutes = 4320;     // 3 days
+        #    else if (totalMinutes <= 129600)   sliceMinutes = 10080;    // 7 days
+        #    else if (totalMinutes <= 525600)   sliceMinutes = 43200;    // 30 days
+        #    else                                sliceMinutes = 129600;   // 90 days
+        #
+        #    // ───────────────────────────────────────────────────────────────
+        #    // 3. Calculate sliceCount with hard caps
+        #    //    (prevents thousands of windows on huge ranges)
+        #    // ───────────────────────────────────────────────────────────────
+        #    sliceCount = (totalMinutes + sliceMinutes - 1) div sliceMinutes;
+        #
+        #    if (sliceCount < 1)
+        #        sliceCount = 1;
+        #
+        #    // Hard safety cap — never more than 100 slices
+        #    if (sliceCount > 100)
+        #        sliceCount = 100;
+        #
+        #    // ───────────────────────────────────────────────────────────────
+        #    // 4. Partition exactly (no drift / no overlap / no gaps)
+        #    // ───────────────────────────────────────────────────────────────
+        #    partition = Jay_SliceWindowPlanner::partitionMinutesExact(
+        #                    totalMinutes,
+        #                    sliceCount);
+        #
+        #    cursorFrom      = _rangeFromUtc;
+        #    allocatedMinutes = 0;
+        #
+        #    // ───────────────────────────────────────────────────────────────
+        #    // 5. Build final slice windows
+        #    // ───────────────────────────────────────────────────────────────
+        #    for (i = 1; i <= conLen(partition); i++)
+        #    {
+        #        partMinutes = conPeek(partition, i);
+        #        allocatedMinutes += partMinutes;
+        #
+        #        // final slice MUST end exactly at rangeToUtc
+        #        if (i == conLen(partition))
+        #            cursorTo = _rangeToUtc;
+        #        else
+        #            cursorTo = DateTimeUtil::addMinutes(cursorFrom, partMinutes);
+        #
+        #        // clamp (defensive)
+        #        if (cursorTo > _rangeToUtc)
+        #            cursorTo = _rangeToUtc;
+        #
+        #        slices.addEnd([
+        #            cursorFrom,
+        #            cursorTo,
+        #            partMinutes,
+        #            displayUnit,
+        #            sliceCount,
+        #            totalMinutes,
+        #            coarseRem
+        #        ]);
+        #
+        #        cursorFrom = cursorTo;
+        #    }
+        #
+        #    info(strFmt(
+        #        "🧭 Optimized Planner: %1 slices (%2 min each) for range %3 → %4 (%5 min total)",
+        #        sliceCount,
+        #        sliceMinutes,
+        #        DateTimeUtil::toStr(_rangeFromUtc),
+        #        DateTimeUtil::toStr(_rangeToUtc),
+        #        totalMinutes));
+        #
+        #    return slices;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #planSlicesForScan
+        #public static List planSlicesForScan(Jay_ScanCtrl _scan)
+        #{
+        #    Jay_ScanScope scope;
+        #    Set           docTypeSet  = new Set(Types::Enum);
+        #    Set           subTypeSet  = new Set(Types::Enum);
+        #    List          sliceList;
+        #    int           docTypeCount;
+        #    int           docSubTypeCount;
+        #    warning("DEBUG: ENTER planSlicesForScan " + DateTimeUtil::toStr(DateTimeUtil::utcNow()));
+        #
+        #    if (!_scan.RecId)
+        #        return new List(Types::Container);
+        #
+        #    // Build distinct docType / subType sets (still needed for probe stage)
+        #    while select DocType, DocSubType, Include
+        #        from scope
+        #        where scope.ParentScanId == _scan.RecId
+        #           && scope.Include == NoYes::Yes
+        #    {
+        #        docTypeSet.add(scope.DocType);
+        #        subTypeSet.add(scope.DocSubType);
+        #    }
+        #
+        #    // These values no longer drive slice sizing,
+        #    // but they are still logically passed through for probe metadata.
+        #    docTypeCount    = docTypeSet.elements();
+        #    docSubTypeCount = subTypeSet.elements();
+        #
+        #    if (docTypeCount <= 0)    docTypeCount = 1;
+        #    if (docSubTypeCount <= 0) docSubTypeCount = 1;
+        #
+        #    // Call the new tiered planner (time-based)
+        #    sliceList = Jay_SliceWindowPlanner::planSlicesForRange(
+        #                    _scan.RangeFromUTC,
+        #                    _scan.RangeToUTC,
+        #                    docTypeCount,
+        #                    docSubTypeCount);
+        #
+        #    warning("DEBUG: EXIT planSlicesForScan " + DateTimeUtil::toStr(DateTimeUtil::utcNow()));
+        #
+        #    return sliceList;
+        #}
+        #
+      ENDSOURCE
+    ENDMETHODS
+  ENDCLASS
+
+***Element: END

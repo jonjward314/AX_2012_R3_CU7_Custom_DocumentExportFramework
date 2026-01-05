@@ -1,0 +1,231 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: DBT
+
+; Microsoft Dynamics AX Table : Jay_DocHandlerRegistryTable unloaded
+; --------------------------------------------------------------------------------
+  TABLEVERSION 1
+  
+  TABLE #Jay_DocHandlerRegistryTable
+    EnforceFKRelation 1
+    PROPERTIES
+      Name                #Jay_DocHandlerRegistryTable
+      CreateRecIdIndex    #Yes
+      PrimaryIndex        #SurrogateKey
+      ClusterIndex        #SurrogateKey
+      ModifiedDateTime    #Yes
+      ModifiedBy          #Yes
+      CreatedDateTime     #Yes
+      CreatedBy           #Yes
+      Origin              #{AD341E5B-8403-4CBC-AFB5-AD9626483709}
+    ENDPROPERTIES
+    
+    FIELDS
+      FIELD #DocSubType
+        ENUM
+        PROPERTIES
+          Name                #DocSubType
+          Label               #Document Sub Type
+          Table               #Jay_DocHandlerRegistryTable
+          Origin              #{3CE1ABE8-91E2-4111-B77E-191074171906}
+          EnumType            #Jay_ExportDocSubType
+        ENDPROPERTIES
+        
+      FIELD #DocType
+        ENUM
+        PROPERTIES
+          Name                #DocType
+          Label               #Document Type
+          Table               #Jay_DocHandlerRegistryTable
+          Origin              #{C0547AC5-91DC-44B9-99CB-9D8DF7E98E38}
+          EnumType            #Jay_ExportDocType
+        ENDPROPERTIES
+        
+      FIELD #Include
+        ENUM
+        PROPERTIES
+          Name                #Include
+          Table               #Jay_DocHandlerRegistryTable
+          Origin              #{42B0CB55-4702-44AB-BB05-FB1800E0DECD}
+          EnumType            #NoYes
+        ENDPROPERTIES
+        
+      FIELD #IsActive
+        ENUM
+        PROPERTIES
+          Name                #IsActive
+          Table               #Jay_DocHandlerRegistryTable
+          Origin              #{AA2B759E-4567-4A23-B364-5370FFD27B4A}
+          EnumType            #NoYes
+        ENDPROPERTIES
+        
+      FIELD #Notes
+        STRING
+        PROPERTIES
+          Name                #Notes
+          Table               #Jay_DocHandlerRegistryTable
+          Origin              #{E74F8B27-0F1B-4ED7-9BBD-595085ACEA1B}
+          ExtendedDataType    #Notes
+          StringSize          #(Memo)
+        ENDPROPERTIES
+        
+      FIELD #TargetTableId
+        INT
+        PROPERTIES
+          Name                #TargetTableId
+          Table               #Jay_DocHandlerRegistryTable
+          Origin              #{0E348D07-C3E2-4D63-A57E-231720446803}
+        ENDPROPERTIES
+        
+    ENDFIELDS
+    GROUPS
+    ENDGROUPS
+    
+    INDICES
+      #Idx_TableId
+      PROPERTIES
+        Name                #Idx_TableId
+        Origin              #{C7E0AF49-EA9C-4799-A1FC-358BAEC918A0}
+      ENDPROPERTIES
+      
+      INDEXFIELDS
+        #TargetTableId
+      ENDINDEXFIELDS
+      
+      #Idx_DocTypeSubtype
+      PROPERTIES
+        Name                #Idx_DocTypeSubtype
+        Origin              #{41CAADFF-8DA1-4DDD-B218-1062F53FCCDB}
+      ENDPROPERTIES
+      
+      INDEXFIELDS
+        #IsActive
+        #DocSubType
+        #DocType
+      ENDINDEXFIELDS
+      
+    ENDINDICES
+    FULLTEXTINDICES
+    ENDFULLTEXTINDICES
+    REFERENCES
+    ENDREFERENCES
+    
+    DELETEACTIONS
+    ENDDELETEACTIONS
+    
+    METHODS
+      SOURCE #initValue
+        #public void initValue()
+        #{
+        #    super();
+        #}
+      ENDSOURCE
+      SOURCE #ensureInitialSeed
+        #/// Insert baseline manual mapping rows if none exist. Idempotent.
+        #public static void ensureInitialSeed()
+        #{
+        #    // ─────────────────────────────────────────────────────────
+        #    // Local declarations (Morphex style: all locals at top)
+        #    // ─────────────────────────────────────────────────────────
+        #    Jay_DocHandlerRegistryTable rec;
+        #    container defaults;
+        #    container row;
+        #    int i;
+        #    int docType;
+        #    int docSubType;
+        #    int targetTableId;
+        #
+        #    // ─────────────────────────────────────────────────────────
+        #    // Define baseline rows (DocType, DocSubType)
+        #    // ─────────────────────────────────────────────────────────
+        #    defaults = [
+        #        [enum2int(Jay_ExportDocType::Confirmation), enum2int(Jay_ExportDocSubType::Unit), tableNum(CustConfirmJour)],
+        #        [enum2int(Jay_ExportDocType::Confirmation), enum2int(Jay_ExportDocSubType::Part),tableNum(CustConfirmJour)],
+        #        [enum2int(Jay_ExportDocType::Confirmation), enum2int(Jay_ExportDocSubType::Vendor),tableNum(CustConfirmJour)],
+        #
+        #        [enum2int(Jay_ExportDocType::Invoice), enum2int(Jay_ExportDocSubType::Unit), tableNum(CustInvoiceJour)],
+        #        [enum2int(Jay_ExportDocType::Invoice), enum2int(Jay_ExportDocSubType::Part), tableNum(CustInvoiceJour)],
+        #        [enum2int(Jay_ExportDocType::Invoice), enum2int(Jay_ExportDocSubType::Vendor), tableNum(CustInvoiceJour)],
+        #
+        #        [enum2int(Jay_ExportDocType::CertificateOfOrigin), enum2int(Jay_ExportDocSubType::All),tableNum(SalesTable)],
+        #
+        #        [enum2int(Jay_ExportDocType::MSRP), enum2int(Jay_ExportDocSubType::All),tableNum(SalesTable)],
+        #
+        #        [enum2int(Jay_ExportDocType::PurchaseOrder), enum2int(Jay_ExportDocSubType::All),tableNum(PurchTable)]
+        #    ];
+        #
+        #    // ─────────────────────────────────────────────────────────
+        #    // Quick existence check: if any active mapping exists, skip seeding
+        #    // ─────────────────────────────────────────────────────────
+        #    select firstOnly rec
+        #        where rec.IsActive == NoYes::Yes;
+        #
+        #    if (rec.RecId)
+        #    {
+        #        return;
+        #    }
+        #
+        #    // ─────────────────────────────────────────────────────────
+        #    // Insert baseline rows (manual placeholders). Idempotent & transactionally safe.
+        #    // ─────────────────────────────────────────────────────────
+        #    for (i = 1; i <= conLen(defaults); i++)
+        #    {
+        #        row = conPeek(defaults, i);
+        #        docType    = any2int(conPeek(row, 1));
+        #        docSubType = any2int(conPeek(row, 2));
+        #        targetTableId = any2int(conPeek(row, 3));
+        #
+        #        ttsBegin;
+        #        // re-check inside transaction to avoid race conditions
+        #        select firstOnly forUpdate rec
+        #            where rec.DocType    == docType
+        #              && rec.DocSubType == docSubType;
+        #
+        #        if (!rec.RecId)
+        #        {
+        #            rec.clear();
+        #            rec.DocType               = docType;
+        #            rec.DocSubType            = docSubType;
+        #            rec.TargetTableId         = targetTableId; // intentionally unset; admin must populate
+        #            rec.IsActive              = NoYes::Yes;
+        #            rec.Notes                 = "Initial seeded mapping placeholder - set TargetTableId in registry to enable arbitration for this doc/subtype.";
+        #            rec.insert();
+        #
+        #            info(strFmt("Jay_DocHandlerRegistryTable.ensureInitialSeed: seeded mapping row DocType=%1 SubType=%2 (TargetTableId=0).",
+        #                        docType, docSubType));
+        #        }
+        #        ttsCommit;
+        #    }
+        #}
+        #
+      ENDSOURCE
+      SOURCE #tableIdForDocTypeSubType
+        #/// <summary>Return TargetTableId for (_docType, _docSubType). Returns 0 when no active mapping found.</summary>
+        #public static int tableIdForDocTypeSubType(int _docType, int _docSubType)
+        #{
+        #    // ─────────────────────────────────────────────────────────
+        #    // Locals (Morphex)
+        #    // ─────────────────────────────────────────────────────────
+        #    Jay_DocHandlerRegistryTable rec;
+        #    int tableId = 0;
+        #
+        #    // ─────────────────────────────────────────────────────────
+        #    // Query the registry for an active mapping
+        #    // ─────────────────────────────────────────────────────────
+        #    select firstOnly rec
+        #        where rec.DocType    == _docType
+        #          && rec.DocSubType == _docSubType
+        #          && rec.IsActive   == NoYes::Yes;
+        #
+        #    tableId = any2int(rec.TargetTableId); // returns 0 if rec empty
+        #
+        #    return tableId;
+        #}
+        #
+      ENDSOURCE
+    ENDMETHODS
+  ENDTABLE
+  
+
+***Element: END

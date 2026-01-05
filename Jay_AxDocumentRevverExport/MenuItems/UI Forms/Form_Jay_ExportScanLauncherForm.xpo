@@ -1,0 +1,1010 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: FRM
+
+; Microsoft Dynamics AX Forms unloaded
+; --------------------------------------------------------------------------------
+FRMVERSION 12
+
+FORM #Jay_ExportScanLauncherForm
+  PROPERTIES
+    Name                #Jay_ExportScanLauncherForm
+    Origin              #{6485685B-8C13-42B6-883D-D2888F57C914}
+  ENDPROPERTIES
+  
+  METHODS
+    SOURCE #classDeclaration
+      #public class FormRun extends ObjectRun
+      #{
+      #    // ============= PURE MANUAL CONTROL VARIABLES =============
+      #    Jay_ScanDirection       scanDirection;
+      #    utcDateTime             scanStartDateTime;
+      #    int                     scanValue;
+      #    Jay_CadenceUnit         scanUnit;
+      #    int                     LengthValue;
+      #    Jay_CadenceUnit         LengthUnit;
+      #    int                     horizonValue1;
+      #    Jay_CadenceUnit         horizonUnit;
+      #    Jay_ExportQueueType     queueType;
+      #    Jay_ExportRunMode       runMode;
+      #
+      #}
+      #
+    ENDSOURCE
+    SOURCE #closeOk
+      #public void closeOk()
+      #{
+      #    Jay_ScanCtrl newScan;
+      #    Jay_TmpScanScope tmpScope;
+      #    int selectedDocs = 0;
+      #
+      #    // Basic required field checks (UI level)
+      #    if (!scanStartDateTime)
+      #    {
+      #        warning("Start Time is required.");
+      #        return;
+      #    }
+      #
+      #    if (scanValue <= 0)
+      #    {
+      #        warning("Scan Interval must be greater than zero.");
+      #        return;
+      #    }
+      #
+      #    if (DirectionCmbBx.selection() == 0)
+      #    {
+      #        warning("Please select a scan direction.");
+      #        return;
+      #    }
+      #
+      #     while select Include from tmpScope where tmpScope.Include == NoYes::Yes
+      #    {
+      #        selectedDocs++;
+      #        if (selectedDocs > 1){continue;}
+      #    }
+      #
+      #    if (selectedDocs == 0)
+      #    {
+      #        warning("You must include at least one Document Type.");
+      #        return;
+      #    }
+      #
+      #    try
+      #    {
+      #        ttsBegin;
+      #        newScan = Jay_ScanCtrlService::createFromFormInput(
+      #            scanStartDateTime,
+      #            scanDirection,
+      #            scanValue,
+      #            scanUnit,
+      #            horizonValue1,
+      #            horizonUnit,
+      #            LengthValue,
+      #            LengthUnit,
+      #            queueType,
+      #            runMode,
+      #            TmpJayScanScope
+      #        );
+      #        ttsCommit;
+      #
+      #        info(strFmt("✅ New scan created: %1", newScan.RecId));
+      #        Jay_ScanCtrlService::schedule(newScan.RecId);
+      #    }
+      #    catch (Exception::Error)
+      #    {
+      #        error("An error occurred while creating the scan record.");
+      #        ttsAbort;
+      #    }
+      #
+      #    super();
+      #}
+      #
+    ENDSOURCE
+    SOURCE #init
+      #public void init()
+      #{
+      #    Jay_ExportRuntimeSettingsTable settings;
+      #    TimeZone                       userTZ;
+      #    utcDateTime                    nowUtc, nowLocal;
+      #
+      #    super();
+      #
+      #    // 1. UTC anchor
+      #    nowUtc = DateTimeUtil::utcNow();
+      #
+      #    // 2. Correct AX CU7 way: user timezone from kernel
+      #    userTZ = DateTimeUtil::getUserPreferredTimeZone();
+      #
+      #    // 3. Convert UTC → user-local just like your dialog()
+      #    nowLocal = DateTimeUtil::applyTimeZoneOffset(nowUtc, userTZ);
+      #
+      #    // 4. Prefill runtime values
+      #    settings = Jay_ExportRuntimeSettings::findOrCreate();
+      #
+      #    scanDirection      = Jay_ScanDirection::Forward;
+      #    scanStartDateTime  = nowLocal;  // ← GUI gets local time, user sees correct value
+      #    scanValue          = settings.DefaultScanValue ? any2Int(settings.DefaultScanValue) : 1;
+      #    scanUnit           = settings.DefaultScanUnit ? settings.DefaultScanUnit : Jay_CadenceUnit::Hour;
+      #    horizonValue1      = settings.DefaultHorizonValue ? any2Int(settings.DefaultHorizonValue) : 0;
+      #    horizonUnit        = settings.DefaultHorizonUnit ? settings.DefaultHorizonUnit : Jay_CadenceUnit::Day;
+      #
+      #    LengthUnit         = Jay_CadenceUnit::Hour;
+      #    LengthValue        = 0;
+      #
+      #    queueType          = Jay_ExportQueueType::Production;
+      #    runMode            = Jay_ExportRunMode::OneOff;
+      #
+      #    // 5. Push into controls
+      #    DirectionCmbBx.selection(scanDirection);
+      #    StartTime.dateTimeValue(scanStartDateTime);
+      #    ScanInterval.value(scanValue);
+      #    ScanUnitCmbBx.selection(scanUnit);
+      #    ScanLength.value(LengthValue);
+      #
+      #    HorizonInterval.value(horizonValue1);
+      #    HorizonUnitCmbBx.selection(horizonUnit);
+      #
+      #    if (RunModeCmbBx)
+      #        RunModeCmbBx.selection(runMode);
+      #
+      #    QueueTypeCmbBx.selection(queueType);
+      #
+      #    ScanLength.allowEdit(false);
+      #    ScanLength.visible(false);
+      #    ScanLngthCmbBx.selection(LengthUnit);
+      #    ScanLngthCmbBx.allowEdit(false);
+      #    ScanLngthCmbBx.visible(false);
+      #
+      #    element.populateDocScope();
+      #}
+      #
+    ENDSOURCE
+    SOURCE #populateDocScope
+      #/// Populate the TmpScanScope grid from the authoritative Jay_DocHandlerRegistryTable.
+      #/// If the registry is empty, the ensureInitialSeed() method will insert baseline rows (idempotent).
+      #public void populateDocScope()
+      #{
+      #    // ─────────────────────────────────────────────────────────
+      #    // Morphex locals (all declarations at top)
+      #    // ─────────────────────────────────────────────────────────
+      #    Jay_TmpScanScope                buffer;
+      #    Jay_DocHandlerRegistryTable     regRec;
+      #    int                             insertedCount = 0;
+      #
+      #    // ─────────────────────────────────────────────────────────
+      #    // Ensure registry baseline exists (idempotent). If ensureInitialSeed() is not present it will be skipped.
+      #    // ─────────────────────────────────────────────────────────
+      #    try
+      #    {
+      #        Jay_DocHandlerRegistryTable::ensureInitialSeed();
+      #    }
+      #    catch (Exception::Error)
+      #    {
+      #        // If ensureInitialSeed isn't present or fails, continue — we'll still try to read mappings.
+      #        info("populateDocScope: registry seed call failed or missing; proceeding to read any existing mappings.");
+      #    }
+      #
+      #    // ─────────────────────────────────────────────────────────
+      #    // Clear temp buffer then load from registry (active mappings only)
+      #    // ─────────────────────────────────────────────────────────
+      #    ttsBegin;
+      #    delete_from buffer;
+      #
+      #    while select regRec order by regRec.DocType, regRec.DocSubType
+      #        where regRec.IsActive == NoYes::Yes
+      #
+      #    {
+      #        buffer.clear();
+      #        buffer.DocType       = regRec.DocType;
+      #        buffer.DocSubType    = regRec.DocSubType;
+      #        // If the registry has an Include value use it; otherwise default to No
+      #        buffer.Include       = regRec.Include ? regRec.Include : NoYes::No;
+      #        // propagate target table id if present (0 means unknown)
+      #        buffer.insert();
+      #        insertedCount++;
+      #    }
+      #
+      #    ttsCommit;
+      #
+      #    // ─────────────────────────────────────────────────────────
+      #    // Refresh UI datasource and provide lightweight feedback
+      #    // ─────────────────────────────────────────────────────────
+      #    TmpJayScanScope_ds.research(true);
+      #
+      #    if (insertedCount == 0)
+      #    {
+      #        warning("populateDocScope: no active mappings found in Jay_DocHandlerRegistryTable. If this is a fresh environment, run ensureInitialSeed() or add mappings.");
+      #    }
+      #}
+      #
+    ENDSOURCE
+  ENDMETHODS
+  OBJECTBANK
+    PROPERTIES
+    ENDPROPERTIES
+    
+    DATASOURCE
+      OBJECTPOOL
+        PROPERTIES
+          Name                #TmpJayScanScope
+          Table               #Jay_TmpScanScope
+          Index               #SurrogateKey
+          InsertAtEnd         #No
+          InsertIfEmpty       #No
+        ENDPROPERTIES
+        
+        FIELDLIST
+        ENDFIELDLIST
+      ENDOBJECTPOOL
+      METHODS
+      ENDMETHODS
+    ENDDATASOURCE
+  ENDOBJECTBANK
+  
+  REFERENCEDATASOURCES
+  ENDREFERENCEDATASOURCES
+  
+  JOINS
+  ENDJOINS
+  
+  PARTREFERENCES
+  ENDPARTREFERENCES
+  
+  DESIGN
+    PROPERTIES
+      Caption             #Export Scan Launcher
+      WindowType          #Popup
+      AlwaysOnTop         #Yes
+      Style               #Dialog
+    ENDPROPERTIES
+    
+    CONTAINER
+      CONTROL GRID
+        PROPERTIES
+          Name                #Grid
+          Width               #Column width
+          ElementPosition     #1610612733
+          HierarchyParent     #Group3
+          DataSource          #TmpJayScanScope
+        ENDPROPERTIES
+        
+        METHODS
+        ENDMETHODS
+      ENDCONTROL 
+      
+      CONTROL GROUP
+        PROPERTIES
+          Name                #Group
+          ElementPosition     #1207959549
+          HierarchyParent     #Group5
+          ArrangeMethod       #Horizontal, flush right
+        ENDPROPERTIES
+        
+        METHODS
+        ENDMETHODS
+      ENDCONTROL 
+      
+      CONTROL GROUP
+        PROPERTIES
+          Name                #Group1
+          ElementPosition     #1610612733
+          HierarchyParent     #Group5
+          ArrangeMethod       #Horizontal, flush right
+        ENDPROPERTIES
+        
+        METHODS
+        ENDMETHODS
+      ENDCONTROL 
+      
+      CONTROL GROUP
+        PROPERTIES
+          Name                #Group2
+          ElementPosition     #1374389532
+          ArrangeMethod       #Horizontal, flush right
+        ENDPROPERTIES
+        
+        METHODS
+        ENDMETHODS
+      ENDCONTROL 
+      
+      CONTROL GROUP
+        PROPERTIES
+          Name                #Group3
+          ElementPosition     #1632087570
+        ENDPROPERTIES
+        
+        METHODS
+        ENDMETHODS
+      ENDCONTROL 
+      
+      CONTROL GROUP
+        PROPERTIES
+          Name                #Group4
+          ElementPosition     #1889785608
+        ENDPROPERTIES
+        
+        METHODS
+        ENDMETHODS
+      ENDCONTROL 
+      
+      CONTROL GROUP
+        PROPERTIES
+          Name                #Group5
+          ElementPosition     #1116691494
+        ENDPROPERTIES
+        
+        METHODS
+        ENDMETHODS
+      ENDCONTROL 
+      
+      CONTROL GROUP
+        PROPERTIES
+          Name                #Group6
+          ElementPosition     #1717986916
+          HierarchyParent     #Group4
+        ENDPROPERTIES
+        
+        METHODS
+        ENDMETHODS
+      ENDCONTROL 
+      
+      CONTROL GROUP
+        PROPERTIES
+          Name                #LengthGroup
+          ElementPosition     #1879048189
+          HierarchyParent     #Group5
+          ArrangeMethod       #Horizontal, flush right
+        ENDPROPERTIES
+        
+        METHODS
+        ENDMETHODS
+      ENDCONTROL 
+      
+      CONTROL CHECKBOX
+        PROPERTIES
+          Name                #IncludeChkBx
+          ElementPosition     #1717986916
+          HierarchyParent     #Grid
+          BackgroundColor     #Window background
+          Label               #Include
+          DataSource          #TmpJayScanScope
+          DataField           #Include
+        ENDPROPERTIES
+        
+        METHODS
+        ENDMETHODS
+      ENDCONTROL 
+      
+      CONTROL COMBOBOX
+        PROPERTIES
+          Name                #DirectionCmbBx
+          AutoDeclaration     #Yes
+          ElementPosition     #1073741822
+          HierarchyParent     #Group
+          Label               #Direction
+          EnumType            #Jay_ScanDirection
+        ENDPROPERTIES
+        
+        METHODS
+          SOURCE #modified
+            #public boolean modified()
+            #{
+            #    boolean ret;
+            #
+            #    ret = super();
+            #
+            #    scanDirection = DirectionCmbBx.selection();  // manual binding
+            #
+            #    return ret;
+            #}
+          ENDSOURCE
+        ENDMETHODS
+      ENDCONTROL 
+      
+      CONTROL COMBOBOX
+        PROPERTIES
+          Name                #DocSubType
+          ElementPosition     #1288490187
+          HierarchyParent     #Grid
+          Label               #Document Sub Type
+          DataSource          #TmpJayScanScope
+          DataField           #DocSubType
+        ENDPROPERTIES
+        
+        METHODS
+        ENDMETHODS
+      ENDCONTROL 
+      
+      CONTROL COMBOBOX
+        PROPERTIES
+          Name                #DocType
+          AllowEdit           #No
+          ElementPosition     #858993458
+          HierarchyParent     #Grid
+          Label               #Document Type
+          DataSource          #TmpJayScanScope
+          DataField           #DocType
+        ENDPROPERTIES
+        
+        METHODS
+        ENDMETHODS
+      ENDCONTROL 
+      
+      CONTROL COMBOBOX
+        PROPERTIES
+          Name                #horizonUnitCmbBx
+          AutoDeclaration     #Yes
+          ElementPosition     #1610612734
+          HierarchyParent     #Group2
+          Label               #Horizon Unit
+          EnumType            #Jay_CadenceUnit
+        ENDPROPERTIES
+        
+        METHODS
+          SOURCE #modified
+            #public boolean modified()
+            #{
+            #    boolean ret;
+            #
+            #    ret = super();
+            #
+            #    horizonUnit = horizonUnitCmbBx.selection();
+            #
+            #    return ret;
+            #}
+          ENDSOURCE
+        ENDMETHODS
+      ENDCONTROL 
+      
+      CONTROL COMBOBOX
+        PROPERTIES
+          Name                #QueueTypeCmbBx
+          AutoDeclaration     #Yes
+          ElementPosition     #805306366
+          HierarchyParent     #Group5
+          Label               #Queue Type
+          EnumType            #Jay_ExportQueueType
+        ENDPROPERTIES
+        
+        METHODS
+          SOURCE #modified
+            #public boolean modified()
+            #{
+            #    boolean ret;
+            #
+            #    ret = super();
+            #
+            #    queueType = QueueTypeCmbBx.selection();
+            #
+            #    if (queueType == Jay_ExportQueueType::Production){
+            #        LengthUnit         = Jay_CadenceUnit::Hour;
+            #        LengthValue        = 0;
+            #        ScanLength.allowEdit(false);
+            #        ScanLength.visible(false);
+            #        ScanLngthCmbBx.allowEdit(false);
+            #        ScanLngthCmbBx.visible(false);
+            #    }
+            #    if (queueType == Jay_ExportQueueType::Historical){
+            #        ScanLength.allowEdit(true);
+            #        ScanLength.visible(true);
+            #        ScanLngthCmbBx.allowEdit(true);
+            #        ScanLngthCmbBx.visible(true);
+            #    }
+            #
+            #    return ret;
+            #}
+          ENDSOURCE
+        ENDMETHODS
+      ENDCONTROL 
+      
+      CONTROL COMBOBOX
+        PROPERTIES
+          Name                #RunModeCmbBx
+          AutoDeclaration     #Yes
+          ElementPosition     #715827880
+          HierarchyParent     #Group
+          Label               #Run Mode
+          EnumType            #Jay_ExportRunMode
+        ENDPROPERTIES
+        
+        METHODS
+          SOURCE #modified
+            #public boolean modified()
+            #{
+            #    boolean ret;
+            #
+            #    ret = super();
+            #
+            #    runMode = RunModeCmbBx.selection();
+            #
+            #    return ret;
+            #}
+          ENDSOURCE
+        ENDMETHODS
+      ENDCONTROL 
+      
+      CONTROL COMBOBOX
+        PROPERTIES
+          Name                #ScanLngthCmbBx
+          AutoDeclaration     #Yes
+          ElementPosition     #1610612733
+          HierarchyParent     #LengthGroup
+          Label               #Length Unit
+          EnumType            #Jay_CadenceUnit
+        ENDPROPERTIES
+        
+        METHODS
+          SOURCE #modified
+            #public boolean modified()
+            #{
+            #    boolean ret;
+            #
+            #    ret = super();
+            #
+            #    LengthUnit = ScanLngthCmbBx.selection();
+            #
+            #    return ret;
+            #}
+          ENDSOURCE
+        ENDMETHODS
+      ENDCONTROL 
+      
+      CONTROL COMBOBOX
+        PROPERTIES
+          Name                #ScanUnitCmbBx
+          AutoDeclaration     #Yes
+          ElementPosition     #1610612734
+          HierarchyParent     #Group1
+          Label               #Scan Unit
+          EnumType            #Jay_CadenceUnit
+        ENDPROPERTIES
+        
+        METHODS
+          SOURCE #modified
+            #public boolean modified()
+            #{
+            #    boolean ret;
+            #
+            #    ret = super();
+            #
+            #    scanUnit = ScanUnitCmbBx.selection();
+            #
+            #    return ret;
+            #}
+          ENDSOURCE
+        ENDMETHODS
+      ENDCONTROL 
+      
+      CONTROL COMMANDBUTTON
+        PROPERTIES
+          Name                #CmdBtnOk
+          ElementPosition     #1431655764
+          HierarchyParent     #Group6
+          Text                #Ok
+        ENDPROPERTIES
+        
+        METHODS
+          SOURCE #clicked
+            #public void clicked()
+            #{
+            #    int64 selectedDocs = 0;
+            #    real  scanMinutes, horizonMinutes;
+            #    real  scanUnitMinutes, horizonUnitMinutes;
+            #    Jay_TmpScanScope tmpScope;
+            #    utcDateTime      computedTo, horizonEnd;
+            #    //Get user timezone (CU7-native)
+            #    TimeZone      userTZ;
+            #    userTZ = DateTimeUtil::getUserPreferredTimeZone();
+            #
+            #    // ─── FORCE READ ALL UI VALUES FIRST ──────────────────────────────────────
+            #    scanDirection     = DirectionCmbBx.selection();
+            #    scanStartDateTime = StartTime.dateTimeValue();
+            #    scanValue         = ScanInterval.value();
+            #    scanUnit          = ScanUnitCmbBx.selection();
+            #    horizonValue1     = horizonInterval.value();
+            #    horizonUnit       = horizonUnitCmbBx.selection();
+            #    runMode           = RunModeCmbBx.selection();
+            #    queueType         = QueueTypeCmbBx.selection();
+            #    LengthValue       = ScanLength.value();
+            #    LengthUnit        = ScanLngthCmbBx.selection();
+            #
+            #    scanStartDateTime = DateTimeUtil::removeTimeZoneOffset(scanStartDateTime, userTZ);
+            #
+            #    // ─── Basic Required Field Checks ─────────────────────────────────────────────
+            #    if (!scanStartDateTime)
+            #    {
+            #        warning("Start Time is required.");
+            #        return;
+            #    }
+            #
+            #    if (!(scanDirection == Jay_ScanDirection::Forward ||
+            #          scanDirection == Jay_ScanDirection::Backward))
+            #    {
+            #        warning("Scan Direction must be Forward or Backward.");
+            #        return;
+            #    }
+            #
+            #    if (scanValue <= 0)
+            #    {
+            #        warning("Scan Interval must be greater than zero.");
+            #        return;
+            #    }
+            #
+            #    // ─── Calendar-aware interval computation ─────────────────────────────────────
+            #    computedTo = Jay_CadenceModel::addCadence(scanStartDateTime, scanValue, scanUnit);
+            #    scanMinutes = Jay_CadenceModel::minutesBetween(scanStartDateTime,computedTo);
+            #    info(strFmt("scanminutes = %1, scanValue = %2, scanUnit = %3",scanMinutes, scanValue, scanUnit));
+            #    if (scanMinutes < 30)
+            #    {
+            #        error("Scan Interval must be at least 30 minutes.");
+            #        return;
+            #    }
+            #
+            #    // ─── Horizon Validation ──────────────────────────────────────────────────────
+            #    if (horizonValue1 > 0)
+            #    {
+            #        horizonEnd     = Jay_CadenceModel::addCadence(scanStartDateTime, horizonValue1, horizonUnit);
+            #        horizonMinutes = abs(Jay_CadenceModel::minutesBetween(scanStartDateTime, horizonEnd));
+            #
+            #        if (horizonMinutes < scanMinutes && queueType != Jay_ExportQueueType::Historical)
+            #        {
+            #            error(strFmt("🚫 Horizon duration must be greater than or equal to the Scan duration."));
+            #            return;
+            #        }
+            #    }
+            #
+            #    // ─── Document Inclusion Validation ───────────────────────────────────────────
+            #    while select Include from tmpScope where tmpScope.Include == NoYes::Yes
+            #    {
+            #        selectedDocs++;
+            #    }
+            #
+            #    if (selectedDocs == 0)
+            #    {
+            #        warning("You must include at least one Document Type.");
+            #        return;
+            #    }
+            #
+            #    // ─── Mode & Horizon Sanity Checks ────────────────────────────────────────────
+            #    switch (runMode)
+            #    {
+            #        case Jay_ExportRunMode::OneOff:
+            #            if (scanStartDateTime > DateTimeUtil::utcNow() && scanDirection == Jay_ScanDirection::Forward)
+            #            {
+            #                error("🚫 You cannot run Forward Scans for a future Scan Start Date/Time in One-Off mode.");
+            #                return;
+            #            }
+            #            if (scanStartDateTime < DateTimeUtil::utcNow() && horizonValue1 == 0)
+            #            {
+            #                error("🚫 A Horizon is required when scanning into the past in One-Off mode to prevent unbounded loops.");
+            #                return;
+            #            }
+            #            break;
+            #
+            #        case Jay_ExportRunMode::AutoRepeat:
+            #            if (horizonValue1 == 0 && scanDirection == Jay_ScanDirection::Backward)
+            #            {
+            #                error("🚫 Auto-Repeat Cycle mode requires a Horizon value to limit total runtime.");
+            #                return;
+            #            }
+            #            break;
+            #
+            #        case Jay_ExportRunMode::Continuous:
+            #            if (horizonValue1 == 0)
+            #            {
+            #                warning("⚠️ Continuous mode without a Horizon may consume resources indefinitely.\n" +
+            #                        "Set a Horizon or enable a runtime safety cap in Export Settings.");
+            #            }
+            #            break;
+            #
+            #        default:
+            #            warning("⚠️ Unknown Run Mode selected. Defaulting to One-Off behavior.");
+            #            runMode = Jay_ExportRunMode::OneOff;
+            #            break;
+            #    }
+            #
+            #    // ─── Success Summary ─────────────────────────────────────────────────────────
+            #    info(strFmt(
+            #        "Ready to launch scan:\n" +
+            #        " • Direction: %1\n" +
+            #        " • Start Time: %2\n" +
+            #        " • Interval: %3 %4\n" +
+            #        " • Horizon: %5 %6\n" +
+            #        " • Queue Type: %7\n" +
+            #        " • Included Docs: %8",
+            #        enum2str(scanDirection),
+            #        scanStartDateTime,
+            #        int2str(scanValue),
+            #        enum2str(scanUnit),
+            #        int2str(horizonValue1),
+            #        enum2str(horizonUnit),
+            #        enum2str(queueType),
+            #        int2str(selectedDocs)
+            #    ));
+            #
+            #    // ─── Proceed to commit ───────────────────────────────────────────────────────
+            #    element.closeOk();
+            #}
+            #
+          ENDSOURCE
+        ENDMETHODS
+      ENDCONTROL 
+      
+      CONTROL INTEDIT
+        PROPERTIES
+          Name                #horizonInterval
+          AutoDeclaration     #Yes
+          ElementPosition     #1073741822
+          HierarchyParent     #Group2
+          Label               #Horizon Interval
+        ENDPROPERTIES
+        
+        METHODS
+          SOURCE #modified
+            #public boolean modified()
+            #{
+            #    boolean ret;
+            #
+            #    ret = super();
+            #
+            #    horizonValue1 = horizonInterval.value();
+            #
+            #    return ret;
+            #}
+          ENDSOURCE
+        ENDMETHODS
+      ENDCONTROL 
+      
+      CONTROL INTEDIT
+        PROPERTIES
+          Name                #ScanInterval
+          AutoDeclaration     #Yes
+          ElementPosition     #1073741822
+          HierarchyParent     #Group1
+          Label               #Scan Interval
+        ENDPROPERTIES
+        
+        METHODS
+          SOURCE #modified
+            #public boolean modified()
+            #{
+            #    boolean ret;
+            #
+            #    ret = super();
+            #
+            #    scanValue = ScanInterval.value();
+            #
+            #    return ret;
+            #}
+          ENDSOURCE
+        ENDMETHODS
+      ENDCONTROL 
+      
+      CONTROL INTEDIT
+        PROPERTIES
+          Name                #ScanLength
+          AutoDeclaration     #Yes
+          ElementPosition     #1073741822
+          HierarchyParent     #LengthGroup
+          Label               #Scan Length
+        ENDPROPERTIES
+        
+        METHODS
+          SOURCE #modified
+            #public boolean modified()
+            #{
+            #    boolean ret;
+            #
+            #    ret = super();
+            #
+            #    LengthValue = ScanLength.value();
+            #
+            #    return ret;
+            #}
+          ENDSOURCE
+        ENDMETHODS
+      ENDCONTROL 
+      
+      CONTROL STATICTEXT
+        PROPERTIES
+          Name                #CopyOfStaticText
+          HelpText            #This will enqueue document exports based on the selected filters below.
+          ElementPosition     #429496728
+          Text                #- Start Time → First timestamp to begin searching for documents
+          Bold                #Bold
+        ENDPROPERTIES
+        
+        METHODS
+        ENDMETHODS
+      ENDCONTROL 
+      
+      CONTROL STATICTEXT
+        PROPERTIES
+          Name                #CopyOfStaticText1
+          HelpText            #This will enqueue document exports based on the selected filters below.
+          ElementPosition     #858993456
+          Text                #- Horizon Interval + Unit → Optional total limit — prevents unbounded historical scans.
+          Bold                #Bold
+        ENDPROPERTIES
+        
+        METHODS
+        ENDMETHODS
+      ENDCONTROL 
+      
+      CONTROL STATICTEXT
+        PROPERTIES
+          Name                #CopyOfStaticText2
+          HelpText            #This will enqueue document exports based on the selected filters below.
+          ElementPosition     #644245092
+          Text                #- Scan Interval + Unit → How far forward/backward each scan slice travels.
+          Bold                #Bold
+        ENDPROPERTIES
+        
+        METHODS
+        ENDMETHODS
+      ENDCONTROL 
+      
+      CONTROL STATICTEXT
+        PROPERTIES
+          Name                #CopyOfStaticText3
+          ElementPosition     #1073741822
+          HierarchyParent     #Group3
+          Text                #Choose which document types and subtypes will be included in this scan.
+          Bold                #Bold
+        ENDPROPERTIES
+        
+        METHODS
+        ENDMETHODS
+      ENDCONTROL 
+      
+      CONTROL STATICTEXT
+        PROPERTIES
+          Name                #CopyOfStaticText4
+          ElementPosition     #1288490187
+          HierarchyParent     #Group4
+          Text                #configured from the Export Runtime Settings button in the Scan Console.
+          Bold                #Bold
+        ENDPROPERTIES
+        
+        METHODS
+        ENDMETHODS
+      ENDCONTROL 
+      
+      CONTROL STATICTEXT
+        PROPERTIES
+          Name                #StaticText
+          HelpText            #This will enqueue document exports based on the selected filters below.
+          ElementPosition     #214748364
+          Text                #Scan Parameters
+          Bold                #Bold
+        ENDPROPERTIES
+        
+        METHODS
+        ENDMETHODS
+      ENDCONTROL 
+      
+      CONTROL STATICTEXT
+        PROPERTIES
+          Name                #StaticText1
+          ElementPosition     #858993458
+          HierarchyParent     #Group4
+          Text                #Detailed settings - including cadence behavior, capacity limits, and auto-retry rules - can be
+          Bold                #Bold
+        ENDPROPERTIES
+        
+        METHODS
+        ENDMETHODS
+      ENDCONTROL 
+      
+      CONTROL UTCDATETIMEEDIT
+        PROPERTIES
+          Name                #StartTime
+          AutoDeclaration     #Yes
+          ElementPosition     #1610612734
+          HierarchyParent     #Group
+          Label               #Scan Start Date Time UTC
+        ENDPROPERTIES
+        
+        METHODS
+          SOURCE #modified
+            #public boolean modified()
+            #{
+            #    boolean ret;
+            #
+            #    ret = super();
+            #
+            #    scanStartDateTime = StartTime.dateTimeValue();
+            #
+            #    return ret;
+            #}
+          ENDSOURCE
+        ENDMETHODS
+      ENDCONTROL 
+      
+    ENDCONTAINER
+    
+  ENDDESIGN
+  
+  PERMISSIONS #Permissions
+    PROPERTIES
+    ENDPROPERTIES
+    
+    PERMISSIONSET #Read
+      PROPERTIES
+      ENDPROPERTIES
+      
+      FORM #Controls
+      ENDFORM
+      
+    TABLES #Tables
+    ENDTABLES
+    
+  SERVERMETHODS #Server Methods
+  ENDSERVERMETHODS
+  
+ASSOCIATEDFORMS #Associated Forms
+ENDASSOCIATEDFORMS
+
+ENDPERMISSIONSET
+
+PERMISSIONSET #Update
+  PROPERTIES
+  ENDPROPERTIES
+  
+  FORM #Controls
+  ENDFORM
+  
+TABLES #Tables
+ENDTABLES
+
+SERVERMETHODS #Server Methods
+ENDSERVERMETHODS
+
+ASSOCIATEDFORMS #Associated Forms
+ENDASSOCIATEDFORMS
+
+ENDPERMISSIONSET
+
+PERMISSIONSET #Create
+  PROPERTIES
+  ENDPROPERTIES
+  
+  FORM #Controls
+  ENDFORM
+  
+TABLES #Tables
+ENDTABLES
+
+SERVERMETHODS #Server Methods
+ENDSERVERMETHODS
+
+ASSOCIATEDFORMS #Associated Forms
+ENDASSOCIATEDFORMS
+
+ENDPERMISSIONSET
+
+PERMISSIONSET #Delete
+  PROPERTIES
+  ENDPROPERTIES
+  
+  FORM #Controls
+  ENDFORM
+  
+TABLES #Tables
+ENDTABLES
+
+SERVERMETHODS #Server Methods
+ENDSERVERMETHODS
+
+ASSOCIATEDFORMS #Associated Forms
+ENDASSOCIATEDFORMS
+
+ENDPERMISSIONSET
+
+ENDPERMISSIONS
+
+ENDFORM
+
+
+***Element: END

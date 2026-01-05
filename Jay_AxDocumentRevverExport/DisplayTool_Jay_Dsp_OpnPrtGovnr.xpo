@@ -1,0 +1,23 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: FTM
+
+; Microsoft Dynamics AX MENUITEM : Jay_Dsp_OpnPrtGovnr unloaded
+; --------------------------------------------------------------------------------
+  VERSION 1
+  
+  MENUITEM #Jay_Dsp_OpnPrtGovnr
+    Type: 1
+    PROPERTIES
+      Name                #Jay_Dsp_OpnPrtGovnr
+      Label               #Open Mass Document Print Govenor
+      ObjectType          #Class
+      Object              #Jay_OpenPrintGovernorState
+      Origin              #{B9E4BF1E-A14F-4FA5-A3C7-11CB5F7F603B}
+    ENDPROPERTIES
+    
+  ENDMENUITEM
+  
+
+***Element: END

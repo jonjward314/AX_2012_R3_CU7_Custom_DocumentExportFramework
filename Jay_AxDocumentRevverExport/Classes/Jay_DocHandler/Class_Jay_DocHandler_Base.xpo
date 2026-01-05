@@ -1,0 +1,152 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: CLS
+
+; Microsoft Dynamics AX Class: Jay_DocHandler_Confirmation unloaded
+; --------------------------------------------------------------------------------
+  CLSVERSION 1
+  
+  CLASS #Jay_DocHandler_Confirmation
+    PROPERTIES
+      Name                #Jay_DocHandler_Confirmation
+      Extends             #Jay_DocHandler_Base
+      Origin              #{A01BA55D-CADF-43CA-B92B-39A777724B80}
+    ENDPROPERTIES
+    
+    METHODS
+      SOURCE #classDeclaration
+        #public class Jay_DocHandler_Confirmation extends Jay_DocHandler_Base
+        #{
+        #
+        #}
+        #
+      ENDSOURCE
+      SOURCE #printRecord
+        #public boolean printRecord(
+        #    RecId               _docRecId,
+        #    Jay_ExportQueueType _queueType,
+        #    RecId               _queueRecId
+        #)
+        #{
+        #    CustConfirmJour        jour;
+        #    SalesConfirmController controller;
+        #    SalesConfirmContract   contract;
+        #    Args                   args;
+        #
+        #    boolean success = false;
+        #    str     raw;
+        #
+        #    int     ttsBefore, ttsAfter, safety;
+        #    str     postInfo;
+        #
+        #    // -------------------------------------------------------
+        #    // VALIDATION
+        #    // -------------------------------------------------------
+        #    select firstOnly jour
+        #        where jour.RecId == _docRecId;
+        #
+        #    if (!jour.RecId)
+        #    {
+        #        Jay_PrintOrchestratorService::logQueueError(
+        #            _queueType, _queueRecId,
+        #            strFmt("Confirmation print error: missing CustConfirmJour RecId=%1.",
+        #                   int642str(_docRecId))
+        #        );
+        #        return false;
+        #    }
+        #
+        #    // -------------------------------------------------------
+        #    // EXECUTE PRINT
+        #    // -------------------------------------------------------
+        #    infolog.clear();
+        #    ttsBefore = appl.ttsLevel();
+        #
+        #    try
+        #    {
+        #        controller = SalesConfirmController::construct();
+        #        controller.parmReportName(ssrsReportStr(SalesConfirm, Report));
+        #
+        #        contract = new SalesConfirmContract();
+        #        contract.parmRecordId(jour.RecId);
+        #
+        #        args = new Args();
+        #        args.record(jour);
+        #
+        #        controller.parmArgs(args);
+        #        controller.parmReportContract().parmRdpContract(contract);
+        #        controller.parmShowDialog(false);
+        #        controller.parmExecutionMode(SysOperationExecutionMode::Synchronous);
+        #
+        #        controller.startOperation();
+        #        success = true;
+        #    }
+        #    catch (Exception::CLRError)
+        #    {
+        #        raw     = Jay_PrintOrchestratorService::safeStr(AifUtil::getClrErrorMessage());
+        #        success = false;
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        raw     = Jay_PrintOrchestratorService::safeStr(infolog.text());
+        #        success = false;
+        #    }
+        #
+        #    // -------------------------------------------------------
+        #    // TTS LEAK CHECK
+        #    // -------------------------------------------------------
+        #    ttsAfter = appl.ttsLevel();
+        #
+        #    if (ttsAfter > ttsBefore)
+        #    {
+        #        safety = 10;
+        #
+        #        while (appl.ttsLevel() > ttsBefore && safety > 0)
+        #        {
+        #            ttsAbort;
+        #            safety--;
+        #        }
+        #
+        #        if (appl.ttsLevel() != ttsBefore)
+        #        {
+        #            Jay_PrintOrchestratorService::logQueueError(
+        #                _queueType,
+        #                _queueRecId,
+        #                strFmt("Confirmation print fatal TTS corruption. RecId=%1",
+        #                       jour.RecId)
+        #            );
+        #            return false;
+        #        }
+        #
+        #        success = false;
+        #    }
+        #
+        #    // -------------------------------------------------------
+        #    // FINAL FAILURE LOG
+        #    // -------------------------------------------------------
+        #    if (!success)
+        #    {
+        #        raw = raw ? raw : Jay_PrintOrchestratorService::safeStr(infolog.text());
+        #
+        #        Jay_PrintOrchestratorService::logQueueError(
+        #            _queueType,
+        #            _queueRecId,
+        #            strFmt(
+        #                "Confirmation print failure. SalesId=%1 | RecId=%2\nAX: %3",
+        #                jour.SalesId,
+        #                jour.RecId,
+        #                raw
+        #            )
+        #        );
+        #
+        #        return false;
+        #    }
+        #
+        #    return true;
+        #}
+        #
+      ENDSOURCE
+    ENDMETHODS
+  ENDCLASS
+
+***Element: END

@@ -1,0 +1,43 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: DBE
+
+; Microsoft Dynamics AX Enumtype : Jay_ArbitrationActionType unloaded
+; --------------------------------------------------------------------------------
+  ENUMTYPEVERSION 1
+  
+  ENUMTYPE #Jay_ArbitrationActionType
+    PROPERTIES
+      Name                #Jay_ArbitrationActionType
+      UseEnumValue        #Yes
+      Origin              #{504482F3-6EFC-48A6-9119-274ABAB71ACF}
+    ENDPROPERTIES
+    
+    TYPEELEMENTS
+      #Defer
+      PROPERTIES
+        Name                #Defer
+        Label               #Defer
+        EnumValue           #1
+      ENDPROPERTIES
+      
+      #Retry
+      PROPERTIES
+        Name                #Retry
+        Label               #Retry
+        EnumValue           #2
+      ENDPROPERTIES
+      
+      #Drain
+      PROPERTIES
+        Name                #Drain
+        Label               #Drain
+        EnumValue           #3
+      ENDPROPERTIES
+      
+    ENDTYPEELEMENTS
+  ENDENUMTYPE
+  
+
+***Element: END

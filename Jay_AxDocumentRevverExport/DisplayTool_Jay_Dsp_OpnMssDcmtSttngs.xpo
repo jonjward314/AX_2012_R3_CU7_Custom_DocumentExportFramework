@@ -1,0 +1,22 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: FTM
+
+; Microsoft Dynamics AX MENUITEM : Jay_Dsp_ExportScanLauncher unloaded
+; --------------------------------------------------------------------------------
+  VERSION 1
+  
+  MENUITEM #Jay_Dsp_ExportScanLauncher
+    Type: 1
+    PROPERTIES
+      Name                #Jay_Dsp_ExportScanLauncher
+      Label               #Export Scan Launcher
+      Object              #Jay_ExportScanLauncherForm
+      Origin              #{F006FAFE-0B2F-47D3-BE7B-84DEDB49F425}
+    ENDPROPERTIES
+    
+  ENDMENUITEM
+  
+
+***Element: END

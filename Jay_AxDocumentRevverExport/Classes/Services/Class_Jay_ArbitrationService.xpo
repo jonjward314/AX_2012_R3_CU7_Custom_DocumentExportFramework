@@ -1,0 +1,1490 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: CLS
+
+; Microsoft Dynamics AX Class: Jay_ArbitrationService unloaded
+; --------------------------------------------------------------------------------
+  CLSVERSION 1
+  
+  CLASS #Jay_ArbitrationService
+    PROPERTIES
+      Name                #Jay_ArbitrationService
+      Origin              #{F7F9FA6D-A0C2-4933-B59B-C4ED995A4D12}
+    ENDPROPERTIES
+    
+    METHODS
+      SOURCE #classDeclaration
+        #public class Jay_ArbitrationService
+        #{
+        #
+        #}
+        #
+      ENDSOURCE
+      SOURCE #allowScan
+        #public static boolean allowScan(RecId _scanRecId)
+        #{
+        #    Jay_ScanCtrl scanCtrl = Jay_ScanCtrl::find(_scanRecId);
+        #
+        #    // Simple guards — expand later with capacity or sibling checks
+        #    if (Jay_ArbitrationService::scanHasActiveSibling(scanCtrl.QueueType)){
+        #        return false;
+        #    }
+        #
+        #    return true;
+        #}
+      ENDSOURCE
+      SOURCE #allowSliceStart
+        #public static boolean allowSliceStart(RecId _sliceRecId)
+        #{
+        #    Jay_SliceCtrl slice, s;
+        #    Jay_ExportRuntimeSettingsTable settings;
+        #    int    targetTableId;
+        #    int    runningSameTable = 0;
+        #    int    runningEnqueuedSameQueue = 0;
+        #    int    maxConcurrent = 3; // default if runtime setting not present
+        #    boolean isHistorical;
+        #    boolean prodPause;
+        #    boolean histPause;
+        #
+        #    // load slice (lock for update; we may update status)
+        #    select firstOnly forUpdate slice
+        #        where slice.RecId == _sliceRecId;
+        #
+        #    if (!slice.RecId)
+        #    {
+        #        warning(strFmt("allowSliceStart: invalid slice RecId %1", _sliceRecId));
+        #        return false;
+        #    }
+        #
+        #    // runtime settings
+        #    settings = Jay_ExportRuntimeSettingsTable::findOrCreate();
+        #    prodPause = (settings.ProdEnqueuePause == NoYes::Yes);
+        #    histPause = (settings.HistEnqueuePause == NoYes::Yes);
+        #    // If you add MaxConcurrentEnqueues to settings later, read it here:
+        #    // if (settings.MaxConcurrentEnqueues) maxConcurrent = settings.MaxConcurrentEnqueues;
+        #
+        #    isHistorical = (slice.QueueType == Jay_ExportQueueType::Historical);
+        #
+        #    // ---------- Production vs Historical priority rule ----------
+        #    if (isHistorical && !prodPause)
+        #    {
+        #        select firstOnly RecId from s
+        #            where s.QueueType == Jay_ExportQueueType::Production
+        #              && (s.SliceStatus == Jay_SliceStatus::Pending
+        #                  || s.SliceStatus == Jay_SliceStatus::Deferred);
+        #
+        #        if (s.RecId)
+        #        {
+        #            slice.SliceStatus = Jay_SliceStatus::Deferred;
+        #            slice.update();
+        #            info(strFmt("⏸ allowSliceStart: Historical slice %1 deferred due to existing Prod slice %2.",
+        #                         slice.RecId, s.RecId));
+        #            return false;
+        #        }
+        #    }
+        #
+        #    // Global pause checks
+        #    if ((isHistorical && histPause) || (!isHistorical && prodPause))
+        #    {
+        #        slice.SliceStatus = Jay_SliceStatus::Deferred;
+        #        slice.update();
+        #        info(strFmt("⏸ allowSliceStart: Slice %1 deferred due to global enqueue pause for queue %2.",
+        #                     slice.RecId, enum2str(slice.QueueType)));
+        #        return false;
+        #    }
+        #
+        #    // Count Running slices targeting the same table (iterate and use registry per-row)
+        #    while select s
+        #        where s.RecId != slice.RecId
+        #          && s.SliceStatus == Jay_SliceStatus::Running
+        #    {
+        #        if (Jay_DocHandlerRegistryTable::tableIdForDocTypeSubType(s.DocType, s.DocSubType) == targetTableId)
+        #        {
+        #            runningSameTable++;
+        #            // early exit if >0 is fine; keep counting for info if you want.
+        #        }
+        #    }
+        #
+        #    if (runningSameTable > 0)
+        #    {
+        #        slice.SliceStatus = Jay_SliceStatus::Deferred;
+        #        slice.update();
+        #        info(strFmt("⏸ allowSliceStart: Slice %1 deferred because %2 Running slice(s) target tableId %3.",
+        #                     slice.RecId, runningSameTable, targetTableId));
+        #        return false;
+        #    }
+        #
+        #    // ---------- Max concurrent (Running|Enqueued) per QueueType ----------
+        #    select count(RecId) from s
+        #        where s.RecId != slice.RecId
+        #          && s.QueueType == slice.QueueType
+        #          && (s.SliceStatus == Jay_SliceStatus::Running);
+        #
+        #    runningEnqueuedSameQueue = any2Int(s.RecId);
+        #
+        #    if (runningEnqueuedSameQueue >= maxConcurrent)
+        #    {
+        #        slice.SliceStatus = Jay_SliceStatus::Deferred;
+        #        slice.update();
+        #        info(strFmt("⏸ allowSliceStart: Slice %1 deferred because %2 slices already Running/Enqueued for queue %3 (cap=%4).",
+        #                     slice.RecId, runningEnqueuedSameQueue, enum2str(slice.QueueType), maxConcurrent));
+        #        return false;
+        #    }
+        #
+        #    // No blockers — allow this slice to proceed.
+        #    return true;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #allWorkComplete
+        #public static boolean allWorkComplete()
+        #{
+        #    Jay_ScanCtrl scan;
+        #    Jay_SliceCtrl slice;
+        #    Jay_DocExportProdQueue prodQ;
+        #    Jay_DocExportHistQueue histQ;
+        #
+        #    //----------------------------------------------------------
+        #    // 1. Any scan not in a terminal state?
+        #    //----------------------------------------------------------
+        #    while select firstOnly scan
+        #        where !(scan.ScanStatus == Jay_ScanStatus::Completed
+        #             || scan.ScanStatus == Jay_ScanStatus::Failed
+        #             || scan.ScanStatus == Jay_ScanStatus::Consumed)
+        #    {
+        #        return false;
+        #    }
+        #
+        #       //----------------------------------------------------------
+        #    // 2. Any slices not in terminal state?
+        #    //----------------------------------------------------------
+        #    while select firstOnly slice
+        #        where !(slice.SliceStatus == Jay_SliceStatus::Completed
+        #             || slice.SliceStatus == Jay_SliceStatus::Partial
+        #             || slice.SliceStatus == Jay_SliceStatus::Failed
+        #             || slice.SliceStatus == Jay_SliceStatus::Printed)
+        #    {
+        #        return false;
+        #    }
+        #
+        #
+        #    //----------------------------------------------------------
+        #    // 3. Any queued/unprinted records remain?
+        #    //----------------------------------------------------------
+        #    while select firstOnly prodQ
+        #        where prodQ.Status != Jay_ExportQueueStatus::Exported
+        #           && prodQ.Status != Jay_ExportQueueStatus::FailedExport
+        #    {
+        #        return false;
+        #    }
+        #
+        #    while select firstOnly histQ
+        #        where histQ.Status != Jay_ExportQueueStatus::Exported
+        #           && histQ.Status != Jay_ExportQueueStatus::FailedExport
+        #    {
+        #        return false;
+        #    }
+        #
+        #    //----------------------------------------------------------
+        #    // 4. Print governor idle?
+        #    //----------------------------------------------------------
+        #    if (Jay_PrintOrchestratorService::isPrinting())
+        #        return false;
+        #
+        #    return true;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #CleanOldRecords
+        #public static void CleanOldRecords()
+        #{
+        #    // ---------------------------------------------------------------------
+        #    // Retention rules (fixed by architecture decision)
+        #    // ---------------------------------------------------------------------
+        #    int KEEP_COMPLETED_DAYS = 7;    // Good stuff (exported, completed)
+        #    int KEEP_ERROR_DAYS     = 30;   // Bad stuff (failed, error logs)
+        #    int KEEP_DEDUPE_DAYS    = 7;    // Dedupe entries
+        #
+        #    utcDateTime nowUtc = DateTimeUtil::utcNow();
+        #
+        #    utcDateTime cutoffCompletedUtc =
+        #        DateTimeUtil::addDays(nowUtc, -KEEP_COMPLETED_DAYS);
+        #
+        #    utcDateTime cutoffErrorUtc =
+        #        DateTimeUtil::addDays(nowUtc, -KEEP_ERROR_DAYS);
+        #
+        #    utcDateTime cutoffDedupeUtc =
+        #        DateTimeUtil::addDays(nowUtc, -KEEP_DEDUPE_DAYS);
+        #
+        #    Jay_BatchCtrl batch;
+        #    Jay_SliceCtrl slice;
+        #    Jay_ScanCtrl  scan;
+        #
+        #    Jay_DocExportProdQueue prod;
+        #    Jay_DocExportHistQueue hist;
+        #
+        #    Jay_DocExportProdQueue prodErr;
+        #    Jay_DocExportHistQueue histErr;
+        #
+        #    Jay_PrintDedupeTable dd;
+        #
+        #    Jay_BatchCtrl  childBatch;
+        #    Jay_SliceCtrl  childSlice;
+        #
+        #
+        #    // ============================================================
+        #    // 1. CLEAN COMPLETED BATCHES
+        #    // ============================================================
+        #    ttsBegin;
+        #    while select forUpdate batch
+        #        where batch.Status == Jay_BatchStatus::Completed
+        #          && batch.modifiedDateTime < cutoffCompletedUtc
+        #    {
+        #        batch.delete();
+        #    }
+        #    ttsCommit;
+        #
+        #
+        #    // ============================================================
+        #    // 2. CLEAN COMPLETED SLICES (only when no child batches exist)
+        #    // ============================================================
+        #    while select slice
+        #        where slice.SliceStatus == Jay_SliceStatus::Completed
+        #          && slice.modifiedDateTime < cutoffCompletedUtc
+        #    {
+        #        select firstOnly childBatch
+        #            where childBatch.ParentSliceRecId == slice.RecId;
+        #
+        #        if (!childBatch.RecId)
+        #        {
+        #            ttsBegin;
+        #            slice.selectForUpdate(true);
+        #            slice.delete();
+        #            ttsCommit;
+        #        }
+        #    }
+        #
+        #
+        #    // ============================================================
+        #    // 3. CLEAN COMPLETED SCANS (only when no slices remain)
+        #    // ============================================================
+        #    while select scan
+        #        where (scan.ScanStatus == Jay_ScanStatus::Completed
+        #            || scan.ScanStatus == Jay_ScanStatus::Consumed)
+        #          && scan.modifiedDateTime< cutoffCompletedUtc
+        #    {
+        #        select firstOnly childSlice
+        #            where childSlice.ParentScanId == scan.RecId;
+        #
+        #        if (!childSlice.RecId)
+        #        {
+        #            ttsBegin;
+        #            scan.selectForUpdate(true);
+        #            scan.delete();
+        #            ttsCommit;
+        #        }
+        #    }
+        #
+        #
+        #    // ============================================================
+        #    // 4. CLEAN QUEUE ROWS (GOOD rows → 7 days retention)
+        #    // ============================================================
+        #    ttsBegin;
+        #    while select forUpdate prod
+        #        where prod.Status == Jay_ExportQueueStatus::Exported
+        #          && prod.LastAttemptUtc < cutoffCompletedUtc
+        #    {
+        #        prod.delete();
+        #    }
+        #    ttsCommit;
+        #
+        #    ttsBegin;
+        #    while select forUpdate hist
+        #        where hist.Status == Jay_ExportQueueStatus::Exported
+        #          && hist.LastAttemptUtc < cutoffCompletedUtc
+        #    {
+        #        hist.delete();
+        #    }
+        #    ttsCommit;
+        #
+        #
+        #  // ============================================================
+        #    // 5. DELETE ERROR ROWS AFTER 30 DAYS
+        #    // ============================================================
+        #
+        #    // Production errors
+        #    ttsBegin;
+        #    while select forUpdate prodErr
+        #        where prodErr.Status == Jay_ExportQueueStatus::FailedExport
+        #          && prodErr.LastAttemptUtc < cutoffErrorUtc
+        #    {
+        #        prodErr.delete();
+        #    }
+        #    ttsCommit;
+        #
+        #    // Historical errors
+        #    ttsBegin;
+        #    while select forUpdate histErr
+        #        where histErr.Status == Jay_ExportQueueStatus::FailedExport
+        #          && histErr.LastAttemptUtc < cutoffErrorUtc
+        #    {
+        #        histErr.delete();
+        #    }
+        #    ttsCommit;
+        #
+        #
+        #    // ============================================================
+        #    // 6. CLEAN OLD DEDUPE ENTRIES (7 days)
+        #    // ============================================================
+        #    ttsBegin;
+        #    while select forUpdate dd
+        #        where dd.modifiedDateTime < cutoffDedupeUtc
+        #    {
+        #        dd.delete();
+        #    }
+        #    ttsCommit;
+        #
+        #    info("ArbitrationMaintenance: CleanOldRecords() complete.");
+        #}
+        #
+      ENDSOURCE
+      SOURCE #cleanupDedupe
+        #public static void cleanupDedupe()
+        #{
+        #    Jay_PrintDedupeTable d;
+        #    RecId scanId;
+        #
+        #    // Loop distinct ScanIds from dedupe table
+        #    while select ScanId from d
+        #    {
+        #        scanId = d.ScanId;
+        #
+        #        if (Jay_ArbitrationService::isScanIdRetired(scanId))
+        #        {
+        #            Jay_PrintDedupe::deleteForScan(scanId);
+        #            info(strFmt("🧹 Dedupe cleanup: removed entries for ScanId %1", scanId));
+        #        }
+        #    }
+        #}
+      ENDSOURCE
+      SOURCE #DetectAndResolveState
+        #public static void DetectAndResolveState()
+        #{
+        #    //
+        #    // PRINT: Heal broken governor locks
+        #    //
+        #    Jay_PrintOrchestratorService::healPrintLocks();
+        #    info("✔ DetectAndResolveState: healPrintLocks() executed.");
+        #
+        #    Jay_ArbitrationService::DetectStuckPrinter();
+        #    //
+        #    // PRINT: Nudge print engine if ready
+        #    //
+        #    Jay_PrintOrchestratorService::maybeTryStartPrint();
+        #    info("✔ DetectAndResolveState: maybeTryStartPrint() executed.");
+        #
+        #    //
+        #    // SLICES: Detect + resolve stuck slices
+        #    //
+        #    Jay_ArbitrationService::detectStuckSlices();
+        #    info("✔ DetectAndResolveState: detectStuckSlices() executed.");
+        #
+        #    //
+        #    // SCANS: Detect + resolve stuck scans
+        #    //
+        #    Jay_ArbitrationService::detectStuckScans();
+        #    info("✔ DetectAndResolveState: detectStuckScans() executed.");
+        #}
+        #
+      ENDSOURCE
+      SOURCE #DetectStuckPrinter
+        #public static void DetectStuckPrinter()
+        #{
+        #    Jay_DocExportProdQueue pq;
+        #    Jay_DocExportHistQueue hq;
+        #    Jay_PrintGovernorState gov;
+        #    BatchJob               job;
+        #
+        #    utcDateTime nowUtc   = DateTimeUtil::utcNow();
+        #    int         ageSeconds;
+        #    int         thresholdMinutes = 10;
+        #    int         thresholdSeconds = thresholdMinutes * 60;
+        #
+        #    Name caption = Jay_PrintOrchestratorService::printCycleCaption();
+        #
+        #    boolean isProd = false;
+        #
+        #    //----------------------------------------------------------------------
+        #    // 1. Find the active processing row (PROD preferred)
+        #    //----------------------------------------------------------------------
+        #    select firstOnly pq
+        #        where pq.Status == Jay_ExportQueueStatus::Processing;
+        #
+        #    if (pq.RecId)
+        #    {
+        #        isProd = true;
+        #    }
+        #    else
+        #    {
+        #        select firstOnly hq
+        #            where hq.Status == Jay_ExportQueueStatus::Processing;
+        #
+        #        if (!hq.RecId)
+        #        {
+        #            // Nothing printing anywhere
+        #            return;
+        #        }
+        #    }
+        #
+        #    //----------------------------------------------------------------------
+        #    // 2. Compute age
+        #    //----------------------------------------------------------------------
+        #    if (isProd)
+        #    {
+        #        if (pq.LastAttemptUtc == DateTimeUtil::minValue())
+        #            ageSeconds = thresholdSeconds + 1;
+        #        else
+        #            ageSeconds = DateTimeUtil::getDifference(nowUtc, pq.LastAttemptUtc);
+        #    }
+        #    else
+        #    {
+        #        if (hq.LastAttemptUtc == DateTimeUtil::minValue())
+        #            ageSeconds = thresholdSeconds + 1;
+        #        else
+        #            ageSeconds = DateTimeUtil::getDifference(nowUtc, hq.LastAttemptUtc);
+        #    }
+        #
+        #    if (ageSeconds <= thresholdSeconds)
+        #        return; // not stuck
+        #
+        #    //----------------------------------------------------------------------
+        #    // 3. Locate the executing PrintCycle batch
+        #    //----------------------------------------------------------------------
+        #    select firstOnly job
+        #        where job.Caption == caption
+        #          && job.Status  == BatchStatus::Executing;
+        #
+        #    //----------------------------------------------------------------------
+        #    // 4. Cancel batch (CU7-safe)
+        #    //----------------------------------------------------------------------
+        #    if (job.RecId)
+        #    {
+        #        ttsBegin;
+        #        select forupdate job where job.RecId == job.RecId;
+        #        job.Status = BatchStatus::Canceled;
+        #        job.update();
+        #        ttsCommit;
+        #
+        #        warning(strFmt(
+        #            "🛑 CU7-safe cancel: PrintCycle batch %1 canceled (age=%2 sec).",
+        #            job.RecId,
+        #            ageSeconds));
+        #    }
+        #
+        #    //----------------------------------------------------------------------
+        #    // 5. Clear governor IsPrinting
+        #    //----------------------------------------------------------------------
+        #    gov = Jay_PrintGovernorState::findOrCreate();
+        #
+        #    ttsBegin;
+        #    select forupdate gov where gov.RecId == gov.RecId;
+        #
+        #    if (gov.IsPrinting)
+        #    {
+        #        gov.IsPrinting = NoYes::No;
+        #        gov.update();
+        #        warning("🔓 Governor IsPrinting cleared.");
+        #    }
+        #
+        #    ttsCommit;
+        #
+        #    //----------------------------------------------------------------------
+        #    // 6. Reset owning queue row ONLY
+        #    //----------------------------------------------------------------------
+        #    ttsBegin;
+        #
+        #    if (isProd)
+        #    {
+        #        select forupdate pq where pq.RecId == pq.RecId;
+        #        pq.Attempts++;
+        #        pq.Status = Jay_ExportQueueStatus::FailedExport; // or WaitingRetry
+        #        pq.update();
+        #
+        #        warning(strFmt(
+        #            "⟳ PROD queue row %1 reset due to stuck print.",
+        #            pq.RecId));
+        #    }
+        #    else
+        #    {
+        #        select forupdate hq where hq.RecId == hq.RecId;
+        #        hq.Status = Jay_ExportQueueStatus::FailedExport;
+        #        hq.update();
+        #
+        #        warning(strFmt(
+        #            "⟳ HIST queue row %1 reset due to stuck print.",
+        #            hq.RecId));
+        #    }
+        #
+        #    ttsCommit;
+        #
+        #    warning("🧹 CU7-safe printer recovery complete.");
+        #}
+        #
+      ENDSOURCE
+      SOURCE #detectStuckScans
+        #public static void detectStuckScans()
+        #{
+        #    Jay_ScanCtrl                    scan;
+        #    Jay_SliceCtrl                   slice;
+        #    Jay_ExportRuntimeSettingsTable  settings = Jay_ExportRuntimeSettingsTable::findOrCreate();
+        #
+        #    boolean hasRunningSlice;
+        #    boolean hasWorkToDo;
+        #    utcDateTime nowUtc = DateTimeUtil::utcNow();
+        #
+        #    while select * from scan
+        #        where scan.ScanStatus != Jay_ScanStatus::Completed
+        #        && scan.ScanStatus != Jay_ScanStatus::Consumed
+        #    {
+        #        hasRunningSlice = false;
+        #        hasWorkToDo     = false;
+        #
+        #        // ------------------------------------------------------
+        #        // Inspect slices for this scan
+        #        // ------------------------------------------------------
+        #        while select slice
+        #            where slice.ParentScanId == scan.RecId
+        #        {
+        #            // 1. If ANY slice is running → nothing to do
+        #            if (slice.SliceStatus == Jay_SliceStatus::Running)
+        #            {
+        #                hasRunningSlice = true;
+        #                break;
+        #            }
+        #
+        #            // 2. Pending slices OR failed slices under retry limit
+        #            if (slice.SliceStatus == Jay_SliceStatus::Pending ||
+        #               (slice.SliceStatus == Jay_SliceStatus::Failed &&
+        #                slice.RetryCount < settings.MaxDeferredRetries))
+        #            {
+        #                hasWorkToDo = true;
+        #            }
+        #        }
+        #
+        #        // ------------------------------------------------------
+        #        // RULE:
+        #        // If nothing running AND work remains AND scan should already have started → restart it
+        #        // ------------------------------------------------------
+        #        if (!hasRunningSlice &&
+        #             hasWorkToDo &&
+        #             scan.NextIntervalStart <= nowUtc)
+        #        {
+        #            warning(strFmt(
+        #                "Scan %1 appears idle but has work remaining — reactivating.",
+        #                scan.RecId));
+        #
+        #            Jay_ScanCtrlService::schedule(scan.RecId);
+        #        }
+        #    }
+        #}
+      ENDSOURCE
+      SOURCE #detectStuckSlices
+        #public static void detectStuckSlices()
+        #{
+        #    Jay_SliceCtrl slice;
+        #    Jay_BatchCtrl batchAnyOpen;
+        #    Jay_BatchCtrl batchAnyExecuting;
+        #    Jay_ExportRuntimeSettingsTable settings = Jay_ExportRuntimeSettingsTable::findOrCreate();
+        #
+        #
+        #    boolean hasOpen;
+        #    boolean activeChild;
+        #
+        #    while select * from slice
+        #        where slice.SliceStatus != Jay_SliceStatus::Completed
+        #    {
+        #        // STEP 0 — Guardrail: prevent infinite reprocessing loops
+        #        if (slice.RetryCount >= settings.MaxDeferredRetries)
+        #            continue;
+        #
+        #        // STEP 1 — Does this slice have open batches?
+        #        select firstOnly batchAnyOpen
+        #            where batchAnyOpen.ParentSliceRecId == slice.RecId
+        #              && batchAnyOpen.Status != Jay_BatchStatus::Completed;
+        #
+        #        // STEP 2 — Is any batch "in flight"?
+        #        select firstOnly batchAnyExecuting
+        #            where batchAnyExecuting.ParentSliceRecId == slice.RecId
+        #              && batchAnyExecuting.Status != Jay_BatchStatus::Completed;
+        #
+        #        hasOpen      = (batchAnyOpen.RecId      != 0);
+        #        activeChild  = (batchAnyExecuting.RecId != 0);
+        #
+        #        // CASE A: Running but nothing executing
+        #        if (slice.SliceStatus == Jay_SliceStatus::Running
+        #         &&  hasOpen
+        #         && !activeChild)
+        #        {
+        #            warning(strFmt(
+        #                "Slice %1 appears stuck → manual restart attempt.",
+        #                slice.RecId));
+        #
+        #            Jay_SliceCtrlService::processSlice(slice.RecId);
+        #            continue;
+        #        }
+        #
+        #        // CASE B: Pending slice but batches exist → impossible state
+        #        if (slice.SliceStatus == Jay_SliceStatus::Pending
+        #         && hasOpen)
+        #        {
+        #            warning(strFmt(
+        #                "Slice %1 Pending but open batches exist → correcting.",
+        #                slice.RecId));
+        #
+        #            Jay_SliceCtrlService::processSlice(slice.RecId);
+        #            continue;
+        #        }
+        #
+        #        // CASE C: Slice marked Completed but batches aren't
+        #        if (slice.SliceStatus == Jay_SliceStatus::Completed
+        #         && hasOpen)
+        #        {
+        #            warning(strFmt(
+        #                "Slice %1 marked completed but child batches not done → marking Running.",
+        #                slice.RecId));
+        #
+        #            Jay_SliceCtrlService::markActive(slice.RecId);
+        #            continue;
+        #        }
+        #    }
+        #}
+        #
+      ENDSOURCE
+      SOURCE #doHeartbeatWork
+        #public static boolean doHeartbeatWork()
+        #{
+        #    boolean success           = false;    // for now
+        #    NoYes   continueHeartbeat = NoYes::Yes;
+        #    boolean rescheduleSuccess = false;
+        #
+        #    try
+        #    {
+        #        Jay_ArbitrationService::DetectandResolveState();
+        #        Jay_ArbitrationService::CleanOldRecords();
+        #
+        #        // TRUE means system is done → do not continue
+        #        if (Jay_ArbitrationService::EndStateDetector())
+        #        {
+        #            continueHeartbeat = NoYes::No;
+        #            rescheduleSuccess = false;
+        #        }
+        #        else
+        #        {
+        #            continueHeartbeat = NoYes::Yes;
+        #            rescheduleSuccess =
+        #                Jay_ArbitrationService::PreserveHeartbeat(continueHeartbeat);
+        #        }
+        #    }
+        #    catch
+        #    {
+        #        //
+        #        // CRASH — FORCE RESCHEDULE
+        #        //
+        #        warning("⚠ Heartbeat crashed — rescheduling supervisor cycle.");
+        #
+        #        Jay_ArbitrationService::PreserveHeartbeat(NoYes::Yes);
+        #
+        #        success = false;
+        #        return success;
+        #    }
+        #
+        #    return success;
+        #}
+      ENDSOURCE
+      SOURCE #EndStateDetector
+        #public static boolean EndStateDetector()
+        #{
+        #    Jay_PrintGovernorState          gov     = Jay_PrintGovernorState::findOrCreate();
+        #    Jay_ExportRuntimeSettingsTable  settings = Jay_ExportRuntimeSettingsTable::findOrCreate();
+        #    utcDateTime nowUtc = DateTimeUtil::utcNow();
+        #    Jay_ScanCtrl          scan;
+        #    Jay_SliceCtrl         slice;
+        #    Jay_DocExportProdQueue prod;
+        #    Jay_DocExportHistQueue hist;
+        #    Batch                 job;
+        #
+        #    Jay_ExportQueueType   qt;
+        #
+        #    int maxAttempts = settings.MaxAllowedPrintAttempts;
+        #
+        #    // Anti-hang protections
+        #    int     loopCount      = 0;
+        #    int     maxLoopCount   = 5000;   // stops runaway loops
+        #    utcdatetime start       = DateTimeUtil::utcNow();
+        #    int     maxMillis       = 250;   // prevent heartbeat from freezing
+        #
+        #    utcdatetime now;
+        #
+        #    // ------------------------------------------------------
+        #    // Helper: did we exceed time budget?
+        #    // ------------------------------------------------------
+        #    boolean timeExceeded()
+        #    {
+        #        now = DateTimeUtil::utcNow();
+        #        return (DateTimeUtil::getDifference(now, start) > maxMillis);
+        #    }
+        #
+        #    // ------------------------------------------------------
+        #    // Helper: did we exceed loop budget?
+        #    // ------------------------------------------------------
+        #    boolean tooManyLoops()
+        #    {
+        #        return (loopCount > maxLoopCount);
+        #    }
+        #
+        #
+        #    // ======================================================
+        #    // 0. PRINT STATE
+        #    // ======================================================
+        #    if (gov.IsPrinting == NoYes::Yes)
+        #        return false;
+        #
+        #    if (gov.PendingPrintCycle == NoYes::Yes)
+        #        return false;
+        #
+        #
+        #    // ======================================================
+        #    // 1. ACTIVE PRINT BATCH RUNNING?
+        #    // ======================================================
+        #    while select job
+        #        where job.Caption == Jay_PrintOrchestratorService::printCycleCaption()
+        #          && job.Status == BatchStatus::Executing
+        #    {
+        #        return false;
+        #    }
+        #
+        #
+        #    while select firstOnly slice
+        #    where slice.SliceStatus == Jay_SliceStatus::Pending
+        #           && slice.FromUtc <= nowUtc
+        #    {
+        #        return false;
+        #    }
+        #
+        #    while select firstOnly scan
+        #    where scan.ScanStatus == Jay_ScanStatus::Pending
+        #       && scan.RangeFromUTC <= nowUtc
+        #    {
+        #        return false;
+        #    }
+        #
+        #    // ======================================================
+        #    // 2. QUEUE STATE — ANY PRINTABLE WORK?
+        #    // ======================================================
+        #    for (qt = 0; qt < enumCnt(Jay_ExportQueueType); qt++)
+        #    {
+        #        loopCount++;
+        #        if (timeExceeded() || tooManyLoops())
+        #            return false;
+        #
+        #        if (Jay_PrintOrchestratorService::hasPrintableWork(qt))
+        #            return false;
+        #    }
+        #
+        #    // ======================================================
+        #    // 3. PRODUCTION QUEUE — ANY NON-FINAL?
+        #    // ======================================================
+        #    while select firstOnly prod
+        #        where prod.Status != Jay_ExportQueueStatus::Exported
+        #          && !(prod.Status == Jay_ExportQueueStatus::FailedExport
+        #               && prod.Attempts >= maxAttempts)
+        #    {
+        #        return false;
+        #    }
+        #
+        #
+        #    // ======================================================
+        #    // 4. HISTORICAL QUEUE — ANY NON-FINAL?
+        #    // ======================================================
+        #    while select firstOnly hist
+        #        where hist.Status != Jay_ExportQueueStatus::Exported
+        #          && !(hist.Status == Jay_ExportQueueStatus::FailedExport
+        #               && hist.Attempts >= maxAttempts)
+        #    {
+        #        return false;
+        #    }
+        #
+        #
+        #    // ======================================================
+        #    // 5. SLICES — ANY STILL OPEN?
+        #    // ======================================================
+        #    while select firstOnly slice
+        #        where slice.SliceStatus != Jay_SliceStatus::Completed
+        #    {
+        #        return false;
+        #    }
+        #
+        #
+        #    // ======================================================
+        #    // 6. SCANS — ANY STILL OPEN?
+        #    // ======================================================
+        #    while select firstOnly scan
+        #        where scan.ScanStatus != Jay_ScanStatus::Completed
+        #          && scan.ScanStatus != Jay_ScanStatus::Consumed
+        #    {
+        #        return false;
+        #    }
+        #
+        #
+        #    // ======================================================
+        #    // 7. SAFETY HATCH
+        #    // ======================================================
+        #    if (timeExceeded() || tooManyLoops())
+        #        return false;
+        #
+        #
+        #    // ------------------------------------------------------
+        #    // All layers idle → end state reached
+        #    // ------------------------------------------------------
+        #    return true;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #ensureHeartbeatAlive
+        #public static void ensureHeartbeatAlive()
+        #{
+        #    Jay_ExportRuntimeSettingsTable settings;
+        #    Jay_ExportRuntimeSettingsTable settingsUpd;
+        #
+        #    BatchJob                       existing;
+        #    Jay_ArbitrationBatch           job;
+        #    BatchHeader                    header;
+        #    Batch                          batch;
+        #    Batch                          batchUpd;
+        #
+        #    utcDateTime                    nowUtc;
+        #    utcDateTime                    nextRun;
+        #    int                            minutesBetweenRuns;
+        #
+        #    // --- Settings + cadence (read-only) ---
+        #    settings           = Jay_ExportRuntimeSettingsTable::findOrCreate();
+        #    minutesBetweenRuns = settings.HeartbeatMinutes ? settings.HeartbeatMinutes : 15;
+        #
+        #    nowUtc  = DateTimeUtil::utcNow();
+        #    nextRun = DateTimeUtil::addMinutes(nowUtc, minutesBetweenRuns);
+        #
+        #    // --- Check for existing heartbeat job (Waiting or Executing) ---
+        #    select firstOnly existing
+        #        where existing.Caption == "Jay Arbitration Heartbeat"
+        #           && (existing.Status == BatchStatus::Waiting
+        #               || existing.Status == BatchStatus::Executing);
+        #
+        #    if (existing.RecId)
+        #    {
+        #        return;
+        #    }
+        #
+        #    // --- None found → bootstrap first heartbeat ---
+        #    info("⚡ No active heartbeat detected – bootstrapping new job...");
+        #
+        #    job = new Jay_ArbitrationBatch();
+        #    job.parmFunctionName(enum2str(Jay_ArbitrationBatchFunctions::Heartbeat));
+        #
+        #    header = BatchHeader::construct();
+        #    header.parmCaption("Jay Arbitration Heartbeat");
+        #    header.parmStartDateTime(nextRun);
+        #    header.addTask(job);
+        #    header.save();
+        #
+        #    // --- Post-save group/user patch (TTS-safe) ---
+        #    ttsBegin;
+        #
+        #    // Always reselect inside the TTS block
+        #    select forupdate batchUpd
+        #        where batchUpd.RecId == header.parmBatchHeaderId();
+        #
+        #    if (batchUpd.RecId)
+        #    {
+        #        batchUpd.GroupId    = settings.BatchGroupName;
+        #        batchUpd.ExecutedBy = settings.Username;
+        #        batchUpd.update();
+        #    }
+        #
+        #    ttsCommit;
+        #
+        #    // --- Log ---
+        #    info(strFmt("🚀 Heartbeat ignition scheduled for %1 (interval %2 min).",
+        #                DateTimeUtil::toStr(nextRun),
+        #                minutesBetweenRuns));
+        #
+        #    // --- Settings update MUST be inside its own TTS ---
+        #    ttsBegin;
+        #
+        #    select forupdate settingsUpd
+        #        where settingsUpd.RecId == settings.RecId;
+        #
+        #    if (settingsUpd.RecId)
+        #    {
+        #        settingsUpd.LastHeartbeatUTC = nowUtc;
+        #        settings.HeartbeatLock = NoYes::No;
+        #        settingsUpd.update();
+        #    }
+        #
+        #    ttsCommit;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #heartbeat
+        #public static void heartbeat()
+        #{
+        #    Jay_ExportRuntimeSettingsTable settings = Jay_ExportRuntimeSettingsTable::findOrCreate();
+        #    utcDateTime nowUtc = DateTimeUtil::utcNow();
+        #    boolean success;
+        #    ;
+        #
+        #    info(strFmt("💓 [Arbitration] Heartbeat triggered at %1", DateTimeUtil::toStr(nowUtc)));
+        #
+        #    // --- Guard: prevent overlap ---
+        #    if (settings.HeartbeatLock == NoYes::Yes)
+        #    {
+        #        warning("⚠ Heartbeat skipped — previous run still active.");
+        #        return;
+        #    }
+        #
+        #    // --- Lock ---
+        #    ttsBegin;
+        #    select forupdate settings;
+        #    settings.HeartbeatLock = NoYes::Yes;
+        #    settings.LastHeartbeatUTC = nowUtc;
+        #    settings.update();
+        #    ttsCommit;
+        #
+        #    try
+        #    {
+        #        info("✅ Heartbeat Starting.");
+        #
+        #        success = Jay_ArbitrationService::doHeartbeatWork();
+        #
+        #        if (success)
+        #            info("✅ Heartbeat cycle completed successfully.");
+        #        else
+        #            warning("⚠ Heartbeat completed with partial success.");
+        #
+        #         // --- Unlock + metrics ---
+        #        ttsBegin;
+        #        select forupdate settings;
+        #        settings.HeartbeatLock = NoYes::No;
+        #        settings.LastHeartbeatUTC = nowUtc;
+        #        settings.update();
+        #        ttsCommit;
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        ttsBegin;
+        #        select forupdate settings;
+        #        settings.HeartbeatLock = NoYes::No;
+        #        settings.update();
+        #        ttsCommit;
+        #
+        #        error("💥 Heartbeat failed unexpectedly; lock released.");
+        #    }
+        #}
+        #
+      ENDSOURCE
+      SOURCE #isOverCapacity
+        #
+        #private static boolean isOverCapacity(Jay_ExportQueueType _queueType)
+        #{
+        #    // Next: Compare queue volume vs. runtime thresholds
+        #    return false;
+        #}
+      ENDSOURCE
+      SOURCE #isScanIdRetired
+        #public static boolean isScanIdRetired(RecId _scanId)
+        #{
+        #    Jay_ScanCtrl  scan;
+        #    Jay_SliceCtrl slice;
+        #
+        #    if (!_scanId)
+        #        return false;
+        #
+        #    // 1. SCAN must exist and must be Completed
+        #    select firstOnly scan
+        #        where scan.RecId == _scanId;
+        #
+        #    if (!scan.RecId)
+        #        return false;
+        #
+        #    if (scan.ScanStatus != Jay_ScanStatus::Completed)
+        #        return false;
+        #
+        #    // 2. NO slices may still be active or incomplete
+        #    while select firstOnly slice
+        #        where slice.ParentScanId == _scanId
+        #          && slice.SliceStatus != Jay_SliceStatus::Completed
+        #    {
+        #        // Any incomplete slice means scan is not retired
+        #        return false;
+        #    }
+        #
+        #    // If we reach here: scan completed + all slices completed
+        #    return true;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #launchSlice
+        #public static boolean launchSlice(RecId _sliceRecId)
+        #{
+        #    return Jay_SliceCtrlService::StartScanSliceProcessing(_sliceRecId);
+        #}
+      ENDSOURCE
+      SOURCE #maintainHealth
+        #public static void maintainHealth()
+        #{
+        #    info("🩺 [Arbitration] Health maintenance cycle started...");
+        #
+        #    // Detect long-running or failed scans
+        #    /*Jay_ScanCtrl scan;
+        #    utcDateTime nowUtc = DateTimeUtil::utcNow();
+        #    int stuckMinutes   = 600; // 10 hours
+        #
+        #    ttsBegin;
+        #    update_recordset scan
+        #        setting Status = Jay_ScanStatus::Stuck
+        #        where scan.Status == Jay_ScanStatus::Running
+        #            && DateTimeUtil::getDifference(nowUtc, scan.LastUpdateUtc) > (stuckMinutes * 60);
+        #    ttsCommit;
+        #
+        #    // Optional: clean up completed scans older than X days
+        #    delete_from scan
+        #        where scan.Status == Jay_ScanStatus::Complete
+        #            && scan.CompletedUtc < DateTimeUtil::addDays(nowUtc, -7);
+        #
+        #    info("✅ [Arbitration] Health cycle complete.");
+        #    */
+        #}
+      ENDSOURCE
+      SOURCE #notifyBatchReady
+        #public static boolean notifyBatchReady(RecId _batchRecId, Jay_ExportQueueType _queueType)
+        #{
+        #    Jay_ArbitrationBatch           job;
+        #    BatchHeader                    header;
+        #    Batch                          batch;
+        #    Jay_ExportRuntimeSettingsTable settings = Jay_ExportRuntimeSettingsTable::findOrCreate();
+        #    Jay_BatchCtrl                  batchCtrl;
+        #    Jay_SliceCtrl                  slice;
+        #
+        #    utcDateTime nowUtc  = DateTimeUtil::utcNow();
+        #    utcDateTime runTime = DateTimeUtil::addMinutes(nowUtc, 2);
+        #
+        #    boolean acquired;
+        #    boolean printerIdle;
+        #    str     caption = Jay_PrintOrchestratorService::printCycleCaption();
+        #
+        #    if (!_batchRecId)
+        #        return false;
+        #
+        #    select firstOnly batchCtrl
+        #        where batchCtrl.RecId == _batchRecId;
+        #
+        #    if (!batchCtrl.RecId)
+        #        return false;
+        #
+        #    slice = Jay_SliceCtrl::find(batchCtrl.ParentSliceRecId);
+        #    if (!slice.RecId)
+        #        return false;
+        #
+        #    //────────────────────────────────────────────────────
+        #    // 0. Self-heal governor
+        #    //────────────────────────────────────────────────────
+        #    Jay_PrintOrchestratorService::ensureGovernorNotStuck();
+        #
+        #    //────────────────────────────────────────────────────
+        #    // 1. Acquire print semaphore
+        #    //────────────────────────────────────────────────────
+        #    // 1. If printing is active → skip scheduling entirely
+        #    if (Jay_PrintOrchestratorService::IsPrinting())
+        #    {
+        #        // Printer is in use — do NOT set pending, do NOT reschedule
+        #        return true;
+        #    }
+        #
+        #    acquired = Jay_PrintOrchestratorService::setPendingPrintCycle();
+        #    if (!acquired)
+        #    {
+        #        // Someone else already scheduled a cycle
+        #        return true;
+        #    }
+        #
+        #    //────────────────────────────────────────────────────
+        #    // 2. Check batch-server reality: is a job already queued?
+        #    //────────────────────────────────────────────────────
+        #    if (Jay_PrintOrchestratorService::printCycleBatchExists())
+        #    {
+        #        info("notifyBatchReady: print-cycle batch already pending; skip scheduling.");
+        #        return true;
+        #    }
+        #
+        #    //────────────────────────────────────────────────────
+        #    // 3. Schedule only if printer not actively printing
+        #    //────────────────────────────────────────────────────
+        #    printerIdle = !Jay_PrintOrchestratorService::IsPrinting();
+        #
+        #    if (printerIdle)
+        #    {
+        #        job = new Jay_ArbitrationBatch();
+        #        job.parmFunctionName(enum2str(Jay_ArbitrationBatchFunctions::RequestProcessPrintQueue));
+        #        job.parmSliceIdentifier(slice.RecId);
+        #        job.parmScanIdentifier(slice.ParentScanId);
+        #        job.parmQueueType(_queueType);
+        #
+        #        header = BatchHeader::construct();
+        #        header.parmCaption(caption);
+        #        header.parmStartDateTime(runTime);
+        #        header.addTask(job);
+        #        header.save();
+        #
+        #        ttsBegin;
+        #        select forUpdate batch
+        #            where batch.RecId == header.parmBatchHeaderId();
+        #
+        #        if (batch.RecId)
+        #        {
+        #            batch.GroupId    = settings.BatchGroupName;
+        #            batch.ExecutedBy = settings.Username;
+        #            batch.update();
+        #        }
+        #        ttsCommit;
+        #
+        #        info(strFmt("notifyBatchReady: Scheduled PrintCycle batch for %1.", _batchRecId));
+        #    }
+        #    else
+        #    {
+        #        info(strFmt("notifyBatchReady: Printer busy; skipping schedule for %1.", _batchRecId));
+        #    }
+        #
+        #    return true;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #PreserveHeartbeat
+        #public static boolean PreserveHeartbeat( NoYes _preserve){
+        #    Jay_ExportRuntimeSettingsTable  settings = Jay_ExportRuntimeSettingsTable::findOrCreate();
+        #    utcDateTime                     nowUtc = DateTimeUtil::utcNow();
+        #    utcDateTime                     nextRun;
+        #    int                             minutesBetweenRuns;
+        #    boolean scheduled = false ;
+        #
+        #    if(_preserve == NoYes::Yes){
+        #        minutesBetweenRuns = settings.HeartbeatMinutes ? settings.HeartbeatMinutes : 15;
+        #        nextRun = DateTimeUtil::addMinutes(nowUtc, minutesBetweenRuns);
+        #
+        #        scheduled = Jay_ArbitrationService::scheduleHeartbeat(nextRun);
+        #    }
+        #
+        #    return scheduled;
+        #}
+      ENDSOURCE
+      SOURCE #RequestGenerateScanSlices
+        #public static boolean RequestGenerateScanSlices(RecId _scanIdentifier)
+        #{
+        #    Jay_ArbitrationBatch           job;
+        #    BatchHeader                    header;
+        #    Batch                          batch;
+        #    utcDateTime                    nowUtc;
+        #    utcDateTime                    runTime;
+        #    boolean                        success = false;
+        #    int                            safetyFloorMinutes = 2;
+        #    int                            diffSeconds;
+        #    Jay_ExportRuntimeSettingsTable settings = Jay_ExportRuntimeSettingsTable::findOrCreate();
+        #
+        #    // ─── 1. Defensive validation ─────────────────────────────────
+        #    if (!_scanIdentifier)
+        #    {
+        #        error("GenerateProcessScanSlices: invalid scan identifier (0).");
+        #        return false;
+        #    }
+        #
+        #    try
+        #    {
+        #        // ─── 2. Compute start time with safety floor ──────────────
+        #        nowUtc  = DateTimeUtil::utcNow();
+        #        runTime = nowUtc; // immediate unless below safetfloor
+        #        diffSeconds = DateTimeUtil::getDifference(runTime, nowUtc);
+        #
+        #        if (diffSeconds < (safetyFloorMinutes * 60))
+        #        {
+        #            runTime = DateTimeUtil::addMinutes(nowUtc, safetyFloorMinutes);
+        #        }
+        #
+        #        // ─── 3. Prepare job ───────────────────────────────────────
+        #        job = new Jay_ArbitrationBatch();
+        #        job.parmScanIdentifier(_scanIdentifier);
+        #        job.parmFunctionName(enum2str(Jay_ArbitrationBatchFunctions::GenerateScanSlices));
+        #
+        #        // ─── 4. Create and configure header ───────────────────────
+        #        header = BatchHeader::construct();
+        #        header.parmCaption(strFmt("Jay_Arbitration Request – generate slices for scan %1", _scanIdentifier));
+        #        header.parmStartDateTime(runTime);
+        #        header.addTask(job);
+        #        header.save();
+        #
+        #        // ─── 5. Post-save patch (Group/User assignment) ───────────
+        #        ttsbegin;
+        #        select forupdate batch
+        #            where batch.RecId == header.parmBatchHeaderId();
+        #        if (batch.RecId)
+        #        {
+        #            batch.GroupId    = settings.BatchGroupName;
+        #            batch.ExecutedBy = settings.Username;
+        #            batch.update();
+        #        }
+        #        ttscommit;
+        #
+        #        // ─── 6. Log success ──────────────────────────────────────
+        #        info(strFmt("RequestProcessScanSlices: scheduled scan %1 at %2 (safety floor %3 min)",
+        #                    _scanIdentifier,
+        #                    DateTimeUtil::toStr(runTime),
+        #                    safetyFloorMinutes));
+        #        success = true;
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        error(strFmt("RequestProcessScanSlices: failed to schedule scan %1", _scanIdentifier));
+        #        success = false;
+        #    }
+        #
+        #    return success;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #RequestProcessPrintQueue
+        #public static boolean RequestProcessPrintQueue(Jay_ExportQueueType _queueType, boolean _immediate = false)
+        #{
+        #    Jay_ArbitrationBatch           job;
+        #    BatchHeader                    header;
+        #    Batch                          batch;
+        #    utcDateTime                    nowUtc;
+        #    utcDateTime                    runTime;
+        #    boolean                        success = false;
+        #    int                            safetyFloorMinutes = 1; // default small delay
+        #    Jay_ExportRuntimeSettingsTable settings = Jay_ExportRuntimeSettingsTable::findOrCreate();
+        #    str                            queueName;
+        #    ;
+        #
+        #    // ─── 1. Validate input ────────────────────────────────────────
+        #    if (!_queueType)
+        #    {
+        #        error("RequestProcessPrintQueue: invalid queue type (0).");
+        #        return false;
+        #    }
+        #
+        #    try
+        #    {
+        #        // ─── 2. Timing logic ──────────────────────────────────────
+        #        nowUtc = DateTimeUtil::utcNow();
+        #        runTime = _immediate
+        #            ? nowUtc
+        #            : DateTimeUtil::addMinutes(nowUtc, safetyFloorMinutes);
+        #
+        #        // ─── 3. Identify queue for display ─────────────────────────
+        #        queueName = enum2str(_queueType);
+        #
+        #        // ─── 4. Prepare job ───────────────────────────────────────
+        #        job = new Jay_ArbitrationBatch();
+        #        job.parmFunctionName(enum2str(Jay_ArbitrationBatchFunctions::RequestProcessPrintQueue));
+        #        job.parmQueueType(_queueType);
+        #
+        #        // ─── 5. Create and configure header ───────────────────────
+        #        header = BatchHeader::construct();
+        #        header.parmCaption(strFmt("Jay_Arbitration Request – Process print queue (%1)", queueName));
+        #        header.parmStartDateTime(runTime);
+        #        header.addTask(job);
+        #        header.save();
+        #
+        #        // ─── 6. Assign runtime batch group/user ───────────────────
+        #        ttsBegin;
+        #        select forupdate batch
+        #            where batch.RecId == header.parmBatchHeaderId();
+        #        if (batch.RecId)
+        #        {
+        #            batch.GroupId    = settings.BatchGroupName;
+        #            batch.ExecutedBy = settings.Username;
+        #            batch.update();
+        #        }
+        #        ttsCommit;
+        #
+        #        // ─── 7. Log result ────────────────────────────────────────
+        #        info(strFmt("🖨️ RequestProcessPrintQueue: scheduled %1 queue for %2 (immediate=%3)",
+        #                    queueName,
+        #                    DateTimeUtil::toStr(runTime),
+        #                    _immediate ? "Yes" : "No"));
+        #
+        #        success = true;
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        error(strFmt("💥 RequestProcessPrintQueue: failed to schedule %1 queue", enum2str(_queueType)));
+        #        success = false;
+        #    }
+        #
+        #    return success;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #RequestProcessScanSlices
+        #public static boolean RequestProcessScanSlices(RecId _scanIdentifier)
+        #{
+        #    Jay_ArbitrationBatch           job;
+        #    BatchHeader                    header;
+        #    Batch                          batch;
+        #    utcDateTime                    nowUtc;
+        #    utcDateTime                    runTime;
+        #    boolean                        success = false;
+        #    int                            safetyFloorMinutes = 2;
+        #    int                            diffSeconds;
+        #    Jay_ExportRuntimeSettingsTable settings = Jay_ExportRuntimeSettingsTable::findOrCreate();
+        #
+        #    // ─── 1. Defensive validation ─────────────────────────────────
+        #    if (!_scanIdentifier)
+        #    {
+        #        error("RequestProcessScanSlices: invalid scan identifier (0).");
+        #        return false;
+        #    }
+        #
+        #    try
+        #    {
+        #        // ─── 2. Compute start time with safety floor ──────────────
+        #        nowUtc  = DateTimeUtil::utcNow();
+        #        runTime = nowUtc; // immediate unless below safetfloor
+        #        diffSeconds = DateTimeUtil::getDifference(runTime, nowUtc);
+        #
+        #        if (diffSeconds < (safetyFloorMinutes * 60))
+        #        {
+        #            runTime = DateTimeUtil::addMinutes(nowUtc, safetyFloorMinutes);
+        #        }
+        #
+        #        // ─── 3. Prepare job ───────────────────────────────────────
+        #        job = new Jay_ArbitrationBatch();
+        #        job.parmScanIdentifier(_scanIdentifier);
+        #        job.parmFunctionName(enum2str(Jay_ArbitrationBatchFunctions::RequestProcessScanSlices));
+        #
+        #        // ─── 4. Create and configure header ───────────────────────
+        #        header = BatchHeader::construct();
+        #        header.parmCaption(strFmt("Jay_Arbitration Request – Process slices for scan %1", _scanIdentifier));
+        #        header.parmStartDateTime(runTime);
+        #        header.addTask(job);
+        #        header.save();
+        #
+        #        // ─── 5. Post-save patch (Group/User assignment) ───────────
+        #        ttsbegin;
+        #        select forupdate batch
+        #            where batch.RecId == header.parmBatchHeaderId();
+        #        if (batch.RecId)
+        #        {
+        #            batch.GroupId    = settings.BatchGroupName;
+        #            batch.ExecutedBy = settings.Username;
+        #            batch.update();
+        #        }
+        #        ttscommit;
+        #
+        #        // ─── 6. Log success ──────────────────────────────────────
+        #        info(strFmt("RequestProcessScanSlices: scheduled scan %1 at %2 (safety floor %3 min)",
+        #                    _scanIdentifier,
+        #                    DateTimeUtil::toStr(runTime),
+        #                    safetyFloorMinutes));
+        #        success = true;
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        error(strFmt("RequestProcessScanSlices: failed to schedule scan %1", _scanIdentifier));
+        #        success = false;
+        #    }
+        #
+        #    return success;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #scanHasActiveSibling
+        #private static boolean scanHasActiveSibling(Jay_ExportQueueType _queueType)
+        #{
+        #    Jay_ScanCtrl scanCtrl;
+        #    int countRunning;
+        #
+        #    select count(RecId) from scanCtrl
+        #        where scanCtrl.QueueType  == _queueType
+        #           && scanCtrl.ScanStatus == Jay_ScanStatus::Running;
+        #
+        #    countRunning = any2Int(scanCtrl.RecId); // count(RecId) result goes here
+        #
+        #    return (countRunning > 0);
+        #}
+      ENDSOURCE
+      SOURCE #scheduleHeartbeat
+        #public static boolean scheduleHeartbeat(utcDateTime _runTime)
+        #{
+        #    Jay_ArbitrationBatch           job;
+        #    Jay_ExportRuntimeSettingsTable settings = Jay_ExportRuntimeSettingsTable::findOrCreate();
+        #    BatchHeader                    header;
+        #    BatchJob                       existing;
+        #    Batch                          batch;
+        #    ;
+        #
+        #    //--------------------------------------------------------------
+        #    // 0. DUPLICATE GUARD
+        #    //--------------------------------------------------------------
+        #    select firstOnly existing
+        #        where existing.Caption == "Jay Arbitration Heartbeat"
+        #           && (existing.Status == BatchStatus::Waiting);
+        #
+        #    if (existing.RecId)
+        #    {
+        #        info(strFmt(
+        #            "⏸ Heartbeat NOT rescheduled — an active heartbeat already exists (RecId %1).",
+        #            existing.RecId));
+        #        return false;
+        #    }
+        #
+        #    //--------------------------------------------------------------
+        #    // 1. Build the heartbeat batch job
+        #    //--------------------------------------------------------------
+        #    job = new Jay_ArbitrationBatch();
+        #    job.parmFunctionName("Heartbeat");
+        #
+        #    header = BatchHeader::construct();
+        #    header.parmCaption("Jay Arbitration Heartbeat");
+        #    header.parmStartDateTime(_runTime);
+        #    header.addTask(job);
+        #    header.save();
+        #
+        #    //--------------------------------------------------------------
+        #    // 2. Patch Group/User (AX 2012 CU7 pattern)
+        #    //--------------------------------------------------------------
+        #    ttsBegin;
+        #    select forupdate batch
+        #        where batch.RecId == header.parmBatchHeaderId();
+        #
+        #    if (batch.RecId)
+        #    {
+        #        batch.GroupId    = settings.BatchGroupName;
+        #        batch.ExecutedBy = settings.Username;
+        #        batch.update();
+        #    }
+        #    ttsCommit;
+        #
+        #    //--------------------------------------------------------------
+        #    // 3. Log result
+        #    //--------------------------------------------------------------
+        #    info(strFmt(
+        #        "🔁 Heartbeat scheduled for %1.",
+        #        DateTimeUtil::toStr(_runTime)
+        #    ));
+        #    return true;
+        #}
+        #
+      ENDSOURCE
+    ENDMETHODS
+  ENDCLASS
+
+***Element: END

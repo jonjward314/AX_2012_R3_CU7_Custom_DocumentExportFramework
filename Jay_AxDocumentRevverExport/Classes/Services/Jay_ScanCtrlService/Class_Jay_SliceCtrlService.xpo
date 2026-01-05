@@ -1,0 +1,393 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: CLS
+
+; Microsoft Dynamics AX Class: Jay_SliceCtrlService unloaded
+; --------------------------------------------------------------------------------
+  CLSVERSION 1
+  
+  CLASS #Jay_SliceCtrlService
+    PROPERTIES
+      Name                #Jay_SliceCtrlService
+      Origin              #{D80B60AB-736C-4B5F-B739-CCDE4805F790}
+    ENDPROPERTIES
+    
+    METHODS
+      SOURCE #classDeclaration
+        #class Jay_SliceCtrlService
+        #{
+        #}
+      ENDSOURCE
+      SOURCE #generateForScan
+        #/// Entry point: build baseline, probe, consolidate, enqueue.
+        #public static void generateForScan(RecId _scanRecId)
+        #{
+        #    Jay_ScanCtrl scan;
+        #    List         windowList;
+        #    int          slicesCreated;
+        #    int          merges;
+        #    Jay_SliceCtrl zeroCheck;
+        #    boolean allZeroCompleted = true;
+        #
+        #    scan = Jay_ScanCtrl::find(_scanRecId);
+        #    if (!scan.RecId)
+        #    {
+        #        error(strFmt("Jay_SliceCtrlService.generateForScan: Invalid RecId %1", _scanRecId));
+        #        return;
+        #    }
+        #
+        #    info(strFmt("🧩 Begin slice generation for scan %1 (%2 → %3)",
+        #                scan.RecId,
+        #                DateTimeUtil::toStr(scan.RangeFromUTC),
+        #                DateTimeUtil::toStr(scan.RangeToUTC)));
+        #
+        #    // Step 1: Plan baseline windows
+        #    windowList = Jay_SliceWindowPlanner::planSlicesForScan(scan);
+        #
+        #    // Step 2: Probe each window and persist results
+        #    slicesCreated = Jay_SliceProbeManager::runProbes(scan, windowList);
+        #
+        #    // Step 3: Consolidate small slices to fit capacity envelopes
+        #    //merges = Jay_SliceConsolidationService::consolidate(scan.RecId);
+        #
+        #    //info(strFmt("📊 %1 slices created, %2 merged. Proceeding to enqueue phase.", slicesCreated, merges));
+        #
+        #
+        #    while select firstOnly zeroCheck
+        #    where zeroCheck.ParentScanId == scan.RecId
+        #       && zeroCheck.SliceStatus != Jay_SliceStatus::Completed
+        #    {
+        #        allZeroCompleted = false;
+        #        break;
+        #    }
+        #
+        #    if (allZeroCompleted)
+        #    {
+        #        info(strFmt(
+        #            "🟦 Scan %1 generated only zero-document slices. Marking scan Completed.",
+        #            scan.RecId));
+        #
+        #        ttsbegin;
+        #        scan = Jay_ScanCtrl::find(scan.RecId, true);
+        #        scan.ScanStatus = Jay_ScanStatus::Completed;
+        #        scan.update();
+        #        ttscommit;
+        #
+        #        return; // <-- Skip StartScanSliceProcessing
+        #    }
+        #
+        #    // Step 4: Start scheduling / enqueuing
+        #    Jay_SliceCtrlService::StartScanSliceProcessing(scan.RecId);
+        #
+        #    info(strFmt("✅ Slice orchestration completed for scan %1.", scan.RecId));
+        #}
+      ENDSOURCE
+      SOURCE #markActive
+        #public static boolean markActive(RecId _sliceRecId)
+        #{
+        #    Jay_SliceCtrl sliceRO = Jay_SliceCtrl::find(_sliceRecId);
+        #    Jay_SliceCtrl sliceUpd;
+        #    boolean changed = false;
+        #
+        #    if (!sliceRO.RecId)
+        #        return false;
+        #
+        #    ttsBegin;
+        #
+        #    select firstOnly forUpdate sliceUpd
+        #        where sliceUpd.RecId == _sliceRecId;
+        #
+        #    if (sliceUpd.RecId)
+        #    {
+        #        // Only transition if not already Running
+        #        if (sliceUpd.SliceStatus != Jay_SliceStatus::Running)
+        #        {
+        #            sliceUpd.SliceStatus = Jay_SliceStatus::Running;
+        #
+        #            // Optional: revive timestamps if you use them
+        #            // sliceUpd.LastUpdateUtc = DateTimeUtil::utcNow();
+        #
+        #            sliceUpd.update();
+        #            changed = true;
+        #        }
+        #    }
+        #
+        #    ttsCommit;
+        #
+        #    return changed;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #processSlice
+        #public static void processSlice(RecId _sliceRecId)
+        #{
+        #    Jay_SliceCtrl sliceRO = Jay_SliceCtrl::find(_sliceRecId);
+        #    Jay_SliceCtrl sliceUpd;
+        #    boolean       enqueueSuccess;
+        #    utcDateTime   nowUtc = DateTimeUtil::utcNow();
+        #    RecId         parentScanId;
+        #
+        #    if (!sliceRO.RecId)
+        #    {
+        #        error(strFmt("processSlice: invalid slice %1", _sliceRecId));
+        #        return;
+        #    }
+        #
+        #    parentScanId = sliceRO.ParentScanId;
+        #
+        #    //
+        #    // 1 — Set to RUNNING
+        #    //
+        #    ttsBegin;
+        #    select forUpdate sliceUpd
+        #        where sliceUpd.RecId == _sliceRecId;
+        #
+        #    sliceUpd.SliceStatus = Jay_SliceStatus::Running;
+        #    sliceUpd.update();
+        #    ttsCommit;
+        #
+        #    //
+        #    // 2 — Run the enqueue worker
+        #    //
+        #    try
+        #    {
+        #        enqueueSuccess = Jay_EnqueueService::enqueueSlice(_sliceRecId);
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        enqueueSuccess = false;
+        #    }
+        #
+        #    //
+        #    // 3 — Final state (Completed or Failed)
+        #    //
+        #    ttsBegin;
+        #    select forUpdate sliceUpd
+        #        where sliceUpd.RecId == _sliceRecId;
+        #
+        #    sliceUpd.SliceStatus = enqueueSuccess
+        #                           ? Jay_SliceStatus::Completed
+        #                           : Jay_SliceStatus::Failed;
+        #    sliceUpd.update();
+        #    ttsCommit;
+        #
+        #    //
+        #    // 4 — Re-enter Scan Orchestration Loop
+        #    //
+        #    Jay_SliceCtrlService::StartScanSliceProcessing(parentScanId);
+        #
+        #    if (enqueueSuccess)
+        #        info(strFmt("✅ Slice %1 fully processed.", _sliceRecId));
+        #    else
+        #        error(strFmt("❌ Slice %1 failed during enqueue.", _sliceRecId));
+        #}
+        #
+      ENDSOURCE
+      SOURCE #ScheduleSliceEnqueue
+        #public static boolean ScheduleSliceEnqueue(RecId _sliceRecId)
+        #{
+        #    Batch                          batch;        // DO NOT update with this
+        #    Batch                          localBatch;   // safe shadow buffer
+        #    BatchHeader                    header;
+        #    Jay_SliceCtrl                  slice = Jay_SliceCtrl::find(_sliceRecId);
+        #    Jay_ExportRuntimeSettingsTable settings = Jay_ExportRuntimeSettingsTable::findOrCreate();
+        #    utcDateTime                    nowUtc  = DateTimeUtil::utcNow();
+        #    utcDateTime                    runTime = nowUtc;
+        #    Jay_SliceCtrlBatch             job     = new Jay_SliceCtrlBatch();
+        #
+        #    if (!slice.RecId)
+        #    {
+        #        error(strFmt("ScheduleSliceEnqueue: invalid slice %1", _sliceRecId));
+        #        return false;
+        #    }
+        #
+        #    job.parmSliceRecId(_sliceRecId);
+        #    job.parmScanRecId(slice.ParentScanId);
+        #    job.parmFunctionName(enum2str(Jay_ArbitrationBatchFunctions::RequestProcessScanSlices));
+        #
+        #    header = BatchHeader::construct();
+        #    header.parmCaption(strFmt("Jay SliceCtrlBatch – Enqueue slice %1 (Scan %2)",
+        #                                slice.RecId, slice.ParentScanId));
+        #    header.parmStartDateTime(runTime);
+        #    header.addTask(job);
+        #    header.save();
+        #
+        #    // SAFE update of Batch record
+        #    ttsBegin;
+        #
+        #    select forUpdate localBatch
+        #        where localBatch.RecId == header.parmBatchHeaderId();
+        #
+        #    if (localBatch.RecId)
+        #    {
+        #        localBatch.GroupId    = settings.BatchGroupName;
+        #        localBatch.ExecutedBy = settings.Username;
+        #        localBatch.update();
+        #    }
+        #
+        #    ttsCommit;
+        #
+        #    info(strFmt("🟢 Scheduled SliceCtrlBatch for slice %1 at %2",
+        #                _sliceRecId, DateTimeUtil::toStr(runTime)));
+        #
+        #    return true;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #StartScanSliceProcessing
+        #public static boolean StartScanSliceProcessing(RecId _parentRecId)
+        #{
+        #    Jay_SliceCtrl                  slice;       // iterator only
+        #    Jay_SliceCtrl                  sliceUpd;    // safe shadow buffer
+        #    Jay_ScanCtrl                   scan;        // read-only
+        #    Jay_ScanCtrl                   scanUpd;     // safe update buffer
+        #    Jay_ExportRuntimeSettingsTable settings;
+        #    Jay_DocHandlerRegistryTable    registry;
+        #    Set                            activeTables;
+        #    int                            runningCount, scheduled, skipped, maxConcurrent;
+        #    utcDateTime                    nowUtc;
+        #    Jay_SliceCtrl                  prodSlice;
+        #    int                            retriesAllowed;
+        #
+        #    nowUtc       = DateTimeUtil::utcNow();
+        #    scheduled    = 0;
+        #    skipped      = 0;
+        #    runningCount = 0;
+        #    activeTables = new Set(Types::Integer);
+        #
+        #    settings       = Jay_ExportRuntimeSettingsTable::findOrCreate();
+        #    maxConcurrent  = settings.MaxConcurrentEnqueues > 0 ? settings.MaxConcurrentEnqueues : 5;
+        #    retriesAllowed = settings.MaxDeferredRetries;
+        #
+        #    scan = Jay_ScanCtrl::find(_parentRecId); // read-only
+        #    if (!scan.RecId)
+        #    {
+        #        error(strFmt("StartScanSliceProcessing: invalid scan %1", _parentRecId));
+        #        return false;
+        #    }
+        #
+        #    info(strFmt("🚀 Begin slice orchestration for scan %1 (%2 queue, MaxConcurrent=%3)",
+        #                scan.RecId, enum2str(scan.QueueType), maxConcurrent));
+        #
+        #    //
+        #    // STEP 1: Collect active tables
+        #    //
+        #    while select SourceTableId from slice
+        #        exists join registry
+        #            where registry.DocType    == slice.DocType
+        #              && registry.DocSubType == slice.DocSubType
+        #              && (slice.SliceStatus == Jay_SliceStatus::Running)
+        #    {
+        #        if (!activeTables.in(slice.SourceTableId))
+        #        {
+        #            activeTables.add(slice.SourceTableId);
+        #            runningCount++;
+        #        }
+        #    }
+        #
+        #    info(strFmt("🧮 %1 active slices across %2 unique tables.",
+        #                runningCount, activeTables.elements()));
+        #
+        #    //
+        #    // STEP 2: Iterate eligible slices
+        #    //
+        #    while select * from slice order by slice.DocType, slice.DocSubType, slice.FromUTC
+        #        exists join registry
+        #            where registry.DocType    == slice.DocType
+        #            && registry.DocSubType == slice.DocSubType
+        #            && slice.ParentScanId == _parentRecId
+        #            && (slice.SliceStatus == Jay_SliceStatus::Pending
+        #             || slice.SliceStatus == Jay_SliceStatus::Deferred
+        #             || (slice.SliceStatus == Jay_SliceStatus::Failed   && slice.RetryCount <= retriesAllowed)
+        #             || (slice.SliceStatus == Jay_SliceStatus::Partial  && slice.RetryCount <= retriesAllowed))
+        #
+        #    {
+        #        if (runningCount >= maxConcurrent)
+        #        {
+        #            info(strFmt("⏸ Concurrency limit reached (%1). Halting.", maxConcurrent));
+        #            break;
+        #        }
+        #
+        #        if (activeTables.in(registry.TargetTableId))
+        #        {
+        #            skipped++;
+        #            continue;
+        #        }
+        #
+        #        if (scan.QueueType == Jay_ExportQueueType::Historical)
+        #        {
+        #            select firstOnly RecId from prodSlice
+        #                where prodSlice.SliceStatus == Jay_SliceStatus::Running
+        #                  && prodSlice.QueueType   == Jay_ExportQueueType::Production;
+        #
+        #            if (prodSlice.RecId)
+        #            {
+        #                skipped++;
+        #                continue;
+        #            }
+        #        }
+        #
+        #        // Attempt scheduling
+        #        if (Jay_SliceCtrlService::ScheduleSliceEnqueue(slice.RecId))
+        #        {
+        #            //
+        #            // SAFE update of slice status
+        #            //
+        #            ttsBegin;
+        #
+        #            select forUpdate sliceUpd
+        #                where sliceUpd.RecId == slice.RecId;
+        #
+        #            // Safety: skip if the row was modified/deleted by merge/concurrency
+        #            if (!sliceUpd.RecId)
+        #            {
+        #                ttsAbort;
+        #                skipped++;
+        #                continue;
+        #            }
+        #
+        #            sliceUpd.SliceStatus = Jay_SliceStatus::Enqueued;
+        #            sliceUpd.update();
+        #
+        #            ttsCommit;
+        #
+        #            activeTables.add(registry.TargetTableId);
+        #            runningCount++;
+        #            scheduled++;
+        #        }
+        #        else
+        #        {
+        #            skipped++;
+        #        }
+        #    }
+        #
+        #    //
+        #    // STEP 3: Update scan status safely
+        #    //
+        #    if (scheduled > 0)
+        #    {
+        #        ttsBegin;
+        #        select forUpdate scanUpd
+        #            where scanUpd.RecId == scan.RecId;
+        #
+        #        if (scanUpd.RecId)
+        #        {
+        #            scanUpd.ScanStatus = Jay_ScanStatus::Running;
+        #            scanUpd.update();
+        #        }
+        #
+        #        ttsCommit;
+        #    }
+        #
+        #    info(strFmt("📦 Orchestration summary: %1 enqueued, %2 skipped, %3 active.",
+        #                scheduled, skipped, runningCount));
+        #
+        #    return (scheduled > 0);
+        #}
+        #
+      ENDSOURCE
+    ENDMETHODS
+  ENDCLASS
+
+***Element: END

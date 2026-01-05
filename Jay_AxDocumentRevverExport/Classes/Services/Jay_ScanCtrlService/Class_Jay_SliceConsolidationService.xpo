@@ -1,0 +1,212 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: CLS
+
+; Microsoft Dynamics AX Class: Jay_SliceConsolidationService unloaded
+; --------------------------------------------------------------------------------
+  CLSVERSION 1
+  
+  CLASS #Jay_SliceConsolidationService
+    PROPERTIES
+      Name                #Jay_SliceConsolidationService
+      Origin              #{180F15B4-DB07-4F59-A5D9-D654970EC927}
+    ENDPROPERTIES
+    
+    METHODS
+      SOURCE #classDeclaration
+        #public class Jay_SliceConsolidationService
+        #{
+        #
+        #}
+      ENDSOURCE
+      SOURCE #consolidate
+        #public static int consolidate(RecId _scanRecId)
+        #{
+        #    Jay_SliceCtrl s1;
+        #    Jay_SliceCtrl s2;
+        #    Jay_SliceCtrl s1Upd;   // shadow buffers for safe updates
+        #    Jay_SliceCtrl s2Upd;
+        #    int           merged;
+        #    int           batchCap;
+        #    int           newPredDocs;
+        #    int           newPredBatches;
+        #    int           newTotalDocs;
+        #    int64         runMs;
+        #    real          newVariance;
+        #    real          newVariancePct;
+        #    utcDateTime   nowUtc;
+        #
+        #    merged   = 0;
+        #    batchCap = Jay_ExportRuntimeSettings::maxDocumentCountPerBatch();
+        #    batchCap = batchCap > 0 ? batchCap : 5000;
+        #    nowUtc   = DateTimeUtil::utcNow();
+        #
+        #    while select * from s1
+        #        order by s1.DocType, s1.DocSubType, s1.FromUTC
+        #        where s1.ParentScanId == _scanRecId
+        #    {
+        #        select firstOnly * from s2
+        #            where s2.ParentScanId == s1.ParentScanId
+        #               && s2.DocType      == s1.DocType
+        #               && s2.DocSubType   == s1.DocSubType
+        #               && s2.FromUTC      == s1.ToUTC;
+        #
+        #        if (s2.RecId &&
+        #            (s1.PredictedDocs + s2.PredictedDocs) <= batchCap)
+        #        {
+        #            // calculate new merged values
+        #            newPredDocs    = s1.PredictedDocs + s2.PredictedDocs;
+        #            newTotalDocs   = s1.TotalDocs + s2.TotalDocs;
+        #            newPredBatches = (newPredDocs + batchCap - 1) div batchCap;
+        #            runMs          = max(s1.RunDurationMs, s2.RunDurationMs);
+        #            newVariance    = (s1.Variance + s2.Variance) / 2.0;
+        #            newVariancePct = (s1.VariancePct + s2.VariancePct) / 2.0;
+        #
+        #            // SAFE UPDATE BLOCK using fresh buffers
+        #            ttsBegin;
+        #
+        #            select forUpdate s1Upd
+        #                where s1Upd.RecId == s1.RecId;
+        #
+        #            select forUpdate s2Upd
+        #                where s2Upd.RecId == s2.RecId;
+        #
+        #            // update s1
+        #            s1Upd.ToUTC            = s2Upd.ToUTC;
+        #            s1Upd.PredictedDocs    = newPredDocs;
+        #            s1Upd.TotalDocs        = newTotalDocs;
+        #            s1Upd.PredictedBatches = newPredBatches;
+        #            s1Upd.RunDurationMs    = runMs;
+        #            s1Upd.Variance         = newVariance;
+        #            s1Upd.VariancePct      = newVariancePct;
+        #
+        #            s1Upd.SliceStatus      = Jay_SliceStatus::Pending;
+        #            s1Upd.update();
+        #
+        #            // delete s2
+        #            s2Upd.delete();
+        #
+        #            ttsCommit;
+        #
+        #            merged++;
+        #        }
+        #    }
+        #
+        #    if (merged)
+        #        info(strFmt("🔧 Consolidated %1 adjacent slices (scan %2)", merged, _scanRecId));
+        #    else
+        #        info(strFmt("No eligible slices for consolidation (scan %1)", _scanRecId));
+        #
+        #    return merged;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #postProbeConsolidate
+        #public static int postProbeConsolidate(RecId _scanRecId)
+        #{
+        #    Jay_SliceCtrl s1;
+        #    Jay_SliceCtrl s2;
+        #    Jay_SliceCtrl s1Upd;
+        #    Jay_SliceCtrl s2Upd;
+        #
+        #    int         merged;
+        #    int         batchCap;
+        #    int         totalDocs;
+        #    int         newPredDocs;
+        #    int         newTotalDocs;
+        #    int         thresholdPct;
+        #    int         mergeCap;
+        #    int64       runMs;
+        #    utcDateTime nowUtc;
+        #
+        #    warning("DEBUG: enter Stage postProbeConsolidate at " + DateTimeUtil::toStr(DateTimeUtil::utcNow()));
+        #
+        #    merged     = 0;
+        #    batchCap   = Jay_ExportRuntimeSettings::maxDocumentCountPerBatch();
+        #    batchCap   = batchCap > 0 ? batchCap : 5000;
+        #    thresholdPct = Jay_ExportRuntimeSettings::sliceMergeThresholdPct();
+        #    mergeCap     = (batchCap * thresholdPct) div 100;
+        #    nowUtc       = DateTimeUtil::utcNow();
+        #
+        #    while select * from s1
+        #        order by s1.DocType, s1.DocSubType, s1.FromUtc
+        #        where s1.ParentScanId == _scanRecId
+        #          && s1.SliceStatus   == Jay_SliceStatus::Pending
+        #    {
+        #        // Find neighbor slice
+        #        select firstOnly * from s2
+        #            where s2.ParentScanId == s1.ParentScanId
+        #               && s2.DocType      == s1.DocType
+        #               && s2.DocSubType   == s1.DocSubType
+        #               && s2.SliceStatus  == Jay_SliceStatus::Pending
+        #               && s2.FromUtc      == s1.ToUtc;
+        #
+        #        // Nothing to merge
+        #        if (!s2.RecId)
+        #            continue;
+        #
+        #        // Check capacity
+        #        totalDocs = s1.PredictedDocs + s2.PredictedDocs;
+        #
+        #        if (totalDocs > mergeCap)
+        #            continue;
+        #
+        #        newPredDocs  = totalDocs;
+        #        newTotalDocs = s1.TotalDocs + s2.TotalDocs;
+        #        runMs        = (s1.RunDurationMs > s2.RunDurationMs ? s1.RunDurationMs : s2.RunDurationMs);
+        #
+        #        // ───────────────────────────────────────────────
+        #        // PER-MERGE TRANSACTION (Isolated)
+        #        // ───────────────────────────────────────────────
+        #        try
+        #        {
+        #            ttsBegin;
+        #
+        #            // Reselect s1 and s2 with locking inside THIS TTS
+        #            select forUpdate s1Upd where s1Upd.RecId == s1.RecId;
+        #            select forUpdate s2Upd where s2Upd.RecId == s2.RecId;
+        #
+        #            // If either disappeared, abort quietly
+        #            if (!s1Upd.RecId || !s2Upd.RecId)
+        #            {
+        #                ttsAbort;
+        #                continue;
+        #            }
+        #
+        #            // Update s1
+        #            s1Upd.ToUtc            = s2Upd.ToUtc;
+        #            s1Upd.PredictedDocs    = newPredDocs;
+        #            s1Upd.TotalDocs        = newTotalDocs;
+        #            s1Upd.RunDurationMs    = runMs;
+        #            s1Upd.SliceStatus      = Jay_SliceStatus::Pending;
+        #            s1Upd.update();
+        #
+        #            // Delete s2
+        #            s2Upd.delete();
+        #
+        #            ttsCommit;
+        #
+        #            merged++;
+        #        }
+        #        catch (Exception::Error)
+        #        {
+        #            // Never kill the consolidation pass over one merge failure
+        #            ttsAbort;
+        #            continue;
+        #        }
+        #    }
+        #
+        #    info(strFmt("🔧 Post-probe consolidation merged %1 Pending slices for scan %2 (≤ %3%% capacity).",
+        #                merged, _scanRecId, thresholdPct));
+        #
+        #    warning("DEBUG: exit Stage postProbeConsolidate at " + DateTimeUtil::toStr(DateTimeUtil::utcNow()));
+        #
+        #    return merged;
+        #}
+        #
+      ENDSOURCE
+    ENDMETHODS
+  ENDCLASS
+
+***Element: END

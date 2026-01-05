@@ -1,0 +1,44 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: CLS
+
+; Microsoft Dynamics AX Class: Jay_RunMode_AutoRepeat unloaded
+; --------------------------------------------------------------------------------
+  CLSVERSION 1
+  
+  CLASS #Jay_RunMode_AutoRepeat
+    PROPERTIES
+      Name                #Jay_RunMode_AutoRepeat
+      Extends             #Jay_RunMode
+      Origin              #{A6FB595A-5F2B-4E0B-8CF0-98CE1782B35D}
+    ENDPROPERTIES
+    
+    METHODS
+      SOURCE #childStartTimeUtc
+        #public utcDateTime childStartTimeUtc(Jay_ScanCtrl _parent)
+        #{
+        #    // Auto-Repeat: next child starts at parent start + interval, adjusted forward if behind:contentReference[oaicite:19]{index=19}:contentReference[oaicite:20]{index=20}
+        #    return this.calcNextStartAfterNow(_parent.ScanStartDateTime,
+        #                                        _parent.ScanValue,
+        #                                        _parent.ScanUnit);
+        #}
+      ENDSOURCE
+      SOURCE #classDeclaration
+        #public class Jay_RunMode_AutoRepeat extends Jay_RunMode
+        #{
+        #}
+      ENDSOURCE
+      SOURCE #nextStartTimeUtc
+        #public utcDateTime nextStartTimeUtc(utcDateTime    _baseTime,
+        #                                    int            _scanValue,
+        #                                    Jay_CadenceUnit _scanUnit)
+        #{
+        #    // Auto-Repeat: schedule next run based on fixed interval pattern:contentReference[oaicite:18]{index=18}
+        #    return this.calcNextStartAfterNow(_baseTime, _scanValue, _scanUnit);
+        #}
+      ENDSOURCE
+    ENDMETHODS
+  ENDCLASS
+
+***Element: END

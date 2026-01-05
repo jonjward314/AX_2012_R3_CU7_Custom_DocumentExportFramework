@@ -1,0 +1,37 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: DBE
+
+; Microsoft Dynamics AX Enumtype : Jay_EnqueueType unloaded
+; --------------------------------------------------------------------------------
+  ENUMTYPEVERSION 1
+  
+  ENUMTYPE #Jay_EnqueueType
+    PROPERTIES
+      Name                #Jay_EnqueueType
+      Label               #Enqueue Type
+      UseEnumValue        #Yes
+      Origin              #{41518794-1714-422F-BF9D-1E868B495618}
+    ENDPROPERTIES
+    
+    TYPEELEMENTS
+      #Slow
+      PROPERTIES
+        Name                #Slow
+        Label               #Slow(One by One)
+        EnumValue           #0
+      ENDPROPERTIES
+      
+      #Fast
+      PROPERTIES
+        Name                #Fast
+        Label               #Fast (Batch Insert)
+        EnumValue           #1
+      ENDPROPERTIES
+      
+    ENDTYPEELEMENTS
+  ENDENUMTYPE
+  
+
+***Element: END

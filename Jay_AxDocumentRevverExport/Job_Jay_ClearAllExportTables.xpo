@@ -1,0 +1,51 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: JOB
+
+; Microsoft Dynamics AX Job: Jay_ClearAllExportTables unloaded
+; --------------------------------------------------------------------------------
+  JOBVERSION 1
+  
+  SOURCE #Jay_ClearAllExportTables
+    #static void Jay_ClearAllExportTables(Args _args)
+    #{
+    #    Jay_PrintGovernorState       gov;
+    #    Jay_DocExportProdQueue       prod;
+    #    Jay_DocExportHistQueue       hist;
+    #    Jay_DocExportProdQueue_Temp  prodTmp;
+    #    Jay_DocExportHistQueue_Temp  histTmp;
+    #    Jay_SliceCtrl                slice;
+    #    Jay_ScanScope                scope;
+    #    Jay_ScanCtrl                 scan;
+    #    Jay_BatchCtrl                batchCtrl;
+    #    Jay_ArbitrationHistoryLog    arbLog;
+    #
+    #    // PRINT GOVERNOR
+    #    delete_from gov;
+    #
+    #    // QUEUES
+    #    delete_from prod;
+    #    delete_from hist;
+    #    delete_from prodTmp;
+    #    delete_from histTmp;
+    #
+    #    // SLICE / SCAN CONTROL
+    #    delete_from slice;
+    #    delete_from scope;
+    #    delete_from scan;
+    #    delete_from batchCtrl;
+    #
+    #    // LOGGING
+    #    delete_from arbLog;
+    #
+    #    info("✔ All Jay_* Export-related tables cleared.");
+    #}
+    #
+  ENDSOURCE
+  PROPERTIES
+    Origin              #{8E06CA4C-0E43-44C6-ABA8-F5DC358B1E38}
+  ENDPROPERTIES
+  
+
+***Element: END

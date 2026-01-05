@@ -1,0 +1,175 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: CLS
+
+; Microsoft Dynamics AX Class: Jay_DocHandler_PurchaseOrder unloaded
+; --------------------------------------------------------------------------------
+  CLSVERSION 1
+  
+  CLASS #Jay_DocHandler_PurchaseOrder
+    PROPERTIES
+      Name                #Jay_DocHandler_PurchaseOrder
+      Extends             #Jay_DocHandler_Base
+      Origin              #{5563F8B8-F1BA-43D1-BFD5-DD874EB0CE36}
+    ENDPROPERTIES
+    
+    METHODS
+      SOURCE #classDeclaration
+        #public class Jay_DocHandler_PurchaseOrder extends Jay_DocHandler_Base
+        #{
+        #
+        #}
+        #
+      ENDSOURCE
+      SOURCE #printRecord
+        #public boolean printRecord(
+        #    RecId               _recId,
+        #    Jay_ExportQueueType _queueType,
+        #    RecId               _queueRecId
+        #)
+        #{
+        #    PurchTable                   purch;
+        #    PurchPurchaseOrderController controller;
+        #    PurchPurchaseOrderContract   contract;
+        #    Args                         args;
+        #    str lineText;
+        #    int i;
+        #    boolean success = false;
+        #    str      raw = "";
+        #    int      ttsBefore, ttsAfter, safety;
+        #
+        #    // -----------------------------------------
+        #    // VALIDATION
+        #    // -----------------------------------------
+        #    select firstOnly purch
+        #        where purch.RecId == _recId;
+        #
+        #    if (!purch.RecId)
+        #    {
+        #        Jay_PrintOrchestratorService::logQueueError(
+        #            _queueType,
+        #            _queueRecId,
+        #            strFmt("PO print error: PurchTable missing for RecId=%1.",
+        #                   int642str(_recId))
+        #        );
+        #        return false;
+        #    }
+        #
+        #    // -----------------------------------------
+        #    // PRINT EXECUTION (one-pass)
+        #    // -----------------------------------------
+        #    infolog.clear();
+        #    ttsBefore = appl.ttsLevel();
+        #
+        #    try
+        #    {
+        #        controller = PurchPurchaseOrderController::construct();
+        #        controller.parmReportName(
+        #            ssrsReportStr(PurchPurchaseOrder, Report)
+        #        );
+        #
+        #        contract = new PurchPurchaseOrderContract();
+        #        contract.parmRecordId(purch.RecId);
+        #
+        #        args = new Args();
+        #        args.record(purch);
+        #
+        #        controller.parmArgs(args);
+        #        controller.parmReportContract().parmRdpContract(contract);
+        #        controller.parmShowDialog(false);
+        #        controller.parmExecutionMode(SysOperationExecutionMode::Synchronous);
+        #
+        #        controller.startOperation();
+        #        success = true;
+        #    }
+        #    catch (Exception::CLRError)
+        #    {
+        #        raw = Jay_PrintOrchestratorService::safeStr(AifUtil::getClrErrorMessage());
+        #        success = false;
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        // multi-line extraction
+        #        i = 1;
+        #
+        #        while (true)
+        #        {
+        #            lineText = infolog.text(i);
+        #            if (!lineText)
+        #                break;
+        #
+        #            raw += lineText + "\n";
+        #            i++;
+        #        }
+        #
+        #        raw = Jay_PrintOrchestratorService::safeStr(raw);
+        #        success = false;
+        #    }
+        #    catch
+        #    {
+        #        raw = "Unknown fatal exception.";
+        #        success = false;
+        #    }
+        #
+        #    // -----------------------------------------
+        #    // TTS Leak Protection
+        #    // -----------------------------------------
+        #    ttsAfter = appl.ttsLevel();
+        #
+        #    if (ttsAfter > ttsBefore)
+        #    {
+        #        safety = 10;
+        #
+        #        while (appl.ttsLevel() > ttsBefore && safety > 0)
+        #        {
+        #            ttsAbort;
+        #            safety--;
+        #        }
+        #
+        #        if (appl.ttsLevel() != ttsBefore)
+        #        {
+        #            Jay_PrintOrchestratorService::logQueueError(
+        #                _queueType,
+        #                _queueRecId,
+        #                strFmt("PO print fatal TTS corruption. RecId=%1", purch.RecId)
+        #            );
+        #            return false;
+        #        }
+        #
+        #        success = false;
+        #    }
+        #
+        #    // -----------------------------------------
+        #    // FAILURE LOGGING (covers all branches)
+        #    // -----------------------------------------
+        #    if (!success)
+        #    {
+        #        if (!raw)
+        #        {
+        #            raw = Jay_PrintOrchestratorService::safeStr(infolog.text());
+        #        }
+        #
+        #        Jay_PrintOrchestratorService::logQueueError(
+        #            _queueType,
+        #            _queueRecId,
+        #            strFmt(
+        #                "PO print failure. PurchId=%1 | Vendor=%2 | RecId=%3\nAX: %4",
+        #                purch.PurchId,
+        #                purch.OrderAccount,
+        #                purch.RecId,
+        #                raw
+        #            )
+        #        );
+        #
+        #        return false;
+        #    }
+        #
+        #    return true;
+        #}
+        #
+      ENDSOURCE
+    ENDMETHODS
+  ENDCLASS
+
+***Element: END

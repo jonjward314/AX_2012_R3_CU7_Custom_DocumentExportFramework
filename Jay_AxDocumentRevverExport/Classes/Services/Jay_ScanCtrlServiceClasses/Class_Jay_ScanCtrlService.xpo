@@ -1,0 +1,562 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: CLS
+
+; Microsoft Dynamics AX Class: Jay_ScanCtrlService unloaded
+; --------------------------------------------------------------------------------
+  CLSVERSION 1
+  
+  CLASS #Jay_ScanCtrlService
+    PROPERTIES
+      Name                #Jay_ScanCtrlService
+      Origin              #{BE9AD3FA-DE68-4238-8876-7823BD33B9B6}
+    ENDPROPERTIES
+    
+    METHODS
+      SOURCE #classDeclaration
+        #public class Jay_ScanCtrlService
+        #{
+        #}
+      ENDSOURCE
+      SOURCE #computeHorizon
+        #public static utcDateTime computeHorizon(Jay_ScanCtrl _scan)
+        #{
+        #    // Delegate to metadata service (computes and stores horizon):contentReference[oaicite:47]{index=47}:contentReference[oaicite:48]{index=48}
+        #    return Jay_ScanMetadataService::computeHorizon(_scan);
+        #}
+      ENDSOURCE
+      SOURCE #computeHorizonStatic
+        #public static utcDateTime computeHorizonStatic(utcDateTime     _scanStartDateTime,
+        #                                                int             _horizonValue,
+        #                                                Jay_CadenceUnit _horizonUnit,
+        #                                                Jay_ScanDirection _direction)
+        #{
+        #    return Jay_ScanMetadataService::computeHorizonStatic(_scanStartDateTime,
+        #                                                            _horizonValue,
+        #                                                            _horizonUnit,
+        #                                                            _direction);
+        #}
+      ENDSOURCE
+      SOURCE #computeInitialRange
+        #public static container computeInitialRange(utcDateTime      _startUtc,
+        #                                            Jay_ScanDirection _direction,
+        #                                            Jay_ExportQueueType _queueType,
+        #                                            int              _scanValue,
+        #                                            Jay_CadenceUnit  _scanUnit,
+        #                                            int              _lengthValue,
+        #                                            Jay_CadenceUnit  _lengthUnit)
+        #{
+        #    return Jay_ScanTemporalService::computeInitialRange(_startUtc, _direction, _queueType,
+        #                                                        _scanValue, _scanUnit,
+        #                                                        _lengthValue, _lengthUnit);
+        #}
+      ENDSOURCE
+      SOURCE #computeNextIntervalStartStatic
+        #public static utcDateTime computeNextIntervalStartStatic(utcDateTime      _currentStartUtc,
+        #                                                        int              _scanValue,
+        #                                                        Jay_CadenceUnit  _scanUnit,
+        #                                                        Jay_ScanDirection _direction)
+        #{
+        #    return Jay_ScanTemporalService::computeNextIntervalStart(_currentStartUtc,
+        #                                                            _scanValue,
+        #                                                            _scanUnit,
+        #                                                            _direction);
+        #}
+      ENDSOURCE
+      SOURCE #computeNextWindow
+        #public static container computeNextWindow(Jay_ScanCtrl _parent,
+        #                                        utcDateTime  _currentAnchor,
+        #                                        utcDateTime  _horizonUtc = DateTimeUtil::maxValue())
+        #{
+        #    // Create appropriate strategy instance (Forward/Backward) and compute next window
+        #    Jay_ScanStrategy strategy = Jay_ScanStrategy::construct(_parent.Direction);
+        #    return strategy.computeNextWindow(_parent, _currentAnchor, _horizonUtc);
+        #}
+      ENDSOURCE
+      SOURCE #consumeParent
+        #public static void consumeParent(RecId _parentRecId, RecId _childRecId)
+        #{
+        #    // Refactored to Jay_ScanLifecycleService::consumeParent()
+        #    Jay_ScanLifecycleService::consumeParent(_parentRecId, _childRecId);
+        #}
+      ENDSOURCE
+      SOURCE #createChildAndCopyScopesWithParentUpdate
+        #public static RecId createChildAndCopyScopesWithParentUpdate(RecId _parentRecId,
+        #                                                                utcDateTime _nextStartUtc,
+        #                                                                utcDateTime _nextEndUtc,
+        #                                                                NoYes _isFinal)
+        #{
+        #    // This internal method is refactored to Jay_ScanLifecycleService::createChildAndCopyScopesWithParentUpdate()
+        #    return Jay_ScanLifecycleService::createChildAndCopyScopesWithParentUpdate(_parentRecId, _nextStartUtc, _nextEndUtc, _isFinal);
+        #}
+      ENDSOURCE
+      SOURCE #CreateChildRecord
+        #public static Jay_ScanCtrl CreateChildRecord(Jay_ScanCtrl _parent)
+        #{
+        #    // Refactored to Jay_ScanLifecycleService::createChildRecord()
+        #    return Jay_ScanLifecycleService::createChildRecord(_parent);
+        #}
+      ENDSOURCE
+      SOURCE #createFromFormInput
+        #public static Jay_ScanCtrl createFromFormInput(utcDateTime        _scanStartDateTime,
+        #                                                Jay_ScanDirection  _direction,
+        #                                                int                _scanValue,
+        #                                                Jay_CadenceUnit    _scanUnit,
+        #                                                int                _horizonValue,
+        #                                                Jay_CadenceUnit    _horizonUnit,
+        #                                                int                _lengthValue,
+        #                                                Jay_CadenceUnit    _lengthUnit,
+        #                                                Jay_ExportQueueType _queueType,
+        #                                                Jay_ExportRunMode   _runMode,
+        #                                                Common             _tmpScopeTable)
+        #{
+        #    Jay_ScanScope newScope;
+        #    Jay_TmpScanScope tmpScope;
+        #    // 1. Normalize start time for batch kickoff using RunMode logic:contentReference[oaicite:51]{index=51}
+        #    Jay_RunMode runMode = Jay_RunMode::construct(_runMode);
+        #    utcDateTime normalizedStartUtc = runMode.nextStartTimeUtc(_scanStartDateTime, _scanValue, _scanUnit);
+        #    // 2. Compute logical range window from entered anchor date:contentReference[oaicite:52]{index=52}
+        #    container range = Jay_ScanTemporalService::computeInitialRange(_scanStartDateTime, _direction, _queueType,
+        #                                                                    _scanValue, _scanUnit,
+        #                                                                    _lengthValue, _lengthUnit);
+        #    utcDateTime rangeFromUtc = conPeek(range, 1);
+        #    utcDateTime rangeToUtc   = conPeek(range, 2);
+        #    // 3. Create and insert the ScanCtrl record with computed values:contentReference[oaicite:53]{index=53}:contentReference[oaicite:54]{index=54}
+        #    Jay_ScanCtrl scanCtrl;
+        #    scanCtrl.clear();
+        #    scanCtrl.initValue();
+        #    scanCtrl.ScanStartDateTime = normalizedStartUtc;
+        #    scanCtrl.Direction         = _direction;
+        #    scanCtrl.ScanValue         = _scanValue;
+        #    scanCtrl.ScanUnit          = _scanUnit;
+        #    scanCtrl.HorizonValue      = _horizonValue;
+        #    scanCtrl.HorizonUnit       = _horizonUnit;
+        #    scanCtrl.LengthValue       = _lengthValue;
+        #    scanCtrl.LengthUnit        = _lengthUnit;
+        #    scanCtrl.QueueType         = _queueType;
+        #    scanCtrl.RunMode           = _runMode;
+        #    scanCtrl.HealthStatus      = Jay_HealthStatus::Healthy;
+        #    scanCtrl.RangeFromUTC      = rangeFromUtc;
+        #    scanCtrl.RangeToUTC        = rangeToUtc;
+        #    scanCtrl.Horizon           = Jay_ScanMetadataService::computeHorizonStatic(_scanStartDateTime,
+        #                                                                            _horizonValue,
+        #                                                                            _horizonUnit,
+        #                                                                            _direction);
+        #    scanCtrl.NextIntervalStart = _scanStartDateTime;
+        #    scanCtrl.insert();
+        #    info(strFmt("Jay_ScanCtrlService initialized:\n  • Entered Start  : %1\n  • Normalized Run : %2\n  • RangeFromUtc   : %3\n  • RangeToUtc     : %4",
+        #                DateTimeUtil::toStr(_scanStartDateTime),
+        #                DateTimeUtil::toStr(normalizedStartUtc),
+        #                DateTimeUtil::toStr(rangeFromUtc),
+        #                DateTimeUtil::toStr(rangeToUtc)));
+        #    // 4. Copy selected scopes from temp table to ScanScope:contentReference[oaicite:55]{index=55}
+        #
+        #    while select * from tmpScope where tmpScope.Include == NoYes::Yes
+        #    {
+        #        newScope.clear();
+        #        newScope.ParentScanId = scanCtrl.RecId;
+        #        newScope.DocType      = tmpScope.DocType;
+        #        newScope.DocSubType   = tmpScope.DocSubType;
+        #        newScope.Include      = tmpScope.Include;
+        #        newScope.insert();
+        #    }
+        #    return scanCtrl;
+        #}
+      ENDSOURCE
+      SOURCE #defer
+        #public static void defer(RecId _scanRecId, int _delayMinutes)
+        #{
+        #    Jay_ScanCtrl                  parent;
+        #    Jay_ScanCtrl                  child;
+        #    Jay_ScanCtrlBatch             job;
+        #    BatchHeader                   header;
+        #    Batch                         batch;        // do NOT update with this
+        #    Batch                         localBatch;   // SAFE buffer for TTS
+        #    Jay_ExportRuntimeSettingsTable settings =
+        #        Jay_ExportRuntimeSettingsTable::findOrCreate();
+        #
+        #    RecId        childRecId;
+        #    utcDateTime  nowUtc;
+        #    utcDateTime  scheduledUtc;
+        #    int          safetyFloorMinutes = 2;
+        #    int          diffSeconds;
+        #    boolean      consumed;
+        #
+        #    // 1. Sanity
+        #    if (!_scanRecId || _delayMinutes <= 0)
+        #        return;
+        #
+        #    parent = Jay_ScanCtrl::find(_scanRecId);
+        #    if (!parent.RecId)
+        #        return;
+        #
+        #    // 2. Compute schedule time
+        #    nowUtc       = DateTimeUtil::utcNow();
+        #    scheduledUtc = DateTimeUtil::addMinutes(nowUtc, _delayMinutes);
+        #    diffSeconds  = DateTimeUtil::getDifference(scheduledUtc, nowUtc);
+        #
+        #    if (diffSeconds < (safetyFloorMinutes * 60))
+        #        scheduledUtc = DateTimeUtil::addMinutes(nowUtc, safetyFloorMinutes);
+        #
+        #    // 3. Handle parent/child swap
+        #    job = new Jay_ScanCtrlBatch();
+        #    childRecId = Jay_ScanLifecycleService::findChild(parent.RecId);
+        #
+        #    if (childRecId)
+        #    {
+        #        child = Jay_ScanCtrl::find(childRecId);
+        #
+        #        if (child.RecId && child.RangeFromUTC && scheduledUtc >= child.RangeFromUTC)
+        #        {
+        #            Jay_ScanLifecycleService::consumeParent(parent.RecId, childRecId);
+        #            consumed = true;
+        #            child = Jay_ScanCtrl::find(childRecId);   // reload updated child
+        #        }
+        #    }
+        #
+        #    job.parmRecId(consumed && childRecId ? childRecId : parent.RecId);
+        #    job.parmFunctionName("StartScan");
+        #
+        #    // 4. Create Batch header
+        #    header = BatchHeader::construct();
+        #
+        #    header.parmCaption(
+        #        strFmt("Scan Start: %1 → %2",
+        #               DateTimeUtil::toStr(consumed && child.RecId ? child.RangeFromUTC : parent.RangeFromUTC),
+        #               DateTimeUtil::toStr(consumed && child.RecId ? child.RangeToUTC   : parent.RangeToUTC)));
+        #
+        #    header.parmStartDateTime(scheduledUtc);
+        #    header.addTask(job);
+        #    header.save();
+        #
+        #    // 5. SAFE batch update using shadow buffer
+        #    ttsBegin;
+        #
+        #    select forUpdate localBatch
+        #        where localBatch.RecId == header.parmBatchHeaderId();
+        #
+        #    if (localBatch.RecId)
+        #    {
+        #        localBatch.GroupId    = settings.BatchGroupName;
+        #        localBatch.ExecutedBy = settings.Username;
+        #        localBatch.update();
+        #    }
+        #
+        #    ttsCommit;
+        #
+        #    // 6. Log
+        #    info(strFmt("⏳ Deferred scan %1 scheduled for %2. Consumed=%3 (Safety floor %4 min)",
+        #                _scanRecId,
+        #                DateTimeUtil::toStr(scheduledUtc),
+        #                consumed ? "Yes" : "No",
+        #                safetyFloorMinutes));
+        #}
+        #
+      ENDSOURCE
+      SOURCE #determineChildRangeFromUtc
+        #public static utcDateTime determineChildRangeFromUtc(Jay_ScanCtrl _parent)
+        #{
+        #    // Use polymorphic strategy to compute next child RangeFrom
+        #    Jay_ScanStrategy strategy = Jay_ScanStrategy::construct(_parent.Direction);
+        #    return strategy.nextRangeFromUtc(_parent);
+        #}
+      ENDSOURCE
+      SOURCE #determineChildRangeToUtc
+        #public static utcDateTime determineChildRangeToUtc(Jay_ScanCtrl _parent, utcDateTime _rangeFromUtc)
+        #{
+        #    Jay_ScanStrategy strategy = Jay_ScanStrategy::construct(_parent.Direction);
+        #    return strategy.nextRangeToUtc(_parent, _rangeFromUtc);
+        #}
+      ENDSOURCE
+      SOURCE #determineChildScanStartTime
+        #public static utcDateTime determineChildScanStartTime(Jay_ScanCtrl _parent)
+        #{
+        #    Jay_RunMode runMode = Jay_RunMode::construct(_parent.RunMode);
+        #    return runMode.childStartTimeUtc(_parent);
+        #}
+      ENDSOURCE
+      SOURCE #determineNextScanStartTimeStatic
+        #public static utcDateTime determineNextScanStartTimeStatic(utcDateTime        _parentScanStartDateTime,
+        #                                                            int                _scanValue,
+        #                                                            Jay_CadenceUnit    _scanUnit,
+        #                                                            Jay_ExportRunMode  _runMode,
+        #                                                            int                _safetyFloorMinutes = 2)
+        #{
+        #    // Determine next scan scheduling time based on run mode (Continuous vs others):contentReference[oaicite:49]{index=49}:contentReference[oaicite:50]{index=50}
+        #    Jay_RunMode runMode = Jay_RunMode::construct(_runMode);
+        #    if (_runMode == Jay_ExportRunMode::Continuous && _safetyFloorMinutes != 2)
+        #    {
+        #        // Note: Custom safety floor parameter is not passed into RunMode class (default 2 used)
+        #    }
+        #    return runMode.nextStartTimeUtc(_parentScanStartDateTime, _scanValue, _scanUnit);
+        #}
+      ENDSOURCE
+      SOURCE #execute
+        #public static void execute(RecId _scanRecId)
+        #{
+        #    Jay_ScanCtrl                scanCtrl = Jay_ScanCtrl::find(_scanRecId);
+        #
+        #    Jay_ExportRuntimeSettingsTable settings = Jay_ExportRuntimeSettingsTable::findOrCreate();
+        #
+        #    boolean shouldDefer = false;
+        #
+        #    //Function Callout Comment Out After Testing.
+        #    warning(strFmt("DEBUG: Jay_ScanCtrlService.execute() recId=%1 ", _scanRecId));
+        #
+        #    //Verify Record Validity Prior to Proceeding.
+        #    If(!(scanCtrl.RecId > 0)){return;}
+        #
+        #
+        #    //Begin Main Function Logic
+        #    // ─── 1️ Schedule next scan first ────────────────────────────────────────────
+        #    if (scanCtrl.RunMode == Jay_ExportRunMode::AutoRepeat)
+        #    {
+        #        Jay_ScanCtrlService::scheduleOffspring(_scanRecId);
+        #    }
+        #    try{
+        #        if(settings.HeartbeatLock == NoYes::No){
+        #        Jay_ArbitrationService::ensureHeartbeatAlive();
+        #        }
+        #    } catch {
+        #        warning("Jay_ArbitrationService::ensureHeartbeatAlive() - Failed In ScanCtrlService.Execute");
+        #    }
+        #    // ─── 2️ Global pause / deferral setting ─────────────────────────────────────
+        #    switch (scanCtrl.QueueType)
+        #    {
+        #        case Jay_ExportQueueType::Production:
+        #            shouldDefer = (settings.ProdEnqueuePause == NoYes::Yes);
+        #            break;
+        #        case Jay_ExportQueueType::Historical:
+        #            shouldDefer = (settings.HistEnqueuePause == NoYes::Yes);
+        #            break;
+        #        default:
+        #            // safety fallback — apply production pause if unknown
+        #            shouldDefer = (settings.ProdEnqueuePause == NoYes::Yes);
+        #            break;
+        #    }
+        #
+        #    if (shouldDefer)
+        #    {
+        #        info(strFmt("⏸ Enqueue paused by global setting for %1 queue. Scan deferred 15 min.",
+        #                    enum2str(scanCtrl.QueueType)));
+        #        Jay_ScanCtrlService::defer(_scanRecId, 15);
+        #        return;
+        #    }
+        #
+        #    // ─── 3️⃣ Arbitration check ──────────────────────────────────────────────────
+        #    if (!Jay_ArbitrationService::allowScan(_scanRecId))
+        #    {
+        #        info(strFmt("⚖️ Scan %1 deferred. Arbitration denied.", _scanRecId));
+        #        Jay_ScanCtrlService::defer(_scanRecId, 15);
+        #        return;
+        #    }
+        #
+        #    // ─── 4️⃣ Generate slices and enqueue work ───────────────────────────────────
+        #
+        #
+        #    Jay_ArbitrationService::RequestGenerateScanSlices(_scanRecId);
+        #
+        #    info(strFmt("✅ Scan %1 Registered successfully.", _scanRecId));
+        #
+        #    return;
+        #}
+      ENDSOURCE
+      SOURCE #findChild
+        #public static RecId findChild(RecId _parentRecId)
+        #{
+        #    // Refactored to Jay_ScanLifecycleService::findChild()
+        #    return Jay_ScanLifecycleService::findChild(_parentRecId);
+        #}
+      ENDSOURCE
+      SOURCE #handlePostCompletion
+        #public static void handlePostCompletion(RecId _scanRecId)
+        #{
+        #    Jay_ScanCtrl scan = Jay_ScanCtrl::find(_scanRecId); // read-only
+        #    Jay_ScanCtrl scanUpd;                               // safe update buffer
+        #
+        #    if (!scan.RecId)
+        #        return;
+        #
+        #    ttsBegin;
+        #    select forUpdate scanUpd
+        #        where scanUpd.RecId == _scanRecId;
+        #
+        #    scanUpd.ScanStatus = Jay_ScanStatus::Completed;
+        #    scanUpd.update();
+        #    ttsCommit;
+        #
+        #    if (scan.RunMode == Jay_ExportRunMode::Continuous)
+        #    {
+        #        info(strFmt("♻ Continuous scan %1 completed; scheduling next cycle.", _scanRecId));
+        #        Jay_ScanCtrlService::scheduleOffspring(_scanRecId);
+        #    }
+        #}
+        #
+      ENDSOURCE
+      SOURCE #normalizeScanStartTime
+        #public static utcDateTime normalizeScanStartTime(utcDateTime ScanStartDateTime)
+        #{
+        #    utcDateTime nowUtc      = DateTimeUtil::utcNow();
+        #    date        todayDate   = DateTimeUtil::date(nowUtc);
+        #    timeOfDay   anchorTime  = DateTimeUtil::time(ScanStartDateTime);
+        #    utcDateTime candidate   = DateTimeUtil::newDateTime(todayDate, anchorTime);
+        #
+        #    // If that time today has already passed, use tomorrow
+        #    if (candidate <= nowUtc)
+        #        candidate = DateTimeUtil::addDays(candidate, 1);
+        #
+        #    return candidate;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #schedule
+        #public static void schedule(RecId _scanRecId)
+        #{
+        #    Jay_ScanCtrlBatch               job;
+        #    Jay_ScanCtrl                    scanCtrl;
+        #    BatchHeader                     header;
+        #    Batch                           localBatch;  // SAFE update buffer
+        #    utcDateTime                     runTime;
+        #    utcDateTime                     nowUtc;
+        #    int                             safetyFloorMinutes = 2;
+        #    Jay_ExportRuntimeSettingsTable  settings;
+        #    str                             batchGroup;
+        #    str                             execUser;
+        #
+        #    if (!_scanRecId)
+        #        return;
+        #
+        #    scanCtrl = Jay_ScanCtrl::find(_scanRecId);
+        #    if (!scanCtrl.RecId)
+        #        return;
+        #
+        #    nowUtc   = DateTimeUtil::utcNow();
+        #    settings = Jay_ExportRuntimeSettingsTable::findOrCreate();
+        #
+        #    // extract values BEFORE TTS
+        #    batchGroup = settings.BatchGroupName;
+        #    execUser   = settings.Username;
+        #
+        #    // 1. Normalize start time
+        #    runTime = Jay_ScanCtrlService::normalizeScanStartTime(scanCtrl.ScanStartDateTime);
+        #
+        #    // 2. Safety floor
+        #    if (runTime <= nowUtc)
+        #        runTime = DateTimeUtil::addMinutes(nowUtc, safetyFloorMinutes);
+        #
+        #    // 3. Configure batch
+        #    job = new Jay_ScanCtrlBatch();
+        #    job.parmRecId(_scanRecId);
+        #    job.parmFunctionName("StartScan");
+        #
+        #    header = BatchHeader::construct();
+        #    header.parmCaption(strFmt("Jay Scan – Scan %1", _scanRecId));
+        #    header.parmStartDateTime(runTime);
+        #    header.addTask(job);
+        #    header.save();
+        #
+        #    // 4. SAFE post-save update
+        #    ttsBegin;
+        #    select forUpdate localBatch
+        #        where localBatch.RecId == header.parmBatchHeaderId();
+        #
+        #    if (localBatch.RecId)
+        #    {
+        #        localBatch.GroupId    = batchGroup;
+        #        localBatch.ExecutedBy = execUser;
+        #        localBatch.update();
+        #    }
+        #    ttsCommit;
+        #
+        #    info(strFmt("📅 Scheduled Scan %1 for %2 (%3, safety floor %4 min)",
+        #                _scanRecId,
+        #                DateTimeUtil::toStr(runTime),
+        #                enum2str(scanCtrl.Direction),
+        #                safetyFloorMinutes));
+        #}
+        #
+      ENDSOURCE
+      SOURCE #scheduleOffspring
+        #public static void scheduleOffspring(RecId _parentRecId)
+        #{
+        #    Jay_ScanCtrl                    parent, child;
+        #    Jay_ExportRuntimeSettingsTable  settings;
+        #    BatchHeader                     header;
+        #    Batch                           localBatch;      // safe buffer
+        #    Jay_ScanCtrlBatch               job;
+        #    RecId                           existingChildRecId;
+        #    utcDateTime                     runTime;
+        #    utcDateTime                     nowUtc;
+        #    int                             safetyFloorMinutes = 2;
+        #    str                             batchGroup;
+        #    str                             execUser;
+        #
+        #    if (!_parentRecId)
+        #        return;
+        #
+        #    nowUtc   = DateTimeUtil::utcNow();
+        #    settings = Jay_ExportRuntimeSettingsTable::findOrCreate();
+        #
+        #    // extract values BEFORE entering TTS
+        #    batchGroup = settings.BatchGroupName;
+        #    execUser   = settings.Username;
+        #
+        #    // Validate parent
+        #    parent = Jay_ScanCtrl::find(_parentRecId);
+        #    if (!parent.RecId)
+        #        return;
+        #
+        #    // Prevent duplicate child
+        #    existingChildRecId = Jay_ScanLifecycleService::findChild(parent.RecId);
+        #    if (existingChildRecId)
+        #        return;
+        #
+        #    // Create child
+        #    child = Jay_ScanLifecycleService::createChildRecord(parent);
+        #
+        #    // Safety floor
+        #    runTime = child.ScanStartDateTime;
+        #    if (runTime <= nowUtc)
+        #        runTime = DateTimeUtil::addMinutes(nowUtc, safetyFloorMinutes);
+        #
+        #    // Create batch
+        #    job = new Jay_ScanCtrlBatch();
+        #    job.parmRecId(child.RecId);
+        #    job.parmFunctionName("StartScan");
+        #
+        #    header = BatchHeader::construct();
+        #    header.parmCaption(strFmt(
+        #            "Child Scan Start: %1 → %2 (Parent %3): Start time: %4",
+        #            DateTimeUtil::toStr(child.RangeFromUTC),
+        #            DateTimeUtil::toStr(child.RangeToUTC),
+        #            parent.RecId,
+        #            child.ScanStartDateTime));
+        #
+        #    header.parmStartDateTime(runTime);
+        #    header.addTask(job);
+        #    header.save();
+        #
+        #    // SAFE batch header patch
+        #    ttsBegin;
+        #    select forUpdate localBatch
+        #        where localBatch.RecId == header.parmBatchHeaderId();
+        #
+        #    if (localBatch.RecId)
+        #    {
+        #        localBatch.GroupId    = batchGroup;
+        #        localBatch.ExecutedBy = execUser;
+        #        localBatch.update();
+        #    }
+        #    ttsCommit;
+        #
+        #    info(strFmt("📅 Scheduled Child Scan %1 for %2 (Safety floor %3 min)",
+        #                child.RecId,
+        #                DateTimeUtil::toStr(runTime),
+        #                safetyFloorMinutes));
+        #}
+      ENDSOURCE
+    ENDMETHODS
+  ENDCLASS
+
+***Element: END

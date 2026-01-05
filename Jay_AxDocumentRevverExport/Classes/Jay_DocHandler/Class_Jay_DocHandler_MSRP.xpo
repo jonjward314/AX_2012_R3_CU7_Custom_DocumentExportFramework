@@ -1,0 +1,157 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: CLS
+
+; Microsoft Dynamics AX Class: Jay_DocHandler_MSRP unloaded
+; --------------------------------------------------------------------------------
+  CLSVERSION 1
+  
+  CLASS #Jay_DocHandler_MSRP
+    PROPERTIES
+      Name                #Jay_DocHandler_MSRP
+      Extends             #Jay_DocHandler_Base
+      Origin              #{3F741F6A-AEEF-4CDD-8A80-9BCCF2FCFE70}
+    ENDPROPERTIES
+    
+    METHODS
+      SOURCE #classDeclaration
+        #public class Jay_DocHandler_MSRP extends Jay_DocHandler_Base
+        #{
+        #
+        #}
+        #
+      ENDSOURCE
+      SOURCE #printRecord
+        #public boolean printRecord(
+        #    RecId               _docRecId,
+        #    Jay_ExportQueueType _queueType,
+        #    RecId               _queueRecId
+        #)
+        #{
+        #    SalesTable             st;
+        #    McaLoadDocsController  controller;
+        #    McaLoadDocsRptContract contract;
+        #    Args                   args;
+        #
+        #    boolean                success = false;
+        #    str                    raw;
+        #
+        #    int                    ttsBefore, ttsAfter, safety;
+        #
+        #    // ---------------------------------
+        #    // VALIDATION
+        #    // ---------------------------------
+        #    select firstOnly st
+        #        where st.RecId == _docRecId;
+        #
+        #    if (!st.RecId)
+        #    {
+        #        Jay_PrintOrchestratorService::logQueueError(
+        #            _queueType,
+        #            _queueRecId,
+        #            strFmt("MSRP print error: SalesTable missing for RecId=%1.",
+        #                   int642str(_docRecId))
+        #        );
+        #        return false;
+        #    }
+        #
+        #    // ---------------------------------
+        #    // PRINT EXECUTION
+        #    // ---------------------------------
+        #    infolog.clear();
+        #    ttsBefore = appl.ttsLevel();
+        #
+        #    try
+        #    {
+        #        controller = new McaLoadDocsController();
+        #        controller.parmReportName(
+        #            ssrsReportStr(McaLoadDocsMSRPSheetReport, MSRPSheet)
+        #        );
+        #
+        #        contract = new McaLoadDocsRptContract();
+        #        contract.parmSalesId(st.SalesId);
+        #        contract.parmAMDeviceId(st.AMDeviceId);
+        #
+        #        args = new Args();
+        #        args.record(st);
+        #
+        #        controller.parmArgs(args);
+        #        controller.parmReportContract().parmRdpContract(contract);
+        #        controller.parmShowDialog(false);
+        #        controller.parmExecutionMode(SysOperationExecutionMode::Synchronous);
+        #
+        #        controller.startOperation();
+        #        success = true;
+        #    }
+        #    catch (Exception::CLRError)
+        #    {
+        #        raw = Jay_PrintOrchestratorService::safeStr(AifUtil::getClrErrorMessage());
+        #        success = false;
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        raw = Jay_PrintOrchestratorService::safeStr(infolog.text());
+        #        success = false;
+        #    }
+        #
+        #    // ---------------------------------
+        #    // TTS LEAK PROTECTION
+        #    // ---------------------------------
+        #    ttsAfter = appl.ttsLevel();
+        #
+        #    if (ttsAfter > ttsBefore)
+        #    {
+        #        safety = 10;
+        #
+        #        while (appl.ttsLevel() > ttsBefore && safety > 0)
+        #        {
+        #            ttsAbort;
+        #            safety--;
+        #        }
+        #
+        #        // Still corrupted?
+        #        if (appl.ttsLevel() != ttsBefore)
+        #        {
+        #            Jay_PrintOrchestratorService::logQueueError(
+        #                _queueType,
+        #                _queueRecId,
+        #                strFmt("MSRP print fatal TTS corruption. RecId=%1", st.RecId)
+        #            );
+        #            return false;
+        #        }
+        #
+        #        success = false;
+        #    }
+        #
+        #    // ---------------------------------
+        #    // FAILURE LOGGING
+        #    // ---------------------------------
+        #    if (!success)
+        #    {
+        #        if (!raw)
+        #        {
+        #            raw = Jay_PrintOrchestratorService::safeStr(infolog.text());
+        #        }
+        #
+        #        Jay_PrintOrchestratorService::logQueueError(
+        #            _queueType,
+        #            _queueRecId,
+        #            strFmt("MSRP print failure. SalesId=%1 | DeviceId=%2 | RecId=%3\nAX: %4",
+        #                   st.SalesId,
+        #                   st.AMDeviceId,
+        #                   st.RecId,
+        #                   raw)
+        #        );
+        #
+        #        return false;
+        #    }
+        #
+        #    return true;
+        #}
+        #
+      ENDSOURCE
+    ENDMETHODS
+  ENDCLASS
+
+***Element: END

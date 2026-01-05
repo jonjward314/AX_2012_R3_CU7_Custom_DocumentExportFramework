@@ -1,0 +1,151 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: CLS
+
+; Microsoft Dynamics AX Class: Jay_DocHandler_Invoice unloaded
+; --------------------------------------------------------------------------------
+  CLSVERSION 1
+  
+  CLASS #Jay_DocHandler_Invoice
+    PROPERTIES
+      Name                #Jay_DocHandler_Invoice
+      Extends             #Jay_DocHandler_Base
+      Origin              #{37C6CB21-3837-49E5-8724-6751E4DA1C28}
+    ENDPROPERTIES
+    
+    METHODS
+      SOURCE #classDeclaration
+        #public class Jay_DocHandler_Invoice extends Jay_DocHandler_Base
+        #{
+        #}
+        #
+      ENDSOURCE
+      SOURCE #printRecord
+        #public boolean printRecord(
+        #    RecId               _docRecId,
+        #    Jay_ExportQueueType _queueType,
+        #    RecId               _queueRecId
+        #)
+        #{
+        #    CustInvoiceJour        jour;
+        #    SalesInvoiceController controller;
+        #    SalesInvoiceContract   contract;
+        #    Args                   args;
+        #
+        #    boolean                success = false;
+        #    str                    raw;
+        #
+        #    int                    ttsBefore, ttsAfter, safety;
+        #
+        #    // -----------------------------------------
+        #    // VALIDATION
+        #    // -----------------------------------------
+        #    select firstOnly jour
+        #        where jour.RecId == _docRecId;
+        #
+        #    if (!jour.RecId)
+        #    {
+        #        Jay_PrintOrchestratorService::logQueueError(
+        #            _queueType,
+        #            _queueRecId,
+        #            strFmt("Invoice print error: CustInvoiceJour missing for RecId=%1.",
+        #                int642str(_docRecId))
+        #        );
+        #        return false;
+        #    }
+        #
+        #    // -----------------------------------------
+        #    // PRINT EXECUTION (one-pass, no retry)
+        #    // -----------------------------------------
+        #    infolog.clear();
+        #    ttsBefore = appl.ttsLevel();
+        #
+        #    try
+        #    {
+        #        controller = new SalesInvoiceController();
+        #        controller.parmReportName(ssrsReportStr(SalesInvoice, Report));
+        #
+        #        contract = new SalesInvoiceContract();
+        #        contract.parmRecordId(jour.RecId);
+        #
+        #        args = new Args();
+        #        args.record(jour);
+        #
+        #        controller.parmArgs(args);
+        #        controller.parmReportContract().parmRdpContract(contract);
+        #        controller.parmShowDialog(false);
+        #        controller.parmExecutionMode(SysOperationExecutionMode::Synchronous);
+        #
+        #        controller.startOperation();
+        #        success = true;
+        #    }
+        #    catch (Exception::CLRError)
+        #    {
+        #        raw = Jay_PrintOrchestratorService::safeStr(AifUtil::getClrErrorMessage());
+        #        success = false;
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        raw = Jay_PrintOrchestratorService::safeStr(infolog.text());
+        #        success = false;
+        #    }
+        #
+        #    // -----------------------------------------
+        #    // TTS Leak Protection
+        #    // -----------------------------------------
+        #    ttsAfter = appl.ttsLevel();
+        #
+        #    if (ttsAfter > ttsBefore)
+        #    {
+        #        safety = 10;
+        #
+        #        while (appl.ttsLevel() > ttsBefore && safety > 0)
+        #        {
+        #            ttsAbort;
+        #            safety--;
+        #        }
+        #
+        #        if (appl.ttsLevel() != ttsBefore)
+        #        {
+        #            Jay_PrintOrchestratorService::logQueueError(
+        #                _queueType,
+        #                _queueRecId,
+        #                strFmt("Invoice print fatal TTS corruption. RecId=%1", jour.RecId)
+        #            );
+        #            return false;
+        #        }
+        #
+        #        success = false;
+        #    }
+        #
+        #    // -----------------------------------------
+        #    // FAILURE LOGGING (covers CLRError, Error, silent failure)
+        #    // -----------------------------------------
+        #    if (!success)
+        #    {
+        #        raw = raw ? raw : Jay_PrintOrchestratorService::safeStr(infolog.text());
+        #
+        #        Jay_PrintOrchestratorService::logQueueError(
+        #            _queueType,
+        #            _queueRecId,
+        #            strFmt(
+        #                "Invoice print failure. InvoiceId=%1 | SalesId=%2 | RecId=%3\nAX: %4",
+        #                jour.InvoiceId,
+        #                jour.SalesId,
+        #                jour.RecId,
+        #                raw
+        #            )
+        #        );
+        #
+        #        return false;
+        #    }
+        #
+        #    return true;
+        #}
+        #
+      ENDSOURCE
+    ENDMETHODS
+  ENDCLASS
+
+***Element: END

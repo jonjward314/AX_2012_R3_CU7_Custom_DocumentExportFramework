@@ -1,0 +1,85 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: DBE
+
+; Microsoft Dynamics AX Enumtype : Jay_ExportQueueStatus unloaded
+; --------------------------------------------------------------------------------
+  ENUMTYPEVERSION 1
+  
+  ENUMTYPE #Jay_ExportQueueStatus
+    PROPERTIES
+      Name                #Jay_ExportQueueStatus
+      UseEnumValue        #Yes
+      Origin              #{47F0C3BD-C6D6-4D79-A50F-106A962B4F69}
+    ENDPROPERTIES
+    
+    TYPEELEMENTS
+      #Queued
+      PROPERTIES
+        Name                #Queued
+        Label               #Queued
+        EnumValue           #0
+      ENDPROPERTIES
+      
+      #Processing
+      PROPERTIES
+        Name                #Processing
+        Label               #Processing
+        EnumValue           #1
+      ENDPROPERTIES
+      
+      #Deferred
+      PROPERTIES
+        Name                #Deferred
+        Label               #Deferred
+        EnumValue           #2
+      ENDPROPERTIES
+      
+      #Incomplete
+      PROPERTIES
+        Name                #Incomplete
+        Label               #Incomplete
+        EnumValue           #3
+      ENDPROPERTIES
+      
+      #Exported
+      PROPERTIES
+        Name                #Exported
+        Label               #Exported
+        EnumValue           #4
+      ENDPROPERTIES
+      
+      #FailedExport
+      PROPERTIES
+        Name                #FailedExport
+        Label               #Failed Export
+        EnumValue           #5
+      ENDPROPERTIES
+      
+      #ToPurge
+      PROPERTIES
+        Name                #ToPurge
+        Label               #To Purge
+        EnumValue           #6
+      ENDPROPERTIES
+      
+      #Waiting
+      PROPERTIES
+        Name                #Waiting
+        Label               #Waiting
+        EnumValue           #7
+      ENDPROPERTIES
+      
+      #Skipped
+      PROPERTIES
+        Name                #Skipped
+        Label               #Skipped
+        EnumValue           #8
+      ENDPROPERTIES
+      
+    ENDTYPEELEMENTS
+  ENDENUMTYPE
+  
+
+***Element: END

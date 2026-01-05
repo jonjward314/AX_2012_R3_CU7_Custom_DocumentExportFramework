@@ -1,0 +1,97 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: CLS
+
+; Microsoft Dynamics AX Class: Jay_SliceProbeManager unloaded
+; --------------------------------------------------------------------------------
+  CLSVERSION 1
+  
+  CLASS #Jay_SliceProbeManager
+    PROPERTIES
+      Name                #Jay_SliceProbeManager
+      Origin              #{BA368248-13D9-4AC6-9DD0-D636D1541AC4}
+    ENDPROPERTIES
+    
+    METHODS
+      SOURCE #classDeclaration
+        #public class Jay_SliceProbeManager
+        #{
+        #}
+      ENDSOURCE
+      SOURCE #runProbes
+        #/// Executes full document probes for all DocType/SubType × time windows.
+        #/// Each (DocType, SubType, Window) → one Jay_SliceCtrl record with accurate count.
+        #public static int runProbes(Jay_ScanCtrl _scan, List _windowList)
+        #{
+        #    Jay_ScanScope        scope;
+        #    ListIterator         winIter;
+        #    container            winCon;
+        #    utcDateTime          fromUtc, toUtc;
+        #    Jay_SliceCtrl        slice;
+        #    int                  approxDocs;
+        #    int                  created;
+        #    Jay_ExportDocType    docType;
+        #    Jay_ExportDocSubType docSubType;
+        #
+        #    warning("DEBUG: enter Stage runProbes at " + DateTimeUtil::toStr(DateTimeUtil::utcNow()));
+        #
+        #
+        #    created = 0;
+        #    if (!_scan.RecId)
+        #        return 0;
+        #
+        #    while select DocType, DocSubType, Include
+        #        from scope
+        #        where scope.ParentScanId == _scan.RecId
+        #           && scope.Include == NoYes::Yes
+        #    {
+        #        docType    = scope.DocType;
+        #        docSubType = scope.DocSubType;
+        #
+        #        winIter = new ListIterator(_windowList);
+        #        while (winIter.more())
+        #        {
+        #            winCon  = winIter.value();
+        #            fromUtc = conPeek(winCon, 1);
+        #            toUtc   = conPeek(winCon, 2);
+        #
+        #            approxDocs = Jay_DocProbeManager::fullProbeDocTypeSubType(
+        #                            docType, docSubType, fromUtc, toUtc);
+        #
+        #            ttsBegin;
+        #            slice.clear();
+        #            slice.initValue();
+        #            slice.ParentScanId   = _scan.RecId;
+        #            slice.DocType        = docType;
+        #            slice.DocSubType     = docSubType;
+        #            slice.FromUtc        = fromUtc;
+        #            slice.ToUtc          = toUtc;
+        #            slice.PredictedDocs  = approxDocs;
+        #            slice.SliceStatus    = (approxDocs > 0)
+        #                                 ? Jay_SliceStatus::Pending
+        #                                 : Jay_SliceStatus::Completed;
+        #            slice.QueueType      = _scan.QueueType;
+        #            slice.SourceTableId  = Jay_DocProbeManager::resolveSourceTableId(docType,docSubType);
+        #            slice.insert();
+        #            ttsCommit;
+        #
+        #            created++;
+        #            winIter.next();
+        #        }
+        #    }
+        #
+        #    info(strFmt("📊 ProbeManager created %1 slices for scan %2.", created, _scan.RecId));
+        #
+        #    if (created > 50)
+        #        Jay_SliceConsolidationService::postProbeConsolidate(_scan.RecId);
+        #
+        #    warning("DEBUG: exit Stage runProbes at " + DateTimeUtil::toStr(DateTimeUtil::utcNow()));
+        #
+        #    return created;
+        #}
+      ENDSOURCE
+    ENDMETHODS
+  ENDCLASS
+
+***Element: END

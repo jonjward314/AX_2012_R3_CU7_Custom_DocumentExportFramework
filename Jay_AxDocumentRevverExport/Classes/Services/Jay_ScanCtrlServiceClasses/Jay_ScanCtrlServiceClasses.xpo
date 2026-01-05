@@ -1,0 +1,69 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: CLS
+
+; Microsoft Dynamics AX Class: Jay_ScanFacadeContext unloaded
+; --------------------------------------------------------------------------------
+  CLSVERSION 1
+  
+  CLASS #Jay_ScanFacadeContext
+    PROPERTIES
+      Name                #Jay_ScanFacadeContext
+      Origin              #{6A8AEB7A-8573-44DA-9181-3AA55624CA86}
+    ENDPROPERTIES
+    
+    METHODS
+      SOURCE #classDeclaration
+        #public class Jay_ScanFacadeContext
+        #{
+        #    // Optional context class to encapsulate a scan and associated strategy/runMode
+        #     Jay_ScanCtrl    _scanCtrl;
+        #     Jay_ScanStrategy _strategy;
+        #     Jay_RunMode     _runMode;
+        #}
+      ENDSOURCE
+      SOURCE #new
+        #public void new(Jay_ScanCtrl scanCtrl)
+        #        {
+        #            _scanCtrl  = scanCtrl;
+        #            _strategy  = Jay_ScanStrategy::construct(_scanCtrl.Direction);
+        #            _runMode   = Jay_RunMode::construct(_scanCtrl.RunMode);
+        #        }
+      ENDSOURCE
+      SOURCE #parmRunMode
+        #public Jay_RunMode parmRunMode()
+        #{
+        #    return _runMode;
+        #}
+      ENDSOURCE
+      SOURCE #parmScanCtrl
+        # public Jay_ScanCtrl parmScanCtrl(Jay_ScanCtrl scanCtrl = null)
+        #{
+        #    if (scanCtrl)
+        #    {
+        #        _scanCtrl = scanCtrl;
+        #        // Reinitialize strategy and runMode for new scan
+        #        _strategy = Jay_ScanStrategy::construct(_scanCtrl.Direction);
+        #        _runMode  = Jay_RunMode::construct(_scanCtrl.RunMode);
+        #    }
+        #    return _scanCtrl;
+        #}
+      ENDSOURCE
+      SOURCE #parmStrategy
+        #public Jay_ScanStrategy parmStrategy()
+        #{
+        #    return _strategy;
+        #}
+      ENDSOURCE
+      SOURCE #construct
+        # public static Jay_ScanFacadeContext construct(RecId _scanRecId)
+        #        {
+        #            Jay_ScanCtrl scan = Jay_ScanCtrl::find(_scanRecId);
+        #            return scan.RecId ? new Jay_ScanFacadeContext(scan) : null;
+        #        }
+      ENDSOURCE
+    ENDMETHODS
+  ENDCLASS
+
+***Element: END

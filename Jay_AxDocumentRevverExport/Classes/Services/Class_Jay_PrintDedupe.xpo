@@ -1,0 +1,94 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: CLS
+
+; Microsoft Dynamics AX Class: Jay_PrintDedupe unloaded
+; --------------------------------------------------------------------------------
+  CLSVERSION 1
+  
+  CLASS #Jay_PrintDedupe
+    PROPERTIES
+      Name                #Jay_PrintDedupe
+      Origin              #{E63B2092-5B5D-4E43-8331-742358C64783}
+    ENDPROPERTIES
+    
+    METHODS
+      SOURCE #classDeclaration
+        #class Jay_PrintDedupe
+        #{
+        #}
+      ENDSOURCE
+      SOURCE #deleteForScan
+        #public static void deleteForScan(RecId _scanId)
+        #{
+        #    Jay_PrintDedupeTable dedupe;
+        #
+        #    ttsBegin;
+        #
+        #    delete_from dedupe
+        #        where dedupe.ScanId    == _scanId
+        #          && dedupe.DataAreaId == curext();
+        #
+        #    ttsCommit;
+        #}
+      ENDSOURCE
+      SOURCE #exists
+        #public static boolean exists(
+        #    RecId               _scanId,
+        #    Jay_ExportDocType   _docType,
+        #    RecId               _documentRecId
+        #)
+        #{
+        #    Jay_PrintDedupeTable dedupe;
+        #
+        #    select firstOnly RecId
+        #        from dedupe
+        #        where dedupe.ScanId          == _scanId
+        #          && dedupe.DocType          == _docType
+        #          && dedupe.DocumentRecId    == _documentRecId
+        #          && dedupe.DataAreaId       == curext();
+        #
+        #    return dedupe.RecId != 0;
+        #}
+      ENDSOURCE
+      SOURCE #markPrinted
+        #public static void markPrinted(
+        #    RecId               _scanId,
+        #    Jay_ExportDocType   _docType,
+        #    RecId               _documentRecId
+        #)
+        #{
+        #    Jay_PrintDedupeTable dedupe;
+        #
+        #    try
+        #    {
+        #        ttsBegin;
+        #
+        #        dedupe.clear();
+        #        dedupe.ScanId           = _scanId;
+        #        dedupe.DocType           = _docType;
+        #        dedupe.DocumentRecId     = _documentRecId;
+        #
+        #
+        #        dedupe.insert();
+        #
+        #        ttsCommit;
+        #    }
+        #    catch (Exception::DuplicateKeyException)
+        #    {
+        #        // Someone else already marked it — perfect outcome
+        #        ttsAbort;
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        // Do NOT throw — dedupe must never block printing
+        #        ttsAbort;
+        #    }
+        #}
+        #
+      ENDSOURCE
+    ENDMETHODS
+  ENDCLASS
+
+***Element: END

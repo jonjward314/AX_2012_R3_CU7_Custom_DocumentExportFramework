@@ -1,0 +1,150 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: DBT
+
+; Microsoft Dynamics AX Table : Jay_BatchCtrl unloaded
+; --------------------------------------------------------------------------------
+  TABLEVERSION 1
+  
+  TABLE #Jay_BatchCtrl
+    EnforceFKRelation 1
+    PROPERTIES
+      Name                #Jay_BatchCtrl
+      CreateRecIdIndex    #Yes
+      PrimaryIndex        #SurrogateKey
+      ClusterIndex        #SurrogateKey
+      ModifiedDateTime    #Yes
+      ModifiedBy          #Yes
+      CreatedDateTime     #Yes
+      CreatedBy           #Yes
+      Origin              #{53BD1CEE-93E8-43E7-B61B-4350D5EA49E7}
+    ENDPROPERTIES
+    
+    FIELDS
+      FIELD #AbortReason
+        STRING
+        PROPERTIES
+          Name                #AbortReason
+          Table               #Jay_BatchCtrl
+          Origin              #{9441BB50-36CB-4FDB-85F7-93F6C679D419}
+          ExtendedDataType    #Description
+          StringSize          #60
+        ENDPROPERTIES
+        
+      FIELD #ActualDocs
+        INT
+        PROPERTIES
+          Name                #ActualDocs
+          Label               #Queued Document Types
+          Table               #Jay_BatchCtrl
+          Origin              #{C0A5BB5C-2F6F-40D8-9E6A-60B8A9F69D18}
+        ENDPROPERTIES
+        
+      FIELD #HealthStatus
+        ENUM
+        PROPERTIES
+          Name                #HealthStatus
+          Table               #Jay_BatchCtrl
+          Origin              #{7A17851D-D5C4-4162-9655-01F255D9FED9}
+          EnumType            #Jay_HealthStatus
+        ENDPROPERTIES
+        
+      FIELD #ParentSliceRecId
+        INT64
+        PROPERTIES
+          Name                #ParentSliceRecId
+          Table               #Jay_BatchCtrl
+          Origin              #{9771866D-26FF-49FA-9938-FB2FEBE5D2BB}
+          ExtendedDataType    #RecId
+        ENDPROPERTIES
+        
+      FIELD #PredictedDocs
+        INT
+        PROPERTIES
+          Name                #PredictedDocs
+          Label               #Prediicted Documents In batch
+          Table               #Jay_BatchCtrl
+          Origin              #{3724A83D-8A3E-4398-A950-53F79AF9A1BC}
+        ENDPROPERTIES
+        
+      FIELD #PrintedDocs
+        INT
+        PROPERTIES
+          Name                #PrintedDocs
+          Label               #Printed Documents
+          Table               #Jay_BatchCtrl
+          Origin              #{69E1D810-E9C3-4CE8-83DB-6B30B6B74FBC}
+        ENDPROPERTIES
+        
+      FIELD #QueueType
+        ENUM
+        PROPERTIES
+          Name                #QueueType
+          Label               #Queue Type
+          Table               #Jay_BatchCtrl
+          Origin              #{8353C83B-92AD-461F-B30E-C18971861635}
+          EnumType            #Jay_ExportQueueType
+        ENDPROPERTIES
+        
+      FIELD #Status
+        ENUM
+        PROPERTIES
+          Name                #Status
+          Label               #Bstch Status
+          Table               #Jay_BatchCtrl
+          Origin              #{CB644112-560C-4059-B039-7AB3848AB20E}
+          EnumType            #Jay_BatchStatus
+        ENDPROPERTIES
+        
+    ENDFIELDS
+    GROUPS
+    ENDGROUPS
+    
+    INDICES
+    ENDINDICES
+    FULLTEXTINDICES
+    ENDFULLTEXTINDICES
+    REFERENCES
+      REFERENCE #Jay_SliceCtrl_Relation
+        PROPERTIES
+          Name                #Jay_SliceCtrl_Relation
+          Table               #Jay_SliceCtrl
+          UseDefaultRoleNames #Yes
+        ENDPROPERTIES
+        
+        FIELDREFERENCES
+          REFERENCETYPE NORMAL
+          PROPERTIES
+            Field               #ParentSliceRecId
+            RelatedField        #RecId
+          ENDPROPERTIES
+          
+        ENDFIELDREFERENCES
+      ENDREFERENCE
+    ENDREFERENCES
+    
+    DELETEACTIONS
+      #Jay_DocExportProdQueue(Jay_BatchCtrl_Relation)
+      PROPERTIES
+        Table               #Jay_DocExportProdQueue
+        DeleteAction        #Cascade
+        Relation            #Jay_BatchCtrl_Relation
+      ENDPROPERTIES
+      
+    ENDDELETEACTIONS
+    
+    METHODS
+      SOURCE #initValue
+        #public void initValue()
+        #{
+        #    super();
+        #
+        #    this.Status            = Jay_BatchStatus::Pending;
+        #}
+      ENDSOURCE
+    ENDMETHODS
+  ENDTABLE
+  
+
+***Element: END

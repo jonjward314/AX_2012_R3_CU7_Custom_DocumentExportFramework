@@ -1,0 +1,60 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: CLS
+
+; Microsoft Dynamics AX Class: Jay_ScanStrategy unloaded
+; --------------------------------------------------------------------------------
+  CLSVERSION 1
+  
+  CLASS #Jay_ScanStrategy
+    PROPERTIES
+      Name                #Jay_ScanStrategy
+      Origin              #{44B44617-DF57-4BA8-ABC0-84A2735435E5}
+    ENDPROPERTIES
+    
+    METHODS
+      SOURCE #classDeclaration
+        #public abstract class Jay_ScanStrategy
+        #{
+        #// Base class for scan direction strategies (Forward/Backward)
+        #// Provides interface for computing next window and child ranges.
+        #}
+      ENDSOURCE
+      SOURCE #computeNextWindow
+        #public container computeNextWindow(Jay_ScanCtrl _parent, utcDateTime _currentAnchor, utcDateTime _horizonUtc)
+        #    {
+        #        throw error("Jay_ScanStrategy::computeNextWindow must be implemented by subclass.");
+        #    }
+      ENDSOURCE
+      SOURCE #nextRangeFromUtc
+        # public utcDateTime nextRangeFromUtc(Jay_ScanCtrl _parent)
+        #    {
+        #        throw error("Jay_ScanStrategy::nextRangeFromUtc must be implemented by subclass.");
+        #    }
+      ENDSOURCE
+      SOURCE #nextRangeToUtc
+        #public utcDateTime nextRangeToUtc(Jay_ScanCtrl _parent, utcDateTime _rangeFromUtc)
+        #    {
+        #        throw error("Jay_ScanStrategy::nextRangeToUtc must be implemented by subclass.");
+        #    }
+      ENDSOURCE
+      SOURCE #construct
+        #public static Jay_ScanStrategy construct(Jay_ScanDirection _direction)
+        #{
+        #    switch (_direction)
+        #    {
+        #        case Jay_ScanDirection::Forward:
+        #            return new Jay_ScanStrategyForward();
+        #        case Jay_ScanDirection::Backward:
+        #            return new Jay_ScanStrategyBackward();
+        #        default:
+        #            throw error(strFmt("Unsupported scan direction: %1", _direction));
+        #    }
+        #}
+        #
+      ENDSOURCE
+    ENDMETHODS
+  ENDCLASS
+
+***Element: END

@@ -1,0 +1,274 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: CLS
+
+; Microsoft Dynamics AX Class: Jay_ArbitrationBatch unloaded
+; --------------------------------------------------------------------------------
+  CLSVERSION 1
+  
+  CLASS #Jay_ArbitrationBatch
+    PROPERTIES
+      Name                #Jay_ArbitrationBatch
+      Extends             #RunBaseBatch
+      Origin              #{7BD1B5E1-2EE4-485A-BEFB-B6792FA580DF}
+    ENDPROPERTIES
+    
+    METHODS
+      SOURCE #classDeclaration
+        #public class Jay_ArbitrationBatch extends RunBaseBatch
+        #{
+        #    #define.CurrentVersion(1)
+        #
+        #    RecId               _scanIdentifier;
+        #    RecId               _sliceIdentifier;
+        #    Name                _functionName;
+        #    Jay_ExportQueueType _taskQueue;
+        #    BatchCaption    _taskCaption;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #getCurrentBatchHeaderId
+        #public int64 getCurrentBatchHeaderId()
+        #{
+        #    BatchInfo bi;
+        #    int64     batchHeaderId = 0;
+        #
+        #    // RunBaseBatch provides batchInfo(), not getBatchInfo()
+        #    bi = this.batchInfo();
+        #
+        #    if (bi)
+        #    {
+        #        batchHeaderId = bi.parmBatchId(); // this is the Batch.RecId for this task
+        #    }
+        #
+        #    return batchHeaderId;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #myrescheduleSelf
+        #private void myrescheduleSelf()
+        #{
+        #    Jay_ArbitrationBatch         job;
+        #    BatchHeader                  header;
+        #    Batch                        batch;       // original buffer (DO NOT update under TTS)
+        #    Batch                        localBatch;  // safe shadow buffer
+        #    utcDateTime                  nowUtc, nextRun;
+        #    int                          minutesBetweenRuns;
+        #    int                          safetyFloorMinutes = 2;
+        #    int                          diffSeconds;
+        #    Jay_ExportRuntimeSettingsTable settings =
+        #        Jay_ExportRuntimeSettingsTable::findOrCreate();
+        #
+        #    // ─── 1. Determine next run time with safety floor ─────────────
+        #    minutesBetweenRuns = 5;
+        #    nowUtc  = DateTimeUtil::utcNow();
+        #    nextRun = DateTimeUtil::addMinutes(nowUtc, minutesBetweenRuns);
+        #    diffSeconds = DateTimeUtil::getDifference(nextRun, nowUtc);
+        #
+        #    if (diffSeconds < (safetyFloorMinutes * 60))
+        #    {
+        #        nextRun = DateTimeUtil::addMinutes(nowUtc, safetyFloorMinutes);
+        #    }
+        #
+        #    // ─── 2. Create and configure job ──────────────────────────────
+        #    job = new Jay_ArbitrationBatch();
+        #    job.parmFunctionName(enum2str(Jay_ArbitrationBatchFunctions::Heartbeat));
+        #
+        #    header = BatchHeader::construct();
+        #    header.parmCaption("Jay Arbitration Heartbeat - Reschedule");
+        #    header.parmStartDateTime(nextRun);
+        #    header.addTask(job);
+        #    header.save();
+        #
+        #    // ─── 3. Post-save update of Batch record (TTS-safe) ───────────
+        #    ttsBegin;
+        #
+        #    select forUpdate localBatch
+        #        where localBatch.RecId == header.parmBatchHeaderId();
+        #
+        #    if (localBatch.RecId)
+        #    {
+        #        localBatch.GroupId    = settings.BatchGroupName;
+        #        localBatch.ExecutedBy = settings.Username;
+        #        localBatch.update();
+        #    }
+        #
+        #    ttsCommit;
+        #
+        #    // ─── 4. Logging ───────────────────────────────────────────────
+        #    info(strFmt("🔁 Rescheduled for %1 (interval %2 min; safety floor %3 min)",
+        #                DateTimeUtil::toStr(nextRun),
+        #                minutesBetweenRuns,
+        #                safetyFloorMinutes));
+        #}
+        #
+      ENDSOURCE
+      SOURCE #pack
+        #public container pack()
+        #{
+        #    // --- Versioned container (explicitly ordered for unpack symmetry) ---
+        #    return [
+        #        #CurrentVersion,
+        #        _scanIdentifier,
+        #        _sliceIdentifier,
+        #        _functionName,
+        #        _taskCaption,
+        #        enum2int(_taskQueue) // store enum as int for safety
+        #    ];
+        #}
+        #
+      ENDSOURCE
+      SOURCE #parmCaption
+        #public BatchCaption parmCaption(BatchCaption _caption = _taskCaption)
+        #{
+        #    if (_caption)
+        #    {
+        #        _taskCaption = _caption;
+        #    }
+        #    return _taskCaption;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #parmFunctionName
+        #public str parmFunctionName(str _value = _functionName)
+        #{
+        #    _functionName = _value;
+        #    return _functionName;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #parmQueueType
+        #public Jay_ExportQueueType parmQueueType(Jay_ExportQueueType _queueType = _taskQueue)
+        #{
+        #    _taskQueue = _queueType;
+        #    return _taskQueue;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #parmScanIdentifier
+        #
+        #public RecId parmScanIdentifier(RecId _value = _scanIdentifier)
+        #{
+        #    _scanIdentifier = _value;
+        #    return _scanIdentifier;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #parmSliceIdentifier
+        #public RecId parmSliceIdentifier(RecId _value = _sliceIdentifier)
+        #{
+        #    _sliceIdentifier = _value;
+        #    return _sliceIdentifier;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #run
+        #public void run()
+        #{
+        #    Jay_ExportRuntimeSettingsTable settings;
+        #    Args            argsLocal;
+        #    RecId           scanIdentifier = 0;
+        #    RecId           sliceIdentifier = 0;
+        #    str             functionName = "";
+        #    Jay_SliceCtrl   slice;
+        #    Jay_ScanCtrl    scan;
+        #    boolean         allowed;
+        #    int             deferMinutes; // fallback; consider reading from runtime settings table
+        #    boolean         scheduleRecheck = true;
+        #    int64 myHeaderId;
+        #
+        #    // ---------- 0) Primary: read parm accessors (simple & explicit) ----------
+        #    // These methods must exist on the batch class (auto-gen or hand-written).
+        #    // This is the easiest, most explicit pattern.
+        #    scanIdentifier  = this.parmScanIdentifier();   // may be 0 if not set
+        #    sliceIdentifier = this.parmSliceIdentifier();  // may be 0 if not set
+        #    functionName    = this.parmFunctionName();     // may be empty if not set
+        #    deferMinutes   = Jay_ExportRuntimeSettings::capacityDeferMinutes();
+        #    switch(functionName){
+        #        case enum2str(Jay_ArbitrationBatchFunctions::Heartbeat):
+        #                try{
+        #                    Jay_ArbitrationService::Heartbeat();
+        #                }
+        #                catch(Exception::Error)
+        #                {
+        #                    error("Jay_ArbitrationBatch: Heartbeat failed");
+        #                }
+        #            break;
+        #        case enum2str(Jay_ArbitrationBatchFunctions::ProcessBatchTag):
+        #            break;
+        #        case enum2str(Jay_ArbitrationBatchFunctions::PromoteTag):
+        #            break;
+        #        case enum2str(Jay_ArbitrationBatchFunctions::RequestProcessScanSlices):
+        #            if (this.parmScanIdentifier() != 0){
+        #                Jay_SliceCtrlService::StartScanSliceProcessing(this.parmScanIdentifier());
+        #            }
+        #            else {
+        #                warning(strFmt("Warning ScanId = 0. Function: %1",functionName));
+        #            }
+        #            break;
+        #        case enum2str(Jay_ArbitrationBatchFunctions::GenerateScanSlices):
+        #                Jay_SliceCtrlService::GenerateForScan(this.parmScanIdentifier());
+        #            break;
+        #        case enum2str(Jay_ArbitrationBatchFunctions::SweepQueue):
+        #            break;
+        #        case enum2str(Jay_ArbitrationBatchFunctions::RequestProcessPrintQueue):
+        #        {
+        #            Jay_PrintOrchestratorService::runPrintCycle(this.parmQueueType());
+        #        }
+        #        break;
+        #
+        #    }
+        #}
+        #
+        #
+      ENDSOURCE
+      SOURCE #unpack
+        #public boolean unpack(container _packedClass)
+        #{
+        #    Version version = conPeek(_packedClass, 1);
+        #    int enumValue;
+        #    ;
+        #
+        #    switch (version)
+        #    {
+        #        case #CurrentVersion:
+        #            _scanIdentifier  = any2Int64(conPeek(_packedClass, 2));
+        #            _sliceIdentifier = any2Int64(conPeek(_packedClass, 3));
+        #            _functionName    = any2Str(conPeek(_packedClass, 4));
+        #            _taskCaption     = any2Str(conPeek(_packedClass, 5));
+        #
+        #            if (conLen(_packedClass) >= 6)
+        #            {
+        #                enumValue  = any2Int(conPeek(_packedClass, 6));
+        #                _taskQueue = enumValue == 1
+        #                             ? Jay_ExportQueueType::Historical
+        #                             : Jay_ExportQueueType::Production;
+        #            }
+        #            break;
+        #
+        #        default:
+        #            return false;
+        #    }
+        #
+        #    return true;
+        #}
+      ENDSOURCE
+      SOURCE #description
+        #public static ClassDescription description()
+        #{
+        #    return "Jay_ArbitrationBatch";
+        #}
+        #
+      ENDSOURCE
+      SOURCE #main
+        #public static void main(Args _args)
+        #{
+        #   Jay_ArbitrationBatch job = new Jay_ArbitrationBatch();
+        #   job.run();
+        #}
+      ENDSOURCE
+    ENDMETHODS
+  ENDCLASS
+
+***Element: END

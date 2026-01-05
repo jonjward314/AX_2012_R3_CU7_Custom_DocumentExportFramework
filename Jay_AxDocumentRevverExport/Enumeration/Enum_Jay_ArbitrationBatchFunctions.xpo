@@ -1,0 +1,85 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: DBE
+
+; Microsoft Dynamics AX Enumtype : Jay_ArbitrationBatchFunctions unloaded
+; --------------------------------------------------------------------------------
+  ENUMTYPEVERSION 1
+  
+  ENUMTYPE #Jay_ArbitrationBatchFunctions
+    PROPERTIES
+      Name                #Jay_ArbitrationBatchFunctions
+      UseEnumValue        #Yes
+      Origin              #{6EC61BE4-3DAB-414E-B8B7-0F36965FE6C6}
+    ENDPROPERTIES
+    
+    TYPEELEMENTS
+      #Heartbeat
+      PROPERTIES
+        Name                #Heartbeat
+        Label               #HeartBeat
+        EnumValue           #1
+      ENDPROPERTIES
+      
+      #RunForScan
+      PROPERTIES
+        Name                #RunForScan
+        Label               #RunForScan
+        EnumValue           #2
+      ENDPROPERTIES
+      
+      #PromoteTag
+      PROPERTIES
+        Name                #PromoteTag
+        Label               #PromoteTag
+        EnumValue           #3
+      ENDPROPERTIES
+      
+      #ProcessBatchTag
+      PROPERTIES
+        Name                #ProcessBatchTag
+        Label               #ProcessBatchTag
+        EnumValue           #4
+      ENDPROPERTIES
+      
+      #SweepQueue
+      PROPERTIES
+        Name                #SweepQueue
+        Label               #SweepQueue
+        EnumValue           #5
+      ENDPROPERTIES
+      
+      #RequestProcessScanSlices
+      PROPERTIES
+        Name                #RequestProcessScanSlices
+        Label               #RequestProcessScanSlices
+        EnumValue           #6
+      ENDPROPERTIES
+      
+      #TryPrintBatch
+      PROPERTIES
+        Name                #TryPrintBatch
+        Label               #TryPrintBatch
+        EnumValue           #7
+      ENDPROPERTIES
+      
+      #RequestProcessPrintQueue
+      PROPERTIES
+        Name                #RequestProcessPrintQueue
+        Label               #RequestProcessPrintQueue
+        EnumValue           #8
+      ENDPROPERTIES
+      
+      #GenerateScanSlices
+      PROPERTIES
+        Name                #GenerateScanSlices
+        Label               #GenerateScanSlices
+        EnumValue           #9
+      ENDPROPERTIES
+      
+    ENDTYPEELEMENTS
+  ENDENUMTYPE
+  
+
+***Element: END

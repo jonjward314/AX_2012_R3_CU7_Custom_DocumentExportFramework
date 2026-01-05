@@ -1,0 +1,67 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: DBT
+
+; Microsoft Dynamics AX Table : Jay_PrintDedupeTable unloaded
+; --------------------------------------------------------------------------------
+  TABLEVERSION 1
+  
+  TABLE #Jay_PrintDedupeTable
+    EnforceFKRelation 1
+    PROPERTIES
+      Name                #Jay_PrintDedupeTable
+      CreateRecIdIndex    #Yes
+      PrimaryIndex        #SurrogateKey
+      ClusterIndex        #SurrogateKey
+      Origin              #{3ABD0CFE-F6B0-4925-A0D6-DAFA0D041A3C}
+    ENDPROPERTIES
+    
+    FIELDS
+      FIELD #DocType
+        ENUM
+        PROPERTIES
+          Name                #DocType
+          Table               #Jay_PrintDedupeTable
+          Origin              #{9F5BF8F2-32AC-4C74-BF56-817431310BC7}
+          EnumType            #Jay_ExportDocType
+        ENDPROPERTIES
+        
+      FIELD #DocumentRecId
+        INT64
+        PROPERTIES
+          Name                #DocumentRecId
+          Table               #Jay_PrintDedupeTable
+          Origin              #{D4408EE8-1403-4D56-82EC-805FCF1C8085}
+          ExtendedDataType    #RecId
+        ENDPROPERTIES
+        
+      FIELD #ScanId
+        INT64
+        PROPERTIES
+          Name                #ScanId
+          Table               #Jay_PrintDedupeTable
+          Origin              #{8FF7E030-B177-4A50-9415-4F9F6C9EB04A}
+          ExtendedDataType    #RecId
+        ENDPROPERTIES
+        
+    ENDFIELDS
+    GROUPS
+    ENDGROUPS
+    
+    INDICES
+    ENDINDICES
+    FULLTEXTINDICES
+    ENDFULLTEXTINDICES
+    REFERENCES
+    ENDREFERENCES
+    
+    DELETEACTIONS
+    ENDDELETEACTIONS
+    
+    METHODS
+    ENDMETHODS
+  ENDTABLE
+  
+
+***Element: END

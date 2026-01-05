@@ -1,0 +1,66 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: CLS
+
+; Microsoft Dynamics AX Class: Jay_ArbitrationCleanup unloaded
+; --------------------------------------------------------------------------------
+  CLSVERSION 1
+  
+  CLASS #Jay_ArbitrationCleanup
+    PROPERTIES
+      Name                #Jay_ArbitrationCleanup
+      Origin              #{70E884A8-4CBA-4ED5-83C8-67C5E434B346}
+    ENDPROPERTIES
+    
+    METHODS
+      SOURCE #classDeclaration
+        #class Jay_ArbitrationCleanup
+        #{
+        #}
+      ENDSOURCE
+      SOURCE #purgeArbitrationHistory
+        #public static void purgeArbitrationHistory(int _days)
+        #{
+        #    // prune Jay_ArbitrationHistoryLog
+        #}
+        #
+      ENDSOURCE
+      SOURCE #purgeOldQueues
+        #public static void purgeOldQueues(int _completeDays, int _otherDays)
+        #{
+        #    // remove Exported queue items older than _completeDays
+        #    // remove all other queue items older than _otherDays
+        #}
+        #
+      ENDSOURCE
+      SOURCE #purgeOldScans
+        #public static void purgeOldScans(int _completeDays, int _otherDays)
+        #{
+        #    // remove completed scans older than _completeDays
+        #    // remove all scans older than _otherDays
+        #}
+        #
+      ENDSOURCE
+      SOURCE #purgeOldSlices
+        #public static void purgeOldSlices(int _completeDays, int _otherDays)
+        #{
+        #    // remove completed slices older than _completeDays
+        #    // remove all slices older than _otherDays
+        #}
+        #
+      ENDSOURCE
+      SOURCE #runAll
+        #public static void runAll()
+        #{
+        #    Jay_ArbitrationCleanup::purgeOldScans(7, 30);
+        #    Jay_ArbitrationCleanup::purgeOldSlices(7, 30);
+        #    Jay_ArbitrationCleanup::purgeOldQueues(7, 30);
+        #    Jay_ArbitrationCleanup::purgeArbitrationHistory(60);
+        #}
+        #
+      ENDSOURCE
+    ENDMETHODS
+  ENDCLASS
+
+***Element: END

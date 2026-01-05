@@ -1,0 +1,144 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: CLS
+
+; Microsoft Dynamics AX Class: Jay_ScanStrategyForward unloaded
+; --------------------------------------------------------------------------------
+  CLSVERSION 1
+  
+  CLASS #Jay_ScanStrategyForward
+    PROPERTIES
+      Name                #Jay_ScanStrategyForward
+      Extends             #Jay_ScanStrategy
+      Origin              #{96317E90-7F80-42B6-825C-B329F4A535EB}
+    ENDPROPERTIES
+    
+    METHODS
+      SOURCE #classDeclaration
+        #public class Jay_ScanStrategyForward extends Jay_ScanStrategy
+        #{
+        #}
+      ENDSOURCE
+      SOURCE #computeNextWindow
+        #public container computeNextWindow(Jay_ScanCtrl _parent,
+        #                                    utcDateTime  _currentAnchor,
+        #                                    utcDateTime  _horizonUtc)
+        #{
+        #    utcDateTime nextStartUtc = DateTimeUtil::maxValue();
+        #    utcDateTime nextEndUtc   = DateTimeUtil::maxValue();
+        #    NoYes       isFinal      = NoYes::No;
+        #    boolean     hasHorizon   = (_horizonUtc != DateTimeUtil::maxValue());
+        #    int         scanMins;
+        #    int         effectiveValue;
+        #    Jay_CadenceUnit effectiveUnit;
+        #    Jay_ExportQueueType qType = _parent.QueueType;
+        #
+        #    // Determine effective window length (override for historical):contentReference[oaicite:0]{index=0}
+        #    if (qType == Jay_ExportQueueType::Historical && _parent.LengthValue > 0)
+        #    {
+        #        effectiveValue = _parent.LengthValue;
+        #        effectiveUnit  = _parent.LengthUnit;
+        #    }
+        #    else
+        #    {
+        #        effectiveValue = _parent.ScanValue;
+        #        effectiveUnit  = _parent.ScanUnit;
+        #    }
+        #
+        #    if (!_parent.RecId)
+        #    {
+        #        // No window if parent record invalid
+        #        return [NoYes::No, DateTimeUtil::maxValue(), DateTimeUtil::maxValue(), NoYes::No];
+        #    }
+        #
+        #    // Compute total minutes of the window for safety:contentReference[oaicite:1]{index=1}
+        #    scanMins = Jay_CadenceModel::toMinutes(abs(effectiveValue), effectiveUnit, _currentAnchor);
+        #    if (scanMins <= 0)
+        #    {
+        #        return [NoYes::No, DateTimeUtil::maxValue(), DateTimeUtil::maxValue(), NoYes::No];
+        #    }
+        #
+        #    // Forward direction – compute next window backwards from current anchor:contentReference[oaicite:2]{index=2}
+        #    nextEndUtc   = _currentAnchor;
+        #    nextStartUtc = Jay_ScanTemporalService::safeAddCadence(_currentAnchor, -effectiveValue, effectiveUnit);
+        #
+        #    // Fallback: if safeAddCadence did not move the time (anchor unchanged), subtract minutes directly:contentReference[oaicite:3]{index=3}
+        #    if (nextStartUtc >= _currentAnchor)
+        #    {
+        #        nextStartUtc = DateTimeUtil::addMinutes(_currentAnchor, -scanMins);
+        #    }
+        #
+        #    // Horizon checks for forward scanning:contentReference[oaicite:4]{index=4}
+        #    if (hasHorizon)
+        #    {
+        #        // If the next window end is at or before horizon, no further window:contentReference[oaicite:5]{index=5}
+        #        if (nextEndUtc <= _horizonUtc)
+        #        {
+        #            return [NoYes::No, DateTimeUtil::maxValue(), DateTimeUtil::maxValue(), NoYes::No];
+        #        }
+        #        // If the next window start precedes horizon, clamp to horizon and mark final:contentReference[oaicite:6]{index=6}
+        #        if (nextStartUtc < _horizonUtc)
+        #        {
+        #            nextStartUtc = _horizonUtc;
+        #            isFinal      = NoYes::Yes;
+        #        }
+        #    }
+        #
+        #    // If window is invalid (start not before end), signal no window:contentReference[oaicite:7]{index=7}
+        #    if (nextStartUtc >= nextEndUtc)
+        #    {
+        #        return [NoYes::No, DateTimeUtil::maxValue(), DateTimeUtil::maxValue(), NoYes::No];
+        #    }
+        #
+        #    // Return the next window (marked Yes):contentReference[oaicite:8]{index=8}
+        #    return [NoYes::Yes, nextStartUtc, nextEndUtc, isFinal];
+        #}
+      ENDSOURCE
+      SOURCE #nextRangeFromUtc
+        #public utcDateTime nextRangeFromUtc(Jay_ScanCtrl _parent)
+        #{
+        #    // For forward scans, the next child range begins where the parent ended
+        #    return _parent.RangeToUTC; // i.e. start at parent's RangeTo:contentReference[oaicite:9]{index=9}
+        #}
+      ENDSOURCE
+      SOURCE #nextRangeToUtc
+        #public utcDateTime nextRangeToUtc(Jay_ScanCtrl _parent, utcDateTime _rangeFromUtc)
+        #{
+        #    // Compute effective window length in minutes (scan vs. length):contentReference[oaicite:10]{index=10}
+        #    int scanIntervalMinutes = abs(_parent.ScanValue) * Jay_CadenceModel::unitToMinutes(_parent.ScanUnit);
+        #    int lengthMinutes       = abs(_parent.LengthValue) * Jay_CadenceModel::unitToMinutes(_parent.LengthUnit);
+        #    int effectiveWindowMinutes;
+        #    Jay_ExportQueueType queueType = _parent.QueueType;
+        #    utcDateTime newRangeToUtc, horizonUtc;
+        #
+        #    if (queueType == Jay_ExportQueueType::Historical && _parent.LengthValue > 0)
+        #    {
+        #        effectiveWindowMinutes = lengthMinutes;
+        #    }
+        #    else
+        #    {
+        #        effectiveWindowMinutes = scanIntervalMinutes;
+        #    }
+        #
+        #    // Forward scans: child RangeTo = RangeFrom + window length:contentReference[oaicite:11]{index=11}
+        #    newRangeToUtc = DateTimeUtil::addMinutes(_rangeFromUtc, effectiveWindowMinutes);
+        #
+        #    // Clamp to horizon if defined (forward only):contentReference[oaicite:12]{index=12}
+        #    if (_parent.HorizonValue > 0)
+        #    {
+        #        horizonUtc = Jay_CadenceModel::addCadence(_parent.NextIntervalStart,
+        #                                                    abs(_parent.HorizonValue),
+        #                                                    _parent.HorizonUnit);
+        #        if (newRangeToUtc > horizonUtc)
+        #        {
+        #            newRangeToUtc = horizonUtc;
+        #        }
+        #    }
+        #    return newRangeToUtc;
+        #}
+      ENDSOURCE
+    ENDMETHODS
+  ENDCLASS
+
+***Element: END

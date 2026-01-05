@@ -1,0 +1,125 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: DBT
+
+; Microsoft Dynamics AX Table : Jay_PrintGovernorState unloaded
+; --------------------------------------------------------------------------------
+  TABLEVERSION 1
+  
+  TABLE #Jay_PrintGovernorState
+    EnforceFKRelation 1
+    PROPERTIES
+      Name                #Jay_PrintGovernorState
+      CreateRecIdIndex    #Yes
+      PrimaryIndex        #SurrogateKey
+      ClusterIndex        #SurrogateKey
+      ModifiedDateTime    #Yes
+      ModifiedBy          #Yes
+      CreatedDateTime     #Yes
+      CreatedBy           #Yes
+      Origin              #{44574346-1A54-4BD4-917F-763EA407B71D}
+    ENDPROPERTIES
+    
+    FIELDS
+      FIELD #IsPrinting
+        ENUM
+        PROPERTIES
+          Name                #IsPrinting
+          Label               #Is Printing
+          Table               #Jay_PrintGovernorState
+          Origin              #{D0AE85A5-8C46-4464-94E5-A60EFE6DCB74}
+          EnumType            #NoYes
+        ENDPROPERTIES
+        
+      FIELD #LastPrintScheduleUtc
+        DATETIME
+        PROPERTIES
+          Name                #LastPrintScheduleUtc
+          Label               #Last Print Schedule Utc
+          Table               #Jay_PrintGovernorState
+          Origin              #{EF3C3166-A8B9-48C4-B34A-591D158CD34E}
+          ExtendedDataType    #ActivationDateTime
+        ENDPROPERTIES
+        
+      FIELD #LastUpdateUtc
+        DATETIME
+        PROPERTIES
+          Name                #LastUpdateUtc
+          Table               #Jay_PrintGovernorState
+          Origin              #{C02DB785-6C08-4D46-A1A1-C3C391EF7713}
+        ENDPROPERTIES
+        
+      FIELD #PendingPrintCycle
+        ENUM
+        PROPERTIES
+          Name                #PendingPrintCycle
+          Label               #Pending Print Cycle
+          Table               #Jay_PrintGovernorState
+          Origin              #{2563356A-5BEE-483A-A3B5-874BA0C8AAE2}
+          EnumType            #NoYes
+        ENDPROPERTIES
+        
+    ENDFIELDS
+    GROUPS
+    ENDGROUPS
+    
+    INDICES
+    ENDINDICES
+    FULLTEXTINDICES
+    ENDFULLTEXTINDICES
+    REFERENCES
+    ENDREFERENCES
+    
+    DELETEACTIONS
+    ENDDELETEACTIONS
+    
+    METHODS
+      SOURCE #initValue
+        #public void initValue()
+        #{
+        #    super();
+        #    this.IsPrinting = NoYes::No;
+        #}
+      ENDSOURCE
+      SOURCE #findOrCreate
+        #public static Jay_PrintGovernorState findOrCreate()
+        #{
+        #    Jay_PrintGovernorState keep;
+        #    Jay_PrintGovernorState del;
+        #
+        #    ttsBegin;
+        #
+        #    // 1. Lock the canonical row deterministically
+        #    //    Using lowest RecId as the canonical row
+        #    select firstOnly forUpdate keep
+        #        order by RecId asc;
+        #
+        #    if (!keep.RecId)
+        #    {
+        #        // No rows exist → create the singleton
+        #        keep.clear();
+        #        keep.initValue();
+        #        keep.insert();
+        #    }
+        #    else
+        #    {
+        #        // 2. Delete ALL other rows while holding the lock
+        #        while select forUpdate del
+        #            where del.RecId != keep.RecId
+        #        {
+        #            del.delete();
+        #        }
+        #    }
+        #
+        #    ttsCommit;
+        #
+        #    return keep;
+        #}
+        #
+      ENDSOURCE
+    ENDMETHODS
+  ENDTABLE
+  
+
+***Element: END

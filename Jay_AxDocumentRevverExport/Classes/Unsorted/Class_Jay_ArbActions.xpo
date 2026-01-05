@@ -1,0 +1,36 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: CLS
+
+; Microsoft Dynamics AX Class: Jay_ArbActions unloaded
+; --------------------------------------------------------------------------------
+  CLSVERSION 1
+  
+  CLASS #Jay_ArbActions
+    PROPERTIES
+      Name                #Jay_ArbActions
+      Origin              #{DEBDC2B2-F421-4F20-B344-C713DECFCCA0}
+    ENDPROPERTIES
+    
+    METHODS
+      SOURCE #classDeclaration
+        #class Jay_ArbActions
+        #{
+        #    boolean StartScan;
+        #    boolean StartSlices;
+        #    boolean StartPrint;
+        #
+        #    boolean ClearStuckScan;
+        #    boolean ClearStuckSlices;
+        #    boolean ClearPrintGovernor;
+        #
+        #    boolean RunMaintenance;
+        #    boolean RunCleanup;
+        #}
+        #
+      ENDSOURCE
+    ENDMETHODS
+  ENDCLASS
+
+***Element: END

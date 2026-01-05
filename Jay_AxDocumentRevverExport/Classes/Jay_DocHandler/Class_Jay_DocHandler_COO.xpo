@@ -1,0 +1,177 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: CLS
+
+; Microsoft Dynamics AX Class: Jay_DocHandler_COO unloaded
+; --------------------------------------------------------------------------------
+  CLSVERSION 1
+  
+  CLASS #Jay_DocHandler_COO
+    PROPERTIES
+      Name                #Jay_DocHandler_COO
+      Extends             #Jay_DocHandler_Base
+      Origin              #{46D1B5E7-1299-48FE-BDEC-C6E4A148CE64}
+    ENDPROPERTIES
+    
+    METHODS
+      SOURCE #classDeclaration
+        #public class Jay_DocHandler_COO extends Jay_DocHandler_Base
+        #{
+        #}
+        #
+      ENDSOURCE
+      SOURCE #printRecord
+        #public boolean printRecord(
+        #    RecId               _docRecId,
+        #    Jay_ExportQueueType _queueType,
+        #    RecId               _queueRecId
+        #)
+        #{
+        #    SalesTable              st;
+        #    AMDeviceTable           device;
+        #    McaLoadDocsController   controller;
+        #    McaLoadDocsRptContract  contract;
+        #    Args                    args;
+        #
+        #    boolean                 success = false;
+        #    str                     raw;
+        #
+        #    int                     ttsBefore, ttsAfter, safety;
+        #
+        #    // -------------------------------------------------------
+        #    // VALIDATION
+        #    // -------------------------------------------------------
+        #    select firstOnly st
+        #        where st.RecId == _docRecId;
+        #
+        #    if (!st.RecId)
+        #    {
+        #        Jay_PrintOrchestratorService::logQueueError(
+        #            _queueType, _queueRecId,
+        #            strFmt("COO print error: SalesTable missing for RecId=%1.",
+        #                   int642str(_docRecId))
+        #        );
+        #        return false;
+        #    }
+        #
+        #    if (!st.AMDeviceId)
+        #    {
+        #        Jay_PrintOrchestratorService::logQueueError(
+        #            _queueType, _queueRecId,
+        #            strFmt("COO print error: SalesId %1 missing AMDeviceId.",
+        #                   st.SalesId)
+        #        );
+        #        return false;
+        #    }
+        #
+        #    select firstOnly device
+        #        where device.DeviceId == st.AMDeviceId;
+        #
+        #    if (!device.RecId)
+        #    {
+        #        Jay_PrintOrchestratorService::logQueueError(
+        #            _queueType, _queueRecId,
+        #            strFmt("COO print error: Device not found for DeviceId=%1.",
+        #                   st.AMDeviceId)
+        #        );
+        #        return false;
+        #    }
+        #
+        #    // -------------------------------------------------------
+        #    // EXECUTE PRINT (ONE PASS – NO INTERNAL RETRY)
+        #    // -------------------------------------------------------
+        #    infolog.clear();
+        #    ttsBefore = appl.ttsLevel();
+        #
+        #    try
+        #    {
+        #        controller = new McaLoadDocsController();
+        #        controller.parmReportName(
+        #            ssrsReportStr(McaLoadDocsCertificateOfOriginReport, CertificateOfOrigin)
+        #        );
+        #
+        #        contract = new McaLoadDocsRptContract();
+        #        contract.parmSalesId(st.SalesId);
+        #        contract.parmAMDeviceId(device.DeviceId);
+        #
+        #        args = new Args();
+        #        args.record(st);
+        #
+        #        controller.parmArgs(args);
+        #        controller.parmReportContract().parmRdpContract(contract);
+        #        controller.parmShowDialog(false);
+        #        controller.parmExecutionMode(SysOperationExecutionMode::Synchronous);
+        #
+        #        controller.startOperation();
+        #        success = true;
+        #    }
+        #    catch (Exception::CLRError)
+        #    {
+        #        raw = Jay_PrintOrchestratorService::safeStr(AifUtil::getClrErrorMessage());
+        #        success = false;
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        raw = Jay_PrintOrchestratorService::safeStr(infolog.text());
+        #        success = false;
+        #    }
+        #
+        #    // -------------------------------------------------------
+        #    // TTS LEAK CHECK (rare on SSRS but must be guarded)
+        #    // -------------------------------------------------------
+        #    ttsAfter = appl.ttsLevel();
+        #
+        #    if (ttsAfter > ttsBefore)
+        #    {
+        #        safety = 10;
+        #
+        #        while (appl.ttsLevel() > ttsBefore && safety > 0)
+        #        {
+        #            ttsAbort;
+        #            safety--;
+        #        }
+        #
+        #        if (appl.ttsLevel() != ttsBefore)
+        #        {
+        #            Jay_PrintOrchestratorService::logQueueError(
+        #                _queueType,
+        #                _queueRecId,
+        #                strFmt("COO print fatal TTS corruption. RecId=%1", st.RecId)
+        #            );
+        #            return false;
+        #        }
+        #
+        #        success = false;
+        #    }
+        #
+        #    // -------------------------------------------------------
+        #    // LOG FAILURE IF ANY
+        #    // -------------------------------------------------------
+        #    if (!success)
+        #    {
+        #        raw = raw ? raw : Jay_PrintOrchestratorService::safeStr(infolog.text());
+        #
+        #        Jay_PrintOrchestratorService::logQueueError(
+        #            _queueType,
+        #            _queueRecId,
+        #            strFmt(
+        #                "COO print failure. SalesId=%1 | DeviceId=%2 | RecId=%3\nAX: %4",
+        #                st.SalesId,
+        #                st.AMDeviceId,
+        #                st.RecId,
+        #                raw
+        #            )
+        #        );
+        #
+        #        return false;
+        #    }
+        #
+        #    return true;
+        #}
+        #
+      ENDSOURCE
+    ENDMETHODS
+  ENDCLASS
+
+***Element: END

@@ -1,0 +1,1222 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: CLS
+
+; Microsoft Dynamics AX Class: Jay_DocProbeManager unloaded
+; --------------------------------------------------------------------------------
+  CLSVERSION 1
+  
+  CLASS #Jay_DocProbeManager
+    PROPERTIES
+      Name                #Jay_DocProbeManager
+      Origin              #{53131048-89DC-4D74-85BD-6D5E7443F69B}
+    ENDPROPERTIES
+    
+    METHODS
+      SOURCE #classDeclaration
+        #// Jay_DocProbeManager
+        #// Single-entry quick-probe dispatcher for doc-type / subtype existence checks.
+        #// CU7-safe, half-open window semantics: ModifiedDateTime >= _fromUtc && < _toUtc
+        #class Jay_DocProbeManager
+        #{
+        #}
+      ENDSOURCE
+      SOURCE #addRecId
+        #public static container addRecId(container _con, RecId _recId)
+        #{
+        #    if (_recId)
+        #    {
+        #        _con += _recId;
+        #    }
+        #    return _con;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #enumerateConfirmRecIds
+        #public static container enumerateConfirmRecIds(
+        #        Jay_ExportDocSubType _subtype,
+        #        utcDateTime          _fromUtc,
+        #        utcDateTime          _toUtc)
+        #{
+        #    container outCon;
+        #    CustConfirmJour jour;
+        #
+        #    if (_fromUtc >= _toUtc)
+        #        return outCon;
+        #
+        #    try
+        #    {
+        #        switch (_subtype)
+        #        {
+        #            //
+        #            // ───────────────────────────────────────────────
+        #            // PART
+        #            // ───────────────────────────────────────────────
+        #            case Jay_ExportDocSubType::Part:
+        #
+        #                while select RecId
+        #                    from jour
+        #                    where jour.DataAreaId == curext()
+        #                      && (
+        #                            (jour.CreatedDateTime  >= _fromUtc &&
+        #                             jour.CreatedDateTime  <  _toUtc) ||
+        #                            (jour.ModifiedDateTime >= _fromUtc &&
+        #                             jour.ModifiedDateTime <  _toUtc)
+        #                         )
+        #                      && (
+        #                            jour.CustGroup == 'Internal' ||
+        #                            jour.CustGroup == 'Part'     ||
+        #                            jour.CustGroup == 'Part_DPU'
+        #                         )
+        #                      && !(
+        #                            jour.CustGroup == 'Internal' &&
+        #                            jour.MCASHIPPINGINSTRUCTIONS == 'Unit'
+        #                         )
+        #                {
+        #                    outCon = Jay_DocProbeManager::addRecId(outCon, jour.RecId);
+        #                }
+        #
+        #                break;
+        #
+        #
+        #            //
+        #            // ───────────────────────────────────────────────
+        #            // UNIT
+        #            // ───────────────────────────────────────────────
+        #            case Jay_ExportDocSubType::Unit:
+        #
+        #                while select RecId
+        #                    from jour
+        #                    where jour.DataAreaId == curext()
+        #                      && (
+        #                            (jour.CreatedDateTime  >= _fromUtc &&
+        #                             jour.CreatedDateTime  <  _toUtc) ||
+        #                            (jour.ModifiedDateTime >= _fromUtc &&
+        #                             jour.ModifiedDateTime <  _toUtc)
+        #                         )
+        #                      && (
+        #                            jour.CustGroup == 'Unit'    ||
+        #                            jour.CustGroup == 'Unit_PO' ||
+        #                            (jour.CustGroup == 'Internal' &&
+        #                             jour.MCASHIPPINGINSTRUCTIONS == 'Unit')
+        #                         )
+        #                {
+        #                    outCon = Jay_DocProbeManager::addRecId(outCon, jour.RecId);
+        #                }
+        #
+        #                break;
+        #
+        #
+        #            //
+        #            // ───────────────────────────────────────────────
+        #            // VENDOR
+        #            // ───────────────────────────────────────────────
+        #            case Jay_ExportDocSubType::Vendor:
+        #
+        #                while select RecId
+        #                    from jour
+        #                    where jour.DataAreaId == curext()
+        #                      && (
+        #                            (jour.CreatedDateTime  >= _fromUtc &&
+        #                             jour.CreatedDateTime  <  _toUtc) ||
+        #                            (jour.ModifiedDateTime >= _fromUtc &&
+        #                             jour.ModifiedDateTime <  _toUtc)
+        #                         )
+        #                      && jour.CustGroup == 'Vendor'
+        #                {
+        #                    outCon = Jay_DocProbeManager::addRecId(outCon, jour.RecId);
+        #                }
+        #
+        #                break;
+        #        }
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        warning("enumerateConfirmRecIds: exception.");
+        #    }
+        #
+        #    return outCon;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #enumerateCooRecIds
+        #public static container enumerateCooRecIds(utcDateTime _fromUtc, utcDateTime _toUtc)
+        #{
+        #    container outCon;
+        #    SalesTable st;
+        #    AMDeviceTable d;
+        #    AMDeviceTableMaster m;
+        #
+        #    if (_fromUtc >= _toUtc)
+        #        return outCon;
+        #
+        #    try
+        #    {
+        #        while select RecId
+        #            from st
+        #            join d
+        #                where d.DeviceId == st.AMDeviceId
+        #            join m
+        #                where m.MasterId == d.MasterId
+        #                  && (m.BodyId == 'MHA'
+        #                   || m.BodyId == 'MHB'
+        #                   || m.BodyId == 'MHC')
+        #              && st.DataAreaId == curext()
+        #              && st.SalesStatus == SalesStatus::Invoiced
+        #              && st.AMDeviceId  != ''
+        #              && (
+        #                    (st.CreatedDateTime  >= _fromUtc && st.CreatedDateTime  < _toUtc)
+        #                 ||
+        #                    (st.ModifiedDateTime >= _fromUtc && st.ModifiedDateTime < _toUtc)
+        #                 )
+        #              && st.SalesPoolId == 'UNIT'
+        #        {
+        #            outCon = Jay_DocProbeManager::addRecId(outCon, st.RecId);
+        #        }
+        #    }
+        #    catch
+        #    {
+        #        warning("enumerateCooRecIds: exception.");
+        #    }
+        #
+        #    return outCon;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #enumerateDocTypeSubType
+        #public static container enumerateDocTypeSubType(Jay_ExportDocType    _docType,
+        #                                                Jay_ExportDocSubType _subType,
+        #                                                utcDateTime          _fromUtc,
+        #                                                utcDateTime          _toUtc)
+        #{
+        #    container recIds;
+        #
+        #    if (_fromUtc >= _toUtc)
+        #        return recIds;
+        #
+        #    try
+        #    {
+        #        switch (_docType)
+        #        {
+        #            case Jay_ExportDocType::PurchaseOrder:
+        #                recIds = Jay_DocProbeManager::enumeratePurchRecIds(_fromUtc, _toUtc);
+        #                break;
+        #
+        #            case Jay_ExportDocType::Confirmation:
+        #                recIds = Jay_DocProbeManager::enumerateConfirmRecIds(
+        #                                _subType, _fromUtc, _toUtc);
+        #                break;
+        #
+        #            case Jay_ExportDocType::Invoice:
+        #                recIds = Jay_DocProbeManager::enumerateInvoiceRecIds(
+        #                                _subType, _fromUtc, _toUtc);
+        #                break;
+        #
+        #            case Jay_ExportDocType::MSRP:
+        #                recIds = Jay_DocProbeManager::enumerateMsrpRecIds(_fromUtc, _toUtc);
+        #                break;
+        #
+        #            case Jay_ExportDocType::CertificateOfOrigin:
+        #                recIds = Jay_DocProbeManager::enumerateCooRecIds(_fromUtc, _toUtc);
+        #                break;
+        #
+        #            default:
+        #                recIds = conNull();
+        #                break;
+        #        }
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        error(strFmt("❌ [Enumerate Dispatcher Exception] DocType=%1 SubType=%2 Window=[%3 — %4]",
+        #                     enum2str(_docType),
+        #                     enum2str(_subType),
+        #                     DateTimeUtil::toStr(_fromUtc),
+        #                     DateTimeUtil::toStr(_toUtc)));
+        #        return conNull();
+        #    }
+        #
+        #    return recIds;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #enumerateInvoiceRecIds
+        #public static container enumerateInvoiceRecIds(
+        #        Jay_ExportDocSubType _subtype,
+        #        utcDateTime          _fromUtc,
+        #        utcDateTime          _toUtc)
+        #{
+        #    container        outCon;
+        #    CustInvoiceJour  ij;
+        #
+        #    if (_fromUtc >= _toUtc)
+        #        return outCon;
+        #
+        #    try
+        #    {
+        #        switch (_subtype)
+        #        {
+        #            case Jay_ExportDocSubType::Part:
+        #                while select RecId
+        #                    from ij
+        #                    where ij.DataAreaId == curext()
+        #                      && (
+        #                            (ij.CreatedDateTime  >= _fromUtc && ij.CreatedDateTime  < _toUtc) ||
+        #                            (ij.ModifiedDateTime >= _fromUtc && ij.ModifiedDateTime < _toUtc)
+        #                         )
+        #                      && (
+        #                            ij.CustGroup == 'Part'     ||
+        #                            ij.CustGroup == 'Part_DPU' ||
+        #                            (ij.CustGroup == 'Internal' &&
+        #                             ij.MCAAMDEVICEBRANDID == '')
+        #                         )
+        #                {
+        #                    outCon = Jay_DocProbeManager::addRecId(outCon, ij.RecId);
+        #                }
+        #                break;
+        #
+        #            case Jay_ExportDocSubType::Unit:
+        #                while select RecId
+        #                    from ij
+        #                    where ij.DataAreaId == curext()
+        #                      && (
+        #                            (ij.CreatedDateTime  >= _fromUtc && ij.CreatedDateTime  < _toUtc) ||
+        #                            (ij.ModifiedDateTime >= _fromUtc && ij.ModifiedDateTime < _toUtc)
+        #                         )
+        #                      && (
+        #                            ij.CustGroup == 'Unit'    ||
+        #                            ij.CustGroup == 'Unit_PO' ||
+        #                            (ij.CustGroup == 'Internal' &&
+        #                             ij.MCAAMDEVICEBRANDID != '')
+        #                         )
+        #                {
+        #                    outCon = Jay_DocProbeManager::addRecId(outCon, ij.RecId);
+        #                }
+        #                break;
+        #
+        #            case Jay_ExportDocSubType::Vendor:
+        #                while select RecId
+        #                    from ij
+        #                    where ij.DataAreaId == curext()
+        #                      && (
+        #                            (ij.CreatedDateTime  >= _fromUtc && ij.CreatedDateTime  < _toUtc) ||
+        #                            (ij.ModifiedDateTime >= _fromUtc && ij.ModifiedDateTime < _toUtc)
+        #                         )
+        #                      && ij.CustGroup == 'Vendor'
+        #                {
+        #                    outCon = Jay_DocProbeManager::addRecId(outCon, ij.RecId);
+        #                }
+        #                break;
+        #        }
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        warning("enumerateInvoiceRecIds: exception.");
+        #    }
+        #
+        #    return outCon;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #enumerateMsrpRecIds
+        #public static container enumerateMsrpRecIds(utcDateTime _fromUtc,
+        #                                          utcDateTime _toUtc)
+        #{
+        #       container   outCon;
+        #       SalesTable  st;
+        #
+        #       if (_fromUtc >= _toUtc)
+        #              return outCon;
+        #
+        #       try
+        #       {
+        #              while select RecId
+        #              from st
+        #              where st.DataAreaId        == curext()
+        #                     && st.SalesStatus        == SalesStatus::Invoiced
+        #                     && st.AMDeviceId         != ''
+        #                     && (
+        #                            (st.ModifiedDateTime >= _fromUtc
+        #                            && st.ModifiedDateTime <  _toUtc)
+        #                     )
+        #                     && st.SalesPoolId == 'UNIT'
+        #              {
+        #              outCon = Jay_DocProbeManager::addRecId(outCon, st.RecId);
+        #              }
+        #       }
+        #       catch (Exception::Error)
+        #       {
+        #              warning("enumerateMsrpRecIds: exception.");
+        #       }
+        #
+        #       return outCon;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #enumeratePurchRecIds
+        #public static container enumeratePurchRecIds(utcDateTime _fromUtc,
+        #                                             utcDateTime _toUtc)
+        #{
+        #    PurchTable purch;
+        #    container  outCon;
+        #
+        #    if (_fromUtc >= _toUtc)
+        #        return outCon;
+        #
+        #    try
+        #    {
+        #        while select RecId
+        #            from purch
+        #            where purch.DataAreaId == curext()
+        #              && (
+        #                    (purch.CreatedDateTime  >= _fromUtc &&
+        #                     purch.CreatedDateTime  <  _toUtc)
+        #                 ||
+        #                    (purch.ModifiedDateTime >= _fromUtc &&
+        #                     purch.ModifiedDateTime <  _toUtc)
+        #                 )
+        #              && (
+        #                    purch.PurchStatus == PurchStatus::Backorder
+        #                 || purch.PurchStatus == PurchStatus::Received
+        #                 || purch.PurchStatus == PurchStatus::Invoiced
+        #                 )
+        #        {
+        #            outCon += purch.RecId;
+        #        }
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        warning("enumeratePurchRecIds: exception.");
+        #    }
+        #
+        #    return outCon;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #fullProbeCertificateOfOriginCount
+        #public static int fullProbeCertificateOfOriginCount(utcDateTime _fromUtc, utcDateTime _toUtc)
+        #{
+        #    SalesTable          st;
+        #    AMDeviceTable       d;
+        #    AMDeviceTableMaster m;
+        #    int64               tmp64 = 0;
+        #    int                 cnt   = 0;
+        #    int                 CAP   = 2147483647;
+        #
+        #    if (_fromUtc >= _toUtc)
+        #    {
+        #        warning("Full probe window invalid: start >= end.");
+        #        return 0;
+        #    }
+        #
+        #    try
+        #    {
+        #        select count(RecId) from st
+        #            join d
+        #                where d.DeviceId == st.AMDeviceId
+        #            join m
+        #                where m.MasterId == d.MasterId
+        #                  && (m.BodyId == 'MHA'
+        #                   || m.BodyId == 'MHB'
+        #                   || m.BodyId == 'MHC')
+        #              && st.DataAreaId == curext()
+        #              && st.SalesStatus == SalesStatus::Invoiced
+        #              && st.AMDeviceId  != ''
+        #              && (
+        #                    (st.CreatedDateTime  >= _fromUtc && st.CreatedDateTime  < _toUtc)
+        #                 ||
+        #                    (st.ModifiedDateTime >= _fromUtc && st.ModifiedDateTime < _toUtc)
+        #                 )&& st.SalesPoolId == 'UNIT';
+        #
+        #        tmp64 = st.RecId;
+        #        cnt   = any2int(tmp64);
+        #    }
+        #    catch
+        #    {
+        #        error(strFmt("❌ [C-of-O Full Probe Exception] Window: [%1 - %2]",
+        #                     DateTimeUtil::toStr(_fromUtc),
+        #                     DateTimeUtil::toStr(_toUtc)));
+        #        return 0;
+        #    }
+        #
+        #    if (cnt < 0) cnt = 0;
+        #    if (cnt > CAP) cnt = CAP;
+        #
+        #    return cnt;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #fullProbeConfirmJournalCount
+        #public static int fullProbeConfirmJournalCount(
+        #    Jay_ExportDocSubType _subtype,
+        #    utcDateTime          _fromUtc,
+        #    utcDateTime          _toUtc)
+        #{
+        #    CustConfirmJour jour;
+        #    int64           tmp64;
+        #    int             cnt = 0;
+        #    int             CAP = 2147483647;
+        #
+        #    if (_fromUtc >= _toUtc)
+        #    {
+        #        warning("Full probe window invalid: start >= end.");
+        #        return 0;
+        #    }
+        #
+        #    try
+        #    {
+        #        switch (_subtype)
+        #        {
+        #            case Jay_ExportDocSubType::Part:
+        #
+        #                select count(RecId) from jour
+        #                    where jour.DataAreaId == curext()
+        #                      && (
+        #                            (jour.CreatedDateTime  >= _fromUtc &&
+        #                             jour.CreatedDateTime  <  _toUtc)
+        #                         ||
+        #                            (jour.ModifiedDateTime >= _fromUtc &&
+        #                             jour.ModifiedDateTime <  _toUtc)
+        #                         )
+        #                      && (
+        #                            jour.CustGroup == 'Internal'
+        #                         || jour.CustGroup == 'Part'
+        #                         || jour.CustGroup == 'Part_DPU'
+        #                         )
+        #                      && !(
+        #                            jour.CustGroup == 'Internal'
+        #                         && jour.MCASHIPPINGINSTRUCTIONS == 'Unit'
+        #                         );
+        #
+        #                tmp64 = jour.RecId;
+        #                cnt   = any2int(tmp64);
+        #                break;
+        #
+        #
+        #            case Jay_ExportDocSubType::Unit:
+        #
+        #                select count(RecId) from jour
+        #                    where jour.DataAreaId == curext()
+        #                      && (
+        #                            (jour.CreatedDateTime  >= _fromUtc &&
+        #                             jour.CreatedDateTime  <  _toUtc)
+        #                         ||
+        #                            (jour.ModifiedDateTime >= _fromUtc &&
+        #                             jour.ModifiedDateTime <  _toUtc)
+        #                         )
+        #                      && (
+        #                            jour.CustGroup == 'Unit'
+        #                         || jour.CustGroup == 'Unit_PO'
+        #                         || (jour.CustGroup == 'Internal' &&
+        #                             jour.MCASHIPPINGINSTRUCTIONS == 'Unit')
+        #                         );
+        #
+        #                tmp64 = jour.RecId;
+        #                cnt   = any2int(tmp64);
+        #                break;
+        #
+        #
+        #            case Jay_ExportDocSubType::Vendor:
+        #
+        #                select count(RecId) from jour
+        #                    where jour.DataAreaId == curext()
+        #                      && (
+        #                            (jour.CreatedDateTime  >= _fromUtc &&
+        #                             jour.CreatedDateTime  <  _toUtc)
+        #                         ||
+        #                            (jour.ModifiedDateTime >= _fromUtc &&
+        #                             jour.ModifiedDateTime <  _toUtc)
+        #                         )
+        #                      && jour.CustGroup == 'Vendor';
+        #
+        #                tmp64 = jour.RecId;
+        #                cnt   = any2int(tmp64);
+        #                break;
+        #
+        #
+        #            default:
+        #                info(strFmt("❌ [Confirmation Full Probe Invalid Subtype] %1",
+        #                            _subtype));
+        #                return 0;
+        #        }
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        error(strFmt("❌ Confirmation Full Probe Failure - Exception: Subtype=%1; Window=[%2 → %3]",
+        #                     _subtype,
+        #                     DateTimeUtil::toStr(_fromUtc),
+        #                     DateTimeUtil::toStr(_toUtc)));
+        #        return 0;
+        #    }
+        #
+        #    if (cnt < 0)  cnt = 0;
+        #    if (cnt > CAP) cnt = CAP;
+        #
+        #    return cnt;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #fullProbeDocTypeSubType
+        #public static int fullProbeDocTypeSubType(Jay_ExportDocType    _docType,
+        #                                          Jay_ExportDocSubType _subType,
+        #                                          utcDateTime          _fromUtc,
+        #                                          utcDateTime          _toUtc)
+        #{
+        #    int found = 0;
+        #
+        #    // Unified guard: empty or inverted window
+        #    if (_fromUtc >= _toUtc)
+        #    {
+        #        warning("Probe window invalid: start >= end.");
+        #        return 0;
+        #    }
+        #
+        #    try
+        #    {
+        #        switch (_docType)
+        #        {
+        #            case Jay_ExportDocType::PurchaseOrder:
+        #                found = Jay_DocProbeManager::fullProbePurchCount(_fromUtc, _toUtc);
+        #                break;
+        #
+        #            case Jay_ExportDocType::Confirmation:
+        #                found = Jay_DocProbeManager::fullProbeConfirmJournalCount(
+        #                            _subType,
+        #                            _fromUtc,
+        #                            _toUtc);
+        #                break;
+        #
+        #            case Jay_ExportDocType::Invoice:
+        #                found = Jay_DocProbeManager::fullProbeInvoiceCount(
+        #                            _subType,
+        #                            _fromUtc,
+        #                            _toUtc);
+        #                break;
+        #
+        #            case Jay_ExportDocType::MSRP:
+        #                found = Jay_DocProbeManager::fullProbeMsrpCount(_fromUtc, _toUtc);
+        #                break;
+        #
+        #            case Jay_ExportDocType::CertificateOfOrigin:
+        #                found = Jay_DocProbeManager::fullProbeCertificateOfOriginCount(_fromUtc, _toUtc);
+        #                break;
+        #
+        #            default:
+        #                // No spam, just treat unhandled types as zero
+        #                found = 0;
+        #                break;
+        #        }
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        error(strFmt("❌ [Full Probe Dispatcher Exception] DocType=%1 SubType=%2 Window=[%3 — %4]",
+        #                     enum2str(_docType),
+        #                     enum2str(_subType),
+        #                     DateTimeUtil::toStr(_fromUtc),
+        #                     DateTimeUtil::toStr(_toUtc)));
+        #
+        #        return 0;
+        #    }
+        #
+        #    return found;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #fullProbeInvoiceCount
+        #public static int fullProbeInvoiceCount(
+        #        Jay_ExportDocSubType _subtype,
+        #        utcDateTime          _fromUtc,
+        #        utcDateTime          _toUtc)
+        #{
+        #    CustInvoiceJour ij;
+        #    int64           tmp64 = 0;
+        #    int             cnt   = 0;
+        #    int             CAP   = 2147483647;
+        #
+        #    if (_fromUtc >= _toUtc)
+        #    {
+        #        warning("Full probe window is invalid: start >= end.");
+        #        return 0;
+        #    }
+        #
+        #    try
+        #    {
+        #        switch (_subtype)
+        #        {
+        #            case Jay_ExportDocSubType::Part:
+        #                select count(RecId) from ij
+        #                    where ij.DataAreaId == curext()
+        #                      && (
+        #                            (ij.CreatedDateTime  >= _fromUtc && ij.CreatedDateTime  < _toUtc) ||
+        #                            (ij.ModifiedDateTime >= _fromUtc && ij.ModifiedDateTime < _toUtc)
+        #                         )
+        #                      && (
+        #                            ij.CustGroup == 'Part'     ||
+        #                            ij.CustGroup == 'Part_DPU' ||
+        #                            (ij.CustGroup == 'Internal' &&
+        #                             ij.MCAAMDEVICEBRANDID == '')
+        #                         );
+        #                break;
+        #
+        #            case Jay_ExportDocSubType::Unit:
+        #                select count(RecId) from ij
+        #                    where ij.DataAreaId == curext()
+        #                      && (
+        #                            (ij.CreatedDateTime  >= _fromUtc && ij.CreatedDateTime  < _toUtc) ||
+        #                            (ij.ModifiedDateTime >= _fromUtc && ij.ModifiedDateTime < _toUtc)
+        #                         )
+        #                      && (
+        #                            ij.CustGroup == 'Unit'     ||
+        #                            ij.CustGroup == 'Unit_PO'  ||
+        #                            (ij.CustGroup == 'Internal' &&
+        #                             ij.MCAAMDEVICEBRANDID != '')
+        #                         );
+        #                break;
+        #
+        #            case Jay_ExportDocSubType::Vendor:
+        #                select count(RecId) from ij
+        #                    where ij.DataAreaId == curext()
+        #                      && (
+        #                            (ij.CreatedDateTime  >= _fromUtc && ij.CreatedDateTime  < _toUtc) ||
+        #                            (ij.ModifiedDateTime >= _fromUtc && ij.ModifiedDateTime < _toUtc)
+        #                         )
+        #                      && ij.CustGroup == 'Vendor';
+        #                break;
+        #        }
+        #
+        #        tmp64 = ij.RecId;
+        #        cnt   = any2int(tmp64);
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        error(strFmt(
+        #            "❌ [Invoice Full Probe Exception] Subtype: %1, Window: [%2 - %3]",
+        #            _subtype,
+        #            DateTimeUtil::toStr(_fromUtc),
+        #            DateTimeUtil::toStr(_toUtc)));
+        #        return 0;
+        #    }
+        #
+        #    if (cnt < 0) cnt = 0;
+        #    if (cnt > CAP) cnt = CAP;
+        #
+        #    return cnt;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #fullProbeMsrpCount
+        #public static int fullProbeMsrpCount(utcDateTime _fromUtc, utcDateTime _toUtc)
+        #{
+        #       SalesTable      st;
+        #       AMDeviceTable   d;
+        #       int64           tmp64 = 0;
+        #       int             cnt   = 0;
+        #       int             CAP   = 2147483647;
+        #
+        #       if (_fromUtc >= _toUtc)
+        #       {
+        #              warning("Full probe window invalid: start >= end.");
+        #              return 0;
+        #       }
+        #
+        #       try
+        #       {
+        #              // Combined Created/Modified half-open window
+        #              select count(RecId) from st
+        #              join d
+        #                     where d.DeviceId == st.AMDeviceId
+        #                     && st.DataAreaId     == curext()
+        #                     && st.SalesStatus    == SalesStatus::Invoiced
+        #                     && st.AMDeviceId     != ''
+        #                     && (
+        #                            (st.ModifiedDateTime >= _fromUtc
+        #                     &&  st.ModifiedDateTime <  _toUtc)
+        #                     )
+        #                     && st.SalesPoolId == 'UNIT';
+        #
+        #              tmp64 = st.RecId;
+        #              cnt   = any2int(tmp64);
+        #       }
+        #       catch (Exception::Error)
+        #       {
+        #              error(strFmt("❌ [MSRP Full Probe Failure - Exception] Window: [From: %1 To: %2]",
+        #                            DateTimeUtil::toStr(_fromUtc),
+        #                            DateTimeUtil::toStr(_toUtc)));
+        #              return 0;
+        #       }
+        #
+        #       if (cnt < 0) cnt = 0;
+        #       if (cnt > CAP) cnt = CAP;
+        #
+        #       return cnt;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #fullProbePurchCount
+        #public static int fullProbePurchCount(utcDateTime _fromUtc, utcDateTime _toUtc)
+        #{
+        #    PurchTable purch;
+        #    int64      tmp64;
+        #    int        cnt = 0;
+        #    int        CAP = 2147483647;
+        #
+        #    if (_fromUtc >= _toUtc)
+        #    {
+        #        warning("Full probe window invalid: start >= end.");
+        #        return 0;
+        #    }
+        #
+        #    try
+        #    {
+        #        // Unified half-open window and OR logic
+        #        select count(RecId) from purch
+        #            where purch.DataAreaId == curext()
+        #              && (
+        #                    (purch.CreatedDateTime  >= _fromUtc &&
+        #                     purch.CreatedDateTime  <  _toUtc)
+        #                 ||
+        #                    (purch.ModifiedDateTime >= _fromUtc &&
+        #                     purch.ModifiedDateTime <  _toUtc)
+        #                 )
+        #              && (
+        #                    purch.PurchStatus == PurchStatus::Backorder
+        #                 || purch.PurchStatus == PurchStatus::Received
+        #                 || purch.PurchStatus == PurchStatus::Invoiced
+        #                 );
+        #
+        #        tmp64 = purch.RecId;
+        #        cnt   = any2int(tmp64);
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        error(strFmt("❌ [Purch Full Probe Failure - Exception] Window=[%1 → %2]",
+        #                     DateTimeUtil::toStr(_fromUtc),
+        #                     DateTimeUtil::toStr(_toUtc)));
+        #        return 0;
+        #    }
+        #
+        #    if (cnt < 0)    cnt = 0;
+        #    if (cnt > CAP)  cnt = CAP;
+        #
+        #    return cnt;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #quickProbeCertificateOfOriginExists
+        #public static boolean quickProbeCertificateOfOriginExists(utcDateTime _fromUtc, utcDateTime _toUtc)
+        #{
+        #    SalesTable st;
+        #    System.Diagnostics.StackTrace stTrace;
+        #    str managedStack;
+        #
+        #    if (_fromUtc >= _toUtc)
+        #    {
+        #        warning("Quick probe window invalid: start >= end.");
+        #        return false;
+        #    }
+        #
+        #    try
+        #    {
+        #        select firstOnly st
+        #            where st.DataAreaId == curext()
+        #              && st.SalesStatus == SalesStatus::Invoiced
+        #              && st.AMDeviceId  != ''
+        #              && (
+        #                    (st.CreatedDateTime  >= _fromUtc && st.CreatedDateTime  < _toUtc)
+        #                 ||
+        #                    (st.ModifiedDateTime >= _fromUtc && st.ModifiedDateTime < _toUtc)
+        #                 )&& st.SalesPoolId == 'UNIT';
+        #
+        #        return (st.RecId != 0);
+        #    }
+        #    catch
+        #    {
+        #        try
+        #        {
+        #            stTrace = new System.Diagnostics.StackTrace(true);
+        #            managedStack = stTrace.ToString();
+        #        }
+        #        catch
+        #        {
+        #            managedStack = "<failed to capture managed stack>";
+        #        }
+        #
+        #        error(strFmt("❌ [C-of-O Quick Probe Exception] [%1 - %2]\n%3",
+        #                     DateTimeUtil::toStr(_fromUtc),
+        #                     DateTimeUtil::toStr(_toUtc),
+        #                     managedStack));
+        #        return false;
+        #    }
+        #}
+        #
+      ENDSOURCE
+      SOURCE #quickProbeConfirmJournalExists
+        #public static boolean quickProbeConfirmJournalExists(
+        #        Jay_ExportDocSubType _subtype,
+        #        utcDateTime          _winFrom,
+        #        utcDateTime          _winTo)
+        #{
+        #    CustConfirmJour confirmJour;
+        #
+        #    if (_winFrom >= _winTo)
+        #    {
+        #        warning("Quick probe window invalid: start >= end.");
+        #        return false;
+        #    }
+        #
+        #    try
+        #    {
+        #        switch (_subtype)
+        #        {
+        #            //
+        #            // ───────────────────────────────────────────────
+        #            // PART
+        #            // ───────────────────────────────────────────────
+        #            case Jay_ExportDocSubType::Part:
+        #
+        #                select firstOnly RecId
+        #                    from confirmJour
+        #                    where confirmJour.DataAreaId == curext()
+        #                      && (
+        #                            (confirmJour.CreatedDateTime  >= _winFrom &&
+        #                             confirmJour.CreatedDateTime  <  _winTo) ||
+        #                            (confirmJour.ModifiedDateTime >= _winFrom &&
+        #                             confirmJour.ModifiedDateTime <  _winTo)
+        #                         )
+        #                      && (
+        #                            confirmJour.CustGroup == 'Internal' ||
+        #                            confirmJour.CustGroup == 'Part'     ||
+        #                            confirmJour.CustGroup == 'Part_DPU'
+        #                         )
+        #                      && !(
+        #                            confirmJour.CustGroup == 'Internal' &&
+        #                            confirmJour.MCASHIPPINGINSTRUCTIONS == 'Unit'
+        #                         );
+        #
+        #                return (confirmJour.RecId != 0);
+        #
+        #
+        #            //
+        #            // ───────────────────────────────────────────────
+        #            // UNIT
+        #            // ───────────────────────────────────────────────
+        #            case Jay_ExportDocSubType::Unit:
+        #
+        #                select firstOnly RecId
+        #                    from confirmJour
+        #                    where confirmJour.DataAreaId == curext()
+        #                      && (
+        #                            (confirmJour.CreatedDateTime  >= _winFrom &&
+        #                             confirmJour.CreatedDateTime  <  _winTo) ||
+        #                            (confirmJour.ModifiedDateTime >= _winFrom &&
+        #                             confirmJour.ModifiedDateTime <  _winTo)
+        #                         )
+        #                      && (
+        #                            confirmJour.CustGroup == 'Unit'    ||
+        #                            confirmJour.CustGroup == 'Unit_PO' ||
+        #                            (confirmJour.CustGroup == 'Internal' &&
+        #                             confirmJour.MCASHIPPINGINSTRUCTIONS == 'Unit')
+        #                         );
+        #
+        #                return (confirmJour.RecId != 0);
+        #
+        #
+        #            //
+        #            // ───────────────────────────────────────────────
+        #            // VENDOR
+        #            // ───────────────────────────────────────────────
+        #            case Jay_ExportDocSubType::Vendor:
+        #
+        #                select firstOnly RecId
+        #                    from confirmJour
+        #                    where confirmJour.DataAreaId == curext()
+        #                      && (
+        #                            (confirmJour.CreatedDateTime  >= _winFrom &&
+        #                             confirmJour.CreatedDateTime  <  _winTo) ||
+        #                            (confirmJour.ModifiedDateTime >= _winFrom &&
+        #                             confirmJour.ModifiedDateTime <  _winTo)
+        #                         )
+        #                      && confirmJour.CustGroup == 'Vendor';
+        #
+        #                return (confirmJour.RecId != 0);
+        #
+        #
+        #            default:
+        #                return false;
+        #        }
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        error("quickProbeConfirmJournalExists exception");
+        #        return false;
+        #    }
+        #}
+        #
+      ENDSOURCE
+      SOURCE #quickProbeDocTypeSubType
+        #public static boolean quickProbeDocTypeSubType(Jay_ExportDocType    _docType,
+        #                                               Jay_ExportDocSubType _subType,
+        #                                               utcDateTime          _fromUtc,
+        #                                               utcDateTime          _toUtc)
+        #{
+        #    boolean iExist = false;
+        #
+        #    if (_fromUtc >= _toUtc)
+        #    {
+        #        warning("Quick probe window invalid: start >= end.");
+        #        return false;
+        #    }
+        #
+        #    try
+        #    {
+        #        switch (_docType)
+        #        {
+        #            case Jay_ExportDocType::PurchaseOrder:
+        #                iExist = Jay_DocProbeManager::quickProbePurchExists(_fromUtc, _toUtc);
+        #                break;
+        #
+        #            case Jay_ExportDocType::Confirmation:
+        #                iExist = Jay_DocProbeManager::quickProbeConfirmJournalExists(
+        #                                _subType, _fromUtc, _toUtc);
+        #                break;
+        #
+        #            case Jay_ExportDocType::Invoice:
+        #                iExist = Jay_DocProbeManager::quickProbeInvoiceExists(
+        #                                _subType, _fromUtc, _toUtc);
+        #                break;
+        #
+        #            case Jay_ExportDocType::MSRP:
+        #                iExist = Jay_DocProbeManager::quickProbeMsrpExists(_fromUtc, _toUtc);
+        #                break;
+        #
+        #            case Jay_ExportDocType::CertificateOfOrigin:
+        #                iExist = Jay_DocProbeManager::quickProbeCertificateOfOriginExists(
+        #                                _fromUtc, _toUtc);
+        #                break;
+        #
+        #            default:
+        #                iExist = false;
+        #                break;
+        #        }
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        error(strFmt("❌ [Quick Probe Dispatcher Exception] DocType=%1 SubType=%2 Window=[%3 — %4]",
+        #                     enum2str(_docType),
+        #                     enum2str(_subType),
+        #                     DateTimeUtil::toStr(_fromUtc),
+        #                     DateTimeUtil::toStr(_toUtc)));
+        #        return false;
+        #    }
+        #
+        #    return iExist;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #quickProbeInvoiceExists
+        #public static boolean quickProbeInvoiceExists(
+        #        Jay_ExportDocSubType _subtype,
+        #        utcDateTime          _fromUtc,
+        #        utcDateTime          _toUtc)
+        #{
+        #    CustInvoiceJour              ij;
+        #    System.Diagnostics.StackTrace stTrace;
+        #    str                           managedStack = "";
+        #
+        #    if (_fromUtc >= _toUtc)
+        #    {
+        #        warning("Quick probe window invalid: start >= end.");
+        #        return false;
+        #    }
+        #
+        #    try
+        #    {
+        #        switch (_subtype)
+        #        {
+        #            case Jay_ExportDocSubType::Part:
+        #                select firstOnly ij
+        #                    where ij.DataAreaId == curext()
+        #                      && (
+        #                            (ij.CreatedDateTime  >= _fromUtc && ij.CreatedDateTime  < _toUtc) ||
+        #                            (ij.ModifiedDateTime >= _fromUtc && ij.ModifiedDateTime < _toUtc)
+        #                         )
+        #                      && (
+        #                            ij.CustGroup == 'Part'     ||
+        #                            ij.CustGroup == 'Part_DPU' ||
+        #                            (ij.CustGroup == 'Internal' &&
+        #                             ij.MCAAMDEVICEBRANDID == '')
+        #                         );
+        #                break;
+        #
+        #            case Jay_ExportDocSubType::Unit:
+        #                select firstOnly ij
+        #                    where ij.DataAreaId == curext()
+        #                      && (
+        #                            (ij.CreatedDateTime  >= _fromUtc && ij.CreatedDateTime  < _toUtc) ||
+        #                            (ij.ModifiedDateTime >= _fromUtc && ij.ModifiedDateTime < _toUtc)
+        #                         )
+        #                      && (
+        #                            ij.CustGroup == 'Unit'    ||
+        #                            ij.CustGroup == 'Unit_PO' ||
+        #                            (ij.CustGroup == 'Internal' &&
+        #                             ij.MCAAMDEVICEBRANDID != '')
+        #                         );
+        #                break;
+        #
+        #            case Jay_ExportDocSubType::Vendor:
+        #                select firstOnly ij
+        #                    where ij.DataAreaId == curext()
+        #                      && (
+        #                            (ij.CreatedDateTime  >= _fromUtc && ij.CreatedDateTime  < _toUtc) ||
+        #                            (ij.ModifiedDateTime >= _fromUtc && ij.ModifiedDateTime < _toUtc)
+        #                         )
+        #                      && ij.CustGroup == 'Vendor';
+        #                break;
+        #
+        #            default:
+        #                info(strFmt("[Invoice Quick Probe Invalid Subtype] %1", _subtype));
+        #                return false;
+        #        }
+        #
+        #        return (ij.RecId != 0);
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        // Managed stack capture (same as before)
+        #        try
+        #        {
+        #            stTrace      = new System.Diagnostics.StackTrace(true);
+        #            managedStack = stTrace.ToString();
+        #        }
+        #        catch (Exception::Error)
+        #        {
+        #            managedStack = "<failed to capture managed stack>";
+        #        }
+        #
+        #        error(strFmt(
+        #            "❌ [Invoice Quick Probe Exception] Subtype=%1 Window=[%2 - %3]\nManagedStack:\n%4",
+        #            _subtype,
+        #            DateTimeUtil::toStr(_fromUtc),
+        #            DateTimeUtil::toStr(_toUtc),
+        #            managedStack));
+        #
+        #        return false;
+        #    }
+        #}
+        #
+      ENDSOURCE
+      SOURCE #quickProbeMsrpExists
+        #public static boolean quickProbeMsrpExists(utcDateTime _fromUtc, utcDateTime _toUtc)
+        #{
+        #       SalesTable                    st;
+        #       System.Diagnostics.StackTrace stTrace;
+        #       str                           managedStack = "";
+        #
+        #       if (_fromUtc >= _toUtc)
+        #       {
+        #              warning("Quick probe window invalid: start >= end.");
+        #              return false;
+        #       }
+        #
+        #       try
+        #       {
+        #              // Combined Created/Modified half-open window
+        #              select firstOnly st
+        #              where st.DataAreaId        == curext()
+        #                     && st.SalesStatus        == SalesStatus::Invoiced
+        #                     && st.AMDeviceId         != ''
+        #                     && (
+        #                            (st.CreatedDateTime  >= _fromUtc
+        #                     && st.CreatedDateTime  <  _toUtc)
+        #                     ||
+        #                            (st.ModifiedDateTime >= _fromUtc
+        #                     && st.ModifiedDateTime <  _toUtc)
+        #                     )&& st.SalesPoolId == 'UNIT';
+        #
+        #              return (st.RecId != 0);
+        #       }
+        #       catch (Exception::Error)
+        #       {
+        #              try
+        #              {
+        #              stTrace = new System.Diagnostics.StackTrace(true);
+        #              managedStack = stTrace.ToString();
+        #              }
+        #              catch (Exception::Error)
+        #              {
+        #              managedStack = "<failed to capture managed stack>";
+        #              }
+        #
+        #              error(strFmt("❌ [MSRP Quick Probe Exception] Window=[%1 - %2]\nManagedStack:\n%3",
+        #                            DateTimeUtil::toStr(_fromUtc), DateTimeUtil::toStr(_toUtc), managedStack));
+        #              return false;
+        #       }
+        #}
+      ENDSOURCE
+      SOURCE #quickProbePurchExists
+        #public static boolean quickProbePurchExists(utcDateTime _fromUtc, utcDateTime _toUtc)
+        #{
+        #    PurchTable purch;
+        #
+        #    if (_fromUtc >= _toUtc)
+        #    {
+        #        warning("Quick probe window invalid: start >= end.");
+        #        return false;
+        #    }
+        #
+        #    try
+        #    {
+        #        select firstOnly RecId from purch
+        #            where purch.DataAreaId == curext()
+        #              && (
+        #                    (purch.CreatedDateTime  >= _fromUtc &&
+        #                     purch.CreatedDateTime  <  _toUtc)
+        #                 ||
+        #                    (purch.ModifiedDateTime >= _fromUtc &&
+        #                     purch.ModifiedDateTime <  _toUtc)
+        #                 )
+        #              && (
+        #                    purch.PurchStatus == PurchStatus::Backorder
+        #                 || purch.PurchStatus == PurchStatus::Received
+        #                 || purch.PurchStatus == PurchStatus::Invoiced
+        #                 );
+        #
+        #        return (purch.RecId != 0);
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        error("quickProbePurchExists exception");
+        #        return false;
+        #    }
+        #}
+        #
+      ENDSOURCE
+      SOURCE #resolveSourceTableId
+        #public static int resolveSourceTableId(Jay_ExportDocType _docType, Jay_ExportDocSubType _subType)
+        #{
+        #    switch (_docType)
+        #    {
+        #        case Jay_ExportDocType::Confirmation:
+        #            return tableNum(CustConfirmJour);
+        #
+        #        case Jay_ExportDocType::Invoice:
+        #            return tableNum(CustInvoiceJour);
+        #
+        #        case Jay_ExportDocType::MSRP:
+        #            return tableNum(SalesTable);
+        #
+        #        case Jay_ExportDocType::CertificateOfOrigin:
+        #            return tableNum(SalesTable);
+        #
+        #        case Jay_ExportDocType::PurchaseOrder:
+        #            return tableNum(PurchTable);
+        #
+        #        default:
+        #            return 0;
+        #    }
+        #}
+      ENDSOURCE
+    ENDMETHODS
+  ENDCLASS
+
+***Element: END

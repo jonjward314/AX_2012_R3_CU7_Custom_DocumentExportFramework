@@ -1,0 +1,66 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: JOB
+
+; Microsoft Dynamics AX Job: Jay_Test_COO_Count_NoDupes unloaded
+; --------------------------------------------------------------------------------
+  JOBVERSION 1
+  
+  SOURCE #Jay_Test_COO_Count_NoDupes
+    #static void Jay_Test_COO_Count_NoDupes(Args _args)
+    #{
+    #    date        fromDate = mkDate(24, 10, 2025);
+    #    date        toDate   = mkDate(31, 10, 2025);
+    #    int         fromTime = str2Time("23:59:59");
+    #    int         toTime   = str2Time("23:59:59");
+    #
+    #    utcDateTime fromUtc  = DateTimeUtil::newDateTime(fromDate, fromTime);
+    #    utcDateTime toUtc    = DateTimeUtil::newDateTime(toDate,   toTime);
+    #
+    #    SalesTable           st;
+    #    AMDeviceTable        d;
+    #    AMDeviceTableMaster  m;
+    #
+    #    Set                 recSet = new Set(Types::Int64);
+    #    int64               id;
+    #
+    #    info(strFmt("COO Window: %1 → %2",
+    #                DateTimeUtil::toStr(fromUtc),
+    #                DateTimeUtil::toStr(toUtc)));
+    #    // ---------------------------------------------------------------------
+    #    // 2️⃣ ModifiedInside but CreatedOutside
+    #    // ---------------------------------------------------------------------
+    #    while select RecId
+    #        from st
+    #        join d
+    #            where d.DeviceId == st.AMDeviceId
+    #        join m
+    #            where m.MasterId == d.MasterId
+    #              && (m.BodyId == 'MHA'
+    #               || m.BodyId == 'MHB'
+    #               || m.BodyId == 'MHC')
+    #              && st.DataAreaId == curext()
+    #              && st.SalesStatus == SalesStatus::Invoiced
+    #              && st.AMDeviceId  != ''
+    #              && st.SalesPoolId == 'UNIT'
+    #              && st.ModifiedDateTime >= fromUtc
+    #              && st.ModifiedDateTime <  toUtc
+    #    {
+    #        recSet.add(st.RecId);
+    #    }
+    #
+    #    // ---------------------------------------------------------------------
+    #    // Final count (unique)
+    #    // ---------------------------------------------------------------------
+    #    info(strFmt("COO UNIQUE COUNT (Created OR Modified): %1",
+    #                recSet.elements()));
+    #}
+    #
+  ENDSOURCE
+  PROPERTIES
+    Origin              #{B3F01DCF-4DA0-4655-8C02-E11E7D68A482}
+  ENDPROPERTIES
+  
+
+***Element: END

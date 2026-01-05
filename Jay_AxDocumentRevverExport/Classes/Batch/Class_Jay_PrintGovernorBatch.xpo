@@ -1,0 +1,254 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: CLS
+
+; Microsoft Dynamics AX Class: Jay_SliceCtrlBatch unloaded
+; --------------------------------------------------------------------------------
+  CLSVERSION 1
+  
+  CLASS #Jay_SliceCtrlBatch
+    PROPERTIES
+      Name                #Jay_SliceCtrlBatch
+      Extends             #RunBaseBatch
+      Origin              #{A98BACE5-C8B5-46C8-8A46-880BE6BCEC91}
+    ENDPROPERTIES
+    
+    METHODS
+      SOURCE #classDeclaration
+        #public class Jay_SliceCtrlBatch extends RunBaseBatch
+        #{
+        #    #define.CurrentVersion(1)
+        #
+        #    RecId        _sliceRecId;
+        #    RecId        _scanRecId;
+        #    str          _functionName;
+        #    BatchCaption _taskCaption;
+        #}
+      ENDSOURCE
+      SOURCE #pack
+        #public container pack()
+        #{
+        #    return [#CurrentVersion, _sliceRecId, _scanRecId, _functionName, _taskCaption];
+        #}
+        #
+        #
+      ENDSOURCE
+      SOURCE #parmCaption
+        #
+        #public BatchCaption parmCaption(BatchCaption _caption = _taskCaption)
+        #{
+        #    _taskCaption = _caption;
+        #    return _taskCaption;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #parmFunctionName
+        #
+        #public str parmFunctionName(str _value = _functionName)
+        #{
+        #    _functionName = _value;
+        #    return _functionName;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #parmScanRecId
+        #
+        #public RecId parmScanRecId(RecId _value = _scanRecId)
+        #{
+        #    _scanRecId = _value;
+        #    return _scanRecId;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #parmSliceRecId
+        #public RecId parmSliceRecId(RecId _value = _sliceRecId)
+        #{
+        #    _sliceRecId = _value;
+        #    return _sliceRecId;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #run
+        #public void run()
+        #{
+        #    RecId sliceRecId   = this.parmSliceRecId();
+        #    RecId scanRecId    = this.parmScanRecId();
+        #    str   functionName = this.parmFunctionName();
+        #
+        #    if (!sliceRecId)
+        #    {
+        #        warning("⚠️ No Slice RecId specified for Jay_SliceCtrlBatch.");
+        #        return;
+        #    }
+        #
+        #    switch (functionName)
+        #    {
+        #        case enum2str(Jay_ArbitrationBatchFunctions::RequestProcessScanSlices):
+        #            Jay_SliceCtrlService::processSlice(sliceRecId);
+        #            break;
+        #        case "Cleanup":
+        #            //Jay_SliceCtrlService::cleanupOldSlices();
+        #            break;
+        #
+        #        case "Debug":
+        #            info(strFmt("Jay_SliceCtrlBatch Debug run for slice %1 (scan %2)", sliceRecId, scanRecId));
+        #            break;
+        #
+        #        default:
+        #            warning(strFmt("Jay_SliceCtrlBatch: unknown function '%1' for slice %2", functionName, sliceRecId));
+        #            break;
+        #    }
+        #}
+        #
+      ENDSOURCE
+      SOURCE #unpack
+        #public boolean unpack(container _packedClass)
+        #{
+        #    Version version = conPeek(_packedClass, 1);
+        #
+        #    switch (version)
+        #    {
+        #        case #CurrentVersion:
+        #            _sliceRecId   = any2int64(conPeek(_packedClass, 2));
+        #            _scanRecId    = any2int64(conPeek(_packedClass, 3));
+        #            _functionName = any2Str(conPeek(_packedClass, 4));
+        #            _taskCaption  = any2Str(conPeek(_packedClass, 5));
+        #            break;
+        #        default:
+        #            return false;
+        #    }
+        #
+        #    return true;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #description
+        #public static ClassDescription description()
+        #{
+        #    return "Jay_SliceCtrlBatch – processes slice-level export enqueue tasks.";
+        #}
+      ENDSOURCE
+      SOURCE #launchSlice
+        #public static void launchSlice(Jay_SliceCtrl _slice)
+        #{
+        #    BatchHeader         header;
+        #    Jay_ArbitrationBatch job = new Jay_ArbitrationBatch();
+        #    utcDateTime          nowUtc = DateTimeUtil::utcNow();
+        #    utcDateTime          runTime = nowUtc;
+        #
+        #    // Future enhancement: could read a deferred start time from _slice if present
+        #    job.parmSliceIdentifier(_slice.RecId);
+        #    job.parmFunctionName("ProcessSlice");
+        #
+        #    header = BatchHeader::construct();
+        #    header.parmCaption(strFmt("Jay Arbitration – Slice %1 (Queue %2)",
+        #                              _slice.RecId,
+        #                              enum2str(_slice.QueueType)));
+        #    header.parmStartDateTime(runTime);
+        #    header.addTask(job);
+        #    header.save();
+        #}
+      ENDSOURCE
+      SOURCE #main
+        #
+        #public static void main(Args _args)
+        #{
+        #    Jay_SliceCtrlBatch job = new Jay_SliceCtrlBatch();
+        #    job.run();
+        #}
+        #
+      ENDSOURCE
+      SOURCE #StartScanSliceProcessing
+        #public static boolean StartScanSliceProcessing(RecId _preferredScanRecId)
+        #{
+        #    Jay_ExportRuntimeSettingsTable settings;
+        #    Jay_SliceCtrl                  slice;
+        #    Jay_SliceCtrl                  running;
+        #    Jay_ScanCtrl                   scan;
+        #    RecId                          scanRecId;
+        #    container                      scanList;
+        #    int                            maxConcurrent;
+        #    int                            runningCount;
+        #    int                            startedCount;
+        #    int                            remainingCapacity;
+        #    int                            i;
+        #
+        #    utcDateTime                    nowUtc;
+        #
+        #    // ─── 0. Initialization ────────────────────────────────────────
+        #    nowUtc = DateTimeUtil::utcNow();
+        #    settings = Jay_ExportRuntimeSettingsTable::findOrCreate();
+        #    maxConcurrent = settings.MaxConcurrentEnqueues ? settings.MaxConcurrentEnqueues : 3;
+        #    startedCount = 0;
+        #
+        #    // ─── 1. Determine current load ────────────────────────────────
+        #    select count(RecId) from running
+        #        where running.SliceStatus == Jay_SliceStatus::Running;
+        #    runningCount = running.RecId;
+        #
+        #    if (runningCount >= maxConcurrent)
+        #    {
+        #        info(strFmt("System at capacity: %1 running/enqueued slices (cap=%2).", runningCount, maxConcurrent));
+        #        return false;
+        #    }
+        #
+        #    remainingCapacity = maxConcurrent - runningCount;
+        #
+        #    // ─── 2. Build prioritized scan list ───────────────────────────
+        #    scanList = [_preferredScanRecId];
+        #
+        #    while select RecId from scan
+        #        where scan.ScanStatus == Jay_ScanStatus::Pending
+        #          && scan.RecId != _preferredScanRecId
+        #    {
+        #        scanList += scan.RecId;
+        #    }
+        #
+        #    // ─── 3. Walk scans until capacity filled ──────────────────────
+        #    for (i = 1; i <= conLen(scanList); i++)
+        #    {
+        #        scanRecId = conPeek(scanList, i);
+        #
+        #     while select firstOnly RecId, SliceStatus
+        #        from slice
+        #        where slice.ParentScanId == scanRecId
+        #          && (slice.SliceStatus == Jay_SliceStatus::Pending
+        #           || slice.SliceStatus == Jay_SliceStatus::Deferred)
+        #    {
+        #        if (!Jay_ArbitrationService::allowSliceStart(slice.RecId))
+        #            continue;
+        #
+        #        // SAFE UPDATE BLOCK
+        #        ttsBegin;
+        #        select forUpdate slice
+        #            where slice.RecId == slice.RecId;
+        #
+        #        slice.SliceStatus      = Jay_SliceStatus::Enqueued;
+        #        slice.update();
+        #        ttsCommit;
+        #
+        #        Jay_SliceCtrlBatch::launchSlice(slice);
+        #
+        #        startedCount++;
+        #        remainingCapacity--;
+        #
+        #        if (remainingCapacity <= 0)
+        #            break;
+        #    }
+        #
+        #        if (remainingCapacity <= 0)
+        #            break;
+        #    }
+        #
+        #    info(strFmt("🔁 Slice dispatcher started %1 slices, capacity now %2/%3.",
+        #                startedCount, maxConcurrent - remainingCapacity, maxConcurrent));
+        #
+        #    return (startedCount > 0);
+        #}
+        #
+      ENDSOURCE
+    ENDMETHODS
+  ENDCLASS
+
+***Element: END

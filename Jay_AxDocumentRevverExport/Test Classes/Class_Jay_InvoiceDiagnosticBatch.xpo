@@ -1,0 +1,170 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: CLS
+
+; Microsoft Dynamics AX Class: Jay_InvoiceDiagnosticBatch unloaded
+; --------------------------------------------------------------------------------
+  CLSVERSION 1
+  
+  CLASS #Jay_InvoiceDiagnosticBatch
+    PROPERTIES
+      Name                #Jay_InvoiceDiagnosticBatch
+      Extends             #RunBaseBatch
+      Origin              #{A81BE37F-7F33-4074-A5B2-DDC2161574E7}
+    ENDPROPERTIES
+    
+    METHODS
+      SOURCE #classDeclaration
+        #class Jay_InvoiceDiagnosticBatch extends RunBaseBatch
+        #{
+        #    container invoiceRecIds;
+        #    DialogField dlgIds;
+        #
+        #    #define.CurrentVersion(1)
+        #    #localmacro.CurrentList
+        #        invoiceRecIds
+        #    #endmacro
+        #}
+      ENDSOURCE
+      SOURCE #dialog
+        #public Object dialog()
+        #{
+        #    Dialog dlg = super();
+        #    dlg.caption("Invoice Diagnostic Runner");
+        #    return dlg;
+        #}
+      ENDSOURCE
+      SOURCE #getFromDialog
+        #public boolean getFromDialog()
+        #{
+        #    return true;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #pack
+        #public container pack()
+        #{
+        #    return [1, invoiceRecIds];
+        #}
+        #
+      ENDSOURCE
+      SOURCE #parmInvoiceRecIds
+        #public container parmInvoiceRecIds(container _value = invoiceRecIds)
+        #{
+        #    invoiceRecIds = _value;
+        #    return invoiceRecIds;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #run
+        #public void run()
+        #{
+        #    int i;
+        #    RecId invoiceJourRecId;
+        #    CustInvoiceJour jour;
+        #    SalesTable salesTable;
+        #    SalesFormLetter formLetter;
+        #
+        #    for (i = 1; i <= conLen(invoiceRecIds); i++)
+        #    {
+        #        invoiceJourRecId = conPeek(invoiceRecIds, i);
+        #
+        #        jour = CustInvoiceJour::findRecId(invoiceJourRecId);
+        #
+        #        if (!jour.RecId)
+        #        {
+        #            info(strFmt("Invoice not found: %1", invoiceJourRecId));
+        #            continue;
+        #        }
+        #
+        #        salesTable = SalesTable::find(jour.SalesId);
+        #
+        #        if (!salesTable.RecId)
+        #        {
+        #            info(strFmt("Missing SalesTable for invoice %1 (SalesId %2)",
+        #                        jour.InvoiceId, jour.SalesId));
+        #            continue;
+        #        }
+        #
+        #        try
+        #        {
+        #            formLetter = SalesFormLetter::construct(DocumentStatus::Invoice);
+        #
+        #            // Required to populate contract
+        #            formLetter.initParmSalesTable(salesTable);
+        #
+        #            // Drive the print through the Print Management pipeline
+        #            formLetter.update(
+        #                salesTable,
+        #                systemDateGet(),
+        #                SalesUpdate::All,
+        #                AccountOrder::None,
+        #                NoYes::No,          // proforma?
+        #                NoYes::Yes,         // printFormLetter?
+        #                NoYes::Yes          // usePrintManagement ← THIS IS THE KEY
+        #            );
+        #
+        #            info(strFmt("Printed: Invoice %1 (RecId %2)",
+        #                        jour.InvoiceId,
+        #                        invoiceJourRecId));
+        #        }
+        #        catch (Exception::Error)
+        #        {
+        #            warning(strFmt("FAILED: Invoice %1 (RecId %2)",
+        #                           jour.InvoiceId,
+        #                           invoiceJourRecId));
+        #        }
+        #    }
+        #}
+        #
+      ENDSOURCE
+      SOURCE #unpack
+        #public boolean unpack(container _packed)
+        #{
+        #    int version = conPeek(_packed, 1);
+        #
+        #    if (version == 1)
+        #    {
+        #        [version, invoiceRecIds] = _packed;
+        #        return true;
+        #    }
+        #
+        #    return false;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #constructWithIds
+        #public static Jay_InvoiceDiagnosticBatch constructWithIds(container _ids)
+        #{
+        #    Jay_InvoiceDiagnosticBatch job = new Jay_InvoiceDiagnosticBatch();
+        #    job.parmInvoiceRecIds(_ids);
+        #    return job;
+        #}
+      ENDSOURCE
+      SOURCE #description
+        #public static ClassDescription description()
+        #{
+        #    return "Jay Invoice Diagnostic Batch (Minimal)";
+        #}
+      ENDSOURCE
+      SOURCE #main
+        #public static void main(Args _args)
+        #{
+        #    Jay_InvoiceDiagnosticBatch job;
+        #
+        #    job = Jay_InvoiceDiagnosticBatch::constructWithIds
+        #    (
+        #        [
+        #            5639727190
+        #        ]
+        #    );
+        #
+        #    job.run();
+        #}
+        #
+      ENDSOURCE
+    ENDMETHODS
+  ENDCLASS
+
+***Element: END

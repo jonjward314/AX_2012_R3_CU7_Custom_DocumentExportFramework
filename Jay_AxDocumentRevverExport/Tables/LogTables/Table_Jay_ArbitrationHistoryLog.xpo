@@ -1,0 +1,108 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: DBT
+
+; Microsoft Dynamics AX Table : Jay_ArbitrationHistoryLog unloaded
+; --------------------------------------------------------------------------------
+  TABLEVERSION 1
+  
+  TABLE #Jay_ArbitrationHistoryLog
+    EnforceFKRelation 1
+    PROPERTIES
+      Name                #Jay_ArbitrationHistoryLog
+      CreateRecIdIndex    #Yes
+      PrimaryIndex        #SurrogateKey
+      ClusterIndex        #SurrogateKey
+      ModifiedDateTime    #Yes
+      ModifiedBy          #Yes
+      CreatedDateTime     #Yes
+      CreatedBy           #Yes
+      Origin              #{DEBC2A69-ECDC-437E-B770-DA5E002C0CB0}
+    ENDPROPERTIES
+    
+    FIELDS
+      FIELD #Action
+        ENUM
+        PROPERTIES
+          Name                #Action
+          Table               #Jay_ArbitrationHistoryLog
+          Origin              #{2A34D0C1-417E-42D7-BF06-CAB0ABD71C10}
+          EnumType            #ABC
+        ENDPROPERTIES
+        
+      FIELD #GeneratorRecId
+        INT64
+        PROPERTIES
+          Name                #GeneratorRecId
+          Label               #Control Record RecId
+          Table               #Jay_ArbitrationHistoryLog
+          Origin              #{340F0105-2904-40AE-B2C6-3D2757A5AF89}
+        ENDPROPERTIES
+        
+      FIELD #LoggedDateTime
+        DATETIME
+        PROPERTIES
+          Name                #LoggedDateTime
+          Label               #Logged DateTime (UTC)
+          Table               #Jay_ArbitrationHistoryLog
+          Origin              #{3F409A1C-AFD0-46F8-ACD0-EC8ECE5FD953}
+        ENDPROPERTIES
+        
+      FIELD #OriginatingRecordType
+        ENUM
+        PROPERTIES
+          Name                #OriginatingRecordType
+          Label               #Originating Record Type
+          Table               #Jay_ArbitrationHistoryLog
+          Origin              #{2AAB17DA-2671-4C72-99A4-CD9A1E07DE1B}
+          EnumType            #ABC
+        ENDPROPERTIES
+        
+      FIELD #QueueType
+        ENUM
+        PROPERTIES
+          Name                #QueueType
+          Label               #Queue Type
+          Table               #Jay_ArbitrationHistoryLog
+          Origin              #{F2AD0525-C37A-4C53-8A29-4604920D72B5}
+          EnumType            #ABC
+        ENDPROPERTIES
+        
+      FIELD #Reason
+        STRING
+        PROPERTIES
+          Name                #Reason
+          Table               #Jay_ArbitrationHistoryLog
+          Origin              #{2DE07A1B-87A3-4B87-9A07-E18EA0AAFA1E}
+          StringSize          #200
+        ENDPROPERTIES
+        
+    ENDFIELDS
+    GROUPS
+    ENDGROUPS
+    
+    INDICES
+    ENDINDICES
+    FULLTEXTINDICES
+    ENDFULLTEXTINDICES
+    REFERENCES
+    ENDREFERENCES
+    
+    DELETEACTIONS
+    ENDDELETEACTIONS
+    
+    METHODS
+      SOURCE #initValue
+        #public void initValue()
+        #{
+        #    super();
+        #
+        #    this.LoggedDateTime   = DateTimeUtil::utcNow();
+        #}
+      ENDSOURCE
+    ENDMETHODS
+  ENDTABLE
+  
+
+***Element: END

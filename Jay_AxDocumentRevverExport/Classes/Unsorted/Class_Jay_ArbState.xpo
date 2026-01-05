@@ -1,0 +1,104 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: CLS
+
+; Microsoft Dynamics AX Class: Jay_ArbState unloaded
+; --------------------------------------------------------------------------------
+  CLSVERSION 1
+  
+  CLASS #Jay_ArbState
+    PROPERTIES
+      Name                #Jay_ArbState
+      Origin              #{B6F03BB6-5270-479E-A09D-F8670B6FEF15}
+    ENDPROPERTIES
+    
+    METHODS
+      SOURCE #buildPrint
+        #private void buildPrint()  { /* query PrintGovernorState */ }
+        #
+      ENDSOURCE
+      SOURCE #buildQueues
+        #private void buildQueues() { /* query prod/hist queues */ }
+        #
+      ENDSOURCE
+      SOURCE #buildScans
+        #private void buildScans()  { /* query + detect stuckness */ }
+        #
+      ENDSOURCE
+      SOURCE #buildSlices
+        #private void buildSlices() { /* query + detect congestion */ }
+        #
+      ENDSOURCE
+      SOURCE #classDeclaration
+        #class Jay_ArbState
+        #{
+        #    // === MACRO STATES (the generals’ dashboards) ===
+        #    //Jay_MacroScanState   macroScan;
+        #    //Jay_MacroSliceState  macroSlice;
+        #    //Jay_MacroQueueState  macroQueue;
+        #    //Jay_MacroPrintState  macroPrint;
+        #
+        #    // === MICRO STATES (problem lists) ===
+        #    List problematicScans;   // [scanRecId]
+        #    List problematicSlices;  // [sliceRecId]
+        #    List congestedQueues;    // [queueType or recIds]
+        #    List stuckItems;         // [various tuples]
+        #
+        #    // === CAPACITY READINGS ===
+        #    int currentRunningScans;
+        #    int currentRunningSlices;
+        #    int queuedProd;
+        #    int queuedHist;
+        #    int printCapacityUsed;
+        #    int printCapacityRemaining;
+        #
+        #    // === FLAGS ===
+        #    boolean hasStuckScans;
+        #    boolean hasStuckSlices;
+        #    boolean hasPrintCongestion;
+        #    boolean hasQueueBacklog;
+        #    boolean requiresImmediateAction;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #computeFlags
+        #
+        #private void computeFlags()
+        #{
+        #    requiresImmediateAction =
+        #        hasStuckScans ||
+        #        hasStuckSlices ||
+        #        hasPrintCongestion;
+        #}
+      ENDSOURCE
+      SOURCE #computeMacros
+        #
+        #private void computeMacros()
+        #{
+        #    // MacroScanState   = none | healthy | backlog | stuck
+        #    // MacroSliceState  = healthy | congested | stuck
+        #    // MacroQueueState  = empty | flowing | bloated
+        #    // MacroPrintState  = idle | printing | saturated
+        #}
+        #
+      ENDSOURCE
+      SOURCE #build
+        #// === FACTORY ===
+        #public static Jay_ArbState build()
+        #{
+        #    Jay_ArbState s = new Jay_ArbState();
+        #    s.buildScans();
+        #    s.buildSlices();
+        #    s.buildQueues();
+        #    s.buildPrint();
+        #    s.computeMacros();
+        #    s.computeFlags();
+        #    return s;
+        #}
+        #
+      ENDSOURCE
+    ENDMETHODS
+  ENDCLASS
+
+***Element: END

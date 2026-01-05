@@ -1,0 +1,80 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: CLS
+
+; Microsoft Dynamics AX Class: Jay_ArbitrationEngine unloaded
+; --------------------------------------------------------------------------------
+  CLSVERSION 1
+  
+  CLASS #Jay_ArbitrationEngine
+    PROPERTIES
+      Name                #Jay_ArbitrationEngine
+      Origin              #{F64C7B95-C006-4E5A-9A22-B3872A4B8DCF}
+    ENDPROPERTIES
+    
+    METHODS
+      SOURCE #classDeclaration
+        #class Jay_ArbitrationEngine
+        #        {
+        #        }
+        #
+      ENDSOURCE
+      SOURCE #applyTruthTable
+        #
+        #        public static Jay_ArbActions applyTruthTable(Jay_ArbState _s)
+        #        {
+        #            Jay_ArbActions a = new Jay_ArbActions();
+        #
+        #            // apply the simplified arbitration decision model here
+        #            return a;
+        #        }
+        #
+        #
+      ENDSOURCE
+      SOURCE #deriveState
+        #
+        #        public static Jay_ArbState deriveState(Jay_ExportQueueType _queueType)
+        #        {
+        #            Jay_ArbState s = new Jay_ArbState();
+        #
+        #            Jay_ExportRuntimeSettingsTable settings = Jay_ExportRuntimeSettingsTable::findOrCreate();
+        #            Jay_ScanCtrl scan;
+        #            Jay_SliceCtrl slice;
+        #            Jay_DocExportProdQueue prodQueue;
+        #            Jay_DocExportHistQueue histQueue;
+        #            Jay_PrintGovernorState printGov;
+        #            int i;
+        #            return s;
+        #        }
+        #
+        #
+      ENDSOURCE
+      SOURCE #evaluateQueue
+        #
+        #        public static void evaluateQueue(Jay_ExportQueueType _queueType)
+        #        {
+        #            Jay_ArbState   s;
+        #            Jay_ArbActions a;
+        #
+        #            s = Jay_ArbitrationEngine::deriveState(_queueType);
+        #            a = Jay_ArbitrationEngine::applyTruthTable(s);
+        #            Jay_ArbitrationEngine::takeActions(a, _queueType);
+        #        }
+        #
+        #
+        #
+      ENDSOURCE
+      SOURCE #takeActions
+        #        public static void takeActions(Jay_ArbActions _a, Jay_ExportQueueType _queueType)
+        #        {
+        #            // fire batches based on chosen actions
+        #        }
+        #
+        #
+        #
+      ENDSOURCE
+    ENDMETHODS
+  ENDCLASS
+
+***Element: END

@@ -1,0 +1,74 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: JOB
+
+; Microsoft Dynamics AX Job: Jay_Test_MSRP_Count_CreatedOrModified unloaded
+; --------------------------------------------------------------------------------
+  JOBVERSION 1
+  
+  SOURCE #Jay_Test_MSRP_Count_CreatedOrModified
+    #static void Jay_Test_MSRP_Count_CreatedOrModified(Args _args)
+    #{
+    #    //
+    #    // 1. Window
+    #    //
+    #    date        fromDate = mkDate(24, 10, 2025);
+    #    date        toDate   = mkDate(31, 10, 2025);
+    #    int         fromTime = str2Time("23:59:59");
+    #    int         toTime   = str2Time("23:59:59");
+    #
+    #    utcDateTime fromUtc = DateTimeUtil::newDateTime(fromDate, fromTime);
+    #    utcDateTime toUtc   = DateTimeUtil::newDateTime(toDate,   toTime);
+    #
+    #    SalesTable  st;
+    #    Set         recSet = new Set(Types::Int64);
+    #
+    #    info(strFmt("MSRP Window: %1 → %2",
+    #        DateTimeUtil::toStr(fromUtc),
+    #        DateTimeUtil::toStr(toUtc)));
+    #
+    #    // ----------------------------------------------------------
+    #    // 1️⃣ Add CREATED inside window
+    #    // ----------------------------------------------------------
+    #    while select RecId
+    #        from st
+    #        where st.DataAreaId        == curext()
+    #          && st.SalesStatus        == SalesStatus::Invoiced
+    #          && st.AMDeviceId         != ''
+    #          && st.SalesPoolId        == 'UNIT'
+    #          && st.CreatedDateTime   >= fromUtc
+    #          && st.CreatedDateTime   <  toUtc
+    #    {
+    #        recSet.add(st.RecId);
+    #    }
+    #
+    #    // ----------------------------------------------------------
+    #    // 2️⃣ Add MODIFIED inside window (created may be outside)
+    #    // ----------------------------------------------------------
+    #    while select RecId
+    #        from st
+    #        where st.DataAreaId        == curext()
+    #          && st.SalesStatus        == SalesStatus::Invoiced
+    #          && st.AMDeviceId         != ''
+    #          && st.SalesPoolId        == 'UNIT'
+    #          && st.ModifiedDateTime  >= fromUtc
+    #          && st.ModifiedDateTime  <  toUtc
+    #    {
+    #        recSet.add(st.RecId);
+    #    }
+    #
+    #    // ----------------------------------------------------------
+    #    // Final Count (unique)
+    #    // ----------------------------------------------------------
+    #    info(strFmt("MSRP UNIQUE COUNT (Created OR Modified): %1",
+    #        recSet.elements()));
+    #}
+    #
+  ENDSOURCE
+  PROPERTIES
+    Origin              #{6B3CEF40-8656-4D1E-AEB9-C71C04E71E68}
+  ENDPROPERTIES
+  
+
+***Element: END

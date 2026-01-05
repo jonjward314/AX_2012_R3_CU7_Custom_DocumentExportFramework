@@ -1,0 +1,409 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: DBT
+
+; Microsoft Dynamics AX Table : Jay_ScanCtrl unloaded
+; --------------------------------------------------------------------------------
+  TABLEVERSION 1
+  
+  TABLE #Jay_ScanCtrl
+    EnforceFKRelation 1
+    PROPERTIES
+      Name                #Jay_ScanCtrl
+      CreateRecIdIndex    #Yes
+      PrimaryIndex        #SurrogateKey
+      ClusterIndex        #SurrogateKey
+      ModifiedDateTime    #Yes
+      ModifiedBy          #Yes
+      CreatedDateTime     #Yes
+      CreatedBy           #Yes
+      Origin              #{78747BC8-BB0C-43CE-A7DC-8508C2AB90BE}
+    ENDPROPERTIES
+    
+    FIELDS
+      FIELD #AbortReason
+        STRING
+        PROPERTIES
+          Name                #AbortReason
+          Table               #Jay_ScanCtrl
+          Origin              #{574F0F69-2518-483D-963C-997C30068E66}
+          ExtendedDataType    #Description
+          StringSize          #60
+        ENDPROPERTIES
+        
+      FIELD #ActualDocs
+        STRING
+        PROPERTIES
+          Name                #ActualDocs
+          Table               #Jay_ScanCtrl
+          Origin              #{4B025A2B-D75A-402B-B455-1801627C5AB3}
+          ExtendedDataType    #Num
+          StringSize          #20
+        ENDPROPERTIES
+        
+      FIELD #ActualSlices
+        INT
+        PROPERTIES
+          Name                #ActualSlices
+          Table               #Jay_ScanCtrl
+          Origin              #{20574668-671B-4829-B233-A5413E2277EC}
+        ENDPROPERTIES
+        
+      FIELD #BatchHeaderRecId_Enqueue
+        INT64
+        PROPERTIES
+          Name                #BatchHeaderRecId_Enqueue
+          Label               #Batch Header RecId For Enqueue Job
+          Table               #Jay_ScanCtrl
+          Origin              #{A9773F45-DCE5-4FAB-8616-451BAB44233B}
+        ENDPROPERTIES
+        
+      FIELD #BatchHeaderRecId_Print
+        INT64
+        PROPERTIES
+          Name                #BatchHeaderRecId_Print
+          Label               #Batch Header RecId for Print Job
+          Table               #Jay_ScanCtrl
+          Origin              #{570CDE50-2322-42B5-8FE4-E75FA11EA7A5}
+        ENDPROPERTIES
+        
+      FIELD #Direction
+        ENUM
+        PROPERTIES
+          Name                #Direction
+          Label               #Scan Direction
+          Table               #Jay_ScanCtrl
+          Origin              #{4DAE05FC-C67F-4BE9-94EC-B935D47046B3}
+          EnumType            #Jay_ScanDirection
+        ENDPROPERTIES
+        
+      FIELD #ExtendedRangeFromUTC
+        DATETIME
+        PROPERTIES
+          Name                #ExtendedRangeFromUTC
+          Table               #Jay_ScanCtrl
+          Origin              #{50029645-5D4F-4491-9F09-18DB24CDE28B}
+        ENDPROPERTIES
+        
+      FIELD #ExtendedRangeToUTC
+        DATETIME
+        PROPERTIES
+          Name                #ExtendedRangeToUTC
+          Table               #Jay_ScanCtrl
+          Origin              #{6BB73ACE-0F85-4150-8038-1F0543965F26}
+        ENDPROPERTIES
+        
+      FIELD #HealthStatus
+        ENUM
+        PROPERTIES
+          Name                #HealthStatus
+          Table               #Jay_ScanCtrl
+          Origin              #{67D07A16-6CEE-40BD-AA76-BDE41200CD49}
+          EnumType            #Jay_HealthStatus
+        ENDPROPERTIES
+        
+      FIELD #Horizon
+        DATETIME
+        PROPERTIES
+          Name                #Horizon
+          Table               #Jay_ScanCtrl
+          Origin              #{122B3DBD-42A8-4510-B7B8-9449854A338D}
+        ENDPROPERTIES
+        
+      FIELD #HorizonUnit
+        ENUM
+        PROPERTIES
+          Name                #HorizonUnit
+          Label               #Processing Horizon Unit
+          Table               #Jay_ScanCtrl
+          Origin              #{06446116-B8F1-4BD6-BEFD-C87EB05D2D51}
+          EnumType            #Jay_CadenceUnit
+        ENDPROPERTIES
+        
+      FIELD #HorizonValue
+        INT
+        PROPERTIES
+          Name                #HorizonValue
+          Label               #Processing Horizon Value
+          Table               #Jay_ScanCtrl
+          Origin              #{B40EB7F3-371C-4D7C-BCE3-7130D5E4C075}
+        ENDPROPERTIES
+        
+      FIELD #LastCompletedEndUtc
+        DATETIME
+        PROPERTIES
+          Name                #LastCompletedEndUtc
+          Label               #Last Completed End (UTC)
+          Table               #Jay_ScanCtrl
+          Origin              #{97E66542-E2C6-4549-B8A3-0B3B9CB472DA}
+        ENDPROPERTIES
+        
+      FIELD #LengthUnit
+        ENUM
+        PROPERTIES
+          Name                #LengthUnit
+          Label               #Length Unit
+          Table               #Jay_ScanCtrl
+          Origin              #{7FAD30CD-23CF-450E-9E40-A64E6B90C6F0}
+          EnumType            #Jay_CadenceUnit
+        ENDPROPERTIES
+        
+      FIELD #LengthValue
+        INT
+        PROPERTIES
+          Name                #LengthValue
+          Label               #Length Value
+          Table               #Jay_ScanCtrl
+          Origin              #{555232D5-8D2F-4A3E-8C40-00C1CFBAB8BB}
+        ENDPROPERTIES
+        
+      FIELD #NextIntervalStart
+        DATETIME
+        PROPERTIES
+          Name                #NextIntervalStart
+          Table               #Jay_ScanCtrl
+          Origin              #{E03E55D3-A21D-40E2-8C6D-7F267CC05265}
+        ENDPROPERTIES
+        
+      FIELD #ParentScanRecId
+        INT64
+        PROPERTIES
+          Name                #ParentScanRecId
+          Label               #Parent Scan
+          Table               #Jay_ScanCtrl
+          Origin              #{82EF17DE-3DDE-4BCE-9CD8-22530E605A50}
+          ExtendedDataType    #RecId
+        ENDPROPERTIES
+        
+      FIELD #PredictedDocuments
+        INT
+        PROPERTIES
+          Name                #PredictedDocuments
+          Label               #Predicted Documents
+          Table               #Jay_ScanCtrl
+          Origin              #{30A32656-5832-4E8D-9AD8-38CB15000FE8}
+        ENDPROPERTIES
+        
+      FIELD #PredictedSlices
+        INT
+        PROPERTIES
+          Name                #PredictedSlices
+          Table               #Jay_ScanCtrl
+          Origin              #{A9EB1DFA-30D9-49B1-80F8-14D90C0B572A}
+        ENDPROPERTIES
+        
+      FIELD #ProofStampUtc
+        DATETIME
+        PROPERTIES
+          Name                #ProofStampUtc
+          Table               #Jay_ScanCtrl
+          Origin              #{3A74F166-AED1-411F-B287-81097ABFA8E2}
+        ENDPROPERTIES
+        
+      FIELD #QueueType
+        ENUM
+        PROPERTIES
+          Name                #QueueType
+          Label               #Queue Type
+          Table               #Jay_ScanCtrl
+          Origin              #{CEAEB5B5-D94E-43B8-8298-95F7F7D29EF7}
+          EnumType            #Jay_ExportQueueType
+        ENDPROPERTIES
+        
+      FIELD #RangeFromUtc
+        DATETIME
+        PROPERTIES
+          Name                #RangeFromUtc
+          Label               #Range From (UTC)
+          Table               #Jay_ScanCtrl
+          Origin              #{1B9563DE-6E8B-4B98-A3F6-9754C1989C4F}
+        ENDPROPERTIES
+        
+      FIELD #RangeToUtc
+        DATETIME
+        PROPERTIES
+          Name                #RangeToUtc
+          Label               #Range To (UTC)
+          Table               #Jay_ScanCtrl
+          Origin              #{B7D3531E-012E-425F-BD02-0EEACE7382BA}
+        ENDPROPERTIES
+        
+      FIELD #RunDurationMs
+        INT64
+        PROPERTIES
+          Name                #RunDurationMs
+          Table               #Jay_ScanCtrl
+          Origin              #{9E8D667D-9C73-4FFC-AD74-1AC9B62B8BE1}
+        ENDPROPERTIES
+        
+      FIELD #RunMode
+        ENUM
+        PROPERTIES
+          Name                #RunMode
+          Label               #Run Mode
+          Table               #Jay_ScanCtrl
+          Origin              #{12488F64-9270-49FF-AA5C-4145477E804C}
+          EnumType            #Jay_ExportRunMode
+        ENDPROPERTIES
+        
+      FIELD #ScanId
+        STRING
+        PROPERTIES
+          Name                #ScanId
+          Label               #Scan Identifier
+          Table               #Jay_ScanCtrl
+          Origin              #{94B10D0D-0906-4DC2-A898-50899D968763}
+          ExtendedDataType    #Name
+          StringSize          #60
+        ENDPROPERTIES
+        
+      FIELD #scanStartDateTime
+        DATETIME
+        PROPERTIES
+          Name                #scanStartDateTime
+          Table               #Jay_ScanCtrl
+          Origin              #{C4238434-77D0-444C-A3D8-B21C3BF3D372}
+        ENDPROPERTIES
+        
+      FIELD #ScanStatus
+        ENUM
+        PROPERTIES
+          Name                #ScanStatus
+          Table               #Jay_ScanCtrl
+          Origin              #{865BE4C7-B15C-4E31-876C-7C78A03D8A0E}
+          EnumType            #Jay_ScanStatus
+        ENDPROPERTIES
+        
+      FIELD #ScanUnit
+        ENUM
+        PROPERTIES
+          Name                #ScanUnit
+          Label               #Scan Cadence Unit
+          Table               #Jay_ScanCtrl
+          Origin              #{DDAC4745-D5F8-429D-BCDD-0752AC44616F}
+          EnumType            #Jay_CadenceUnit
+        ENDPROPERTIES
+        
+      FIELD #ScanValue
+        INT
+        PROPERTIES
+          Name                #ScanValue
+          Label               #Scan Cadence Value
+          Table               #Jay_ScanCtrl
+          Origin              #{F4CDFF0F-4C1F-43CC-82DB-357711F8B426}
+        ENDPROPERTIES
+        
+      FIELD #StartBatchHeaderId
+        INT64
+        PROPERTIES
+          Name                #StartBatchHeaderId
+          Table               #Jay_ScanCtrl
+          Origin              #{D286E2C9-61F0-4E92-A250-DE2A2BF30F1C}
+          ExtendedDataType    #RecId
+        ENDPROPERTIES
+        
+      FIELD #Variance
+        REAL
+        PROPERTIES
+          Name                #Variance
+          Table               #Jay_ScanCtrl
+          Origin              #{3FA2B1DF-B746-46B0-8C9A-AB120FF5F674}
+          ExtendedDataType    #Amount
+        ENDPROPERTIES
+        
+      FIELD #VariancePct
+        REAL
+        PROPERTIES
+          Name                #VariancePct
+          Table               #Jay_ScanCtrl
+          Origin              #{460ED18C-B785-458B-9716-BAADF5B3F4D0}
+          ExtendedDataType    #Percent
+        ENDPROPERTIES
+        
+    ENDFIELDS
+    GROUPS
+    ENDGROUPS
+    
+    INDICES
+      #Indx_QType_Dir
+      PROPERTIES
+        Name                #Indx_QType_Dir
+        Origin              #{50B434E5-A5CD-401E-AF9D-B3489F1008DA}
+      ENDPROPERTIES
+      
+      INDEXFIELDS
+        #QueueType
+        #Direction
+      ENDINDEXFIELDS
+      
+    ENDINDICES
+    FULLTEXTINDICES
+    ENDFULLTEXTINDICES
+    REFERENCES
+    ENDREFERENCES
+    
+    DELETEACTIONS
+      #Jay_ScanScope(ParentScan)
+      PROPERTIES
+        Table               #Jay_ScanScope
+        Relation            #ParentScan
+      ENDPROPERTIES
+      
+      #Jay_SliceCtrl(Jay_ScanCtrl_Relation)
+      PROPERTIES
+        Table               #Jay_SliceCtrl
+        DeleteAction        #Cascade
+        Relation            #Jay_ScanCtrl_Relation
+      ENDPROPERTIES
+      
+    ENDDELETEACTIONS
+    
+    METHODS
+      SOURCE #initValue
+        #public void initValue()
+        #{
+        #    super();
+        #}
+      ENDSOURCE
+      SOURCE #insert
+        #public void insert()
+        #{
+        #    super();
+        #}
+      ENDSOURCE
+      SOURCE #validateWrite
+        #public boolean validateWrite()
+        #{
+        #    boolean ret;
+        #
+        #    ret = super();
+        #
+        #    return ret;
+        #}
+      ENDSOURCE
+      SOURCE #find
+        #public static Jay_ScanCtrl find(RecId _recId, boolean _forUpdate = false)
+        #{
+        #    Jay_ScanCtrl scanCtrl;
+        #    if (_recId)
+        #    {
+        #        if (_forUpdate)
+        #        {
+        #            select firstOnly forUpdate scanCtrl
+        #                where scanCtrl.RecId == _recId;
+        #        }
+        #        else
+        #        {
+        #            select firstOnly scanCtrl
+        #                where scanCtrl.RecId == _recId;
+        #        }
+        #    }
+        #    return scanCtrl;
+        #}
+      ENDSOURCE
+    ENDMETHODS
+  ENDTABLE
+  
+
+***Element: END

@@ -1,0 +1,169 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: CLS
+
+; Microsoft Dynamics AX Class: Jay_ArbitrationMaintenance unloaded
+; --------------------------------------------------------------------------------
+  CLSVERSION 1
+  
+  CLASS #Jay_ArbitrationMaintenance
+    PROPERTIES
+      Name                #Jay_ArbitrationMaintenance
+      Origin              #{48701F4F-F9C1-4978-8344-395277F2AE1F}
+    ENDPROPERTIES
+    
+    METHODS
+      SOURCE #classDeclaration
+        #class Jay_ArbitrationMaintenance
+        #{
+        #}
+        #
+      ENDSOURCE
+      SOURCE #detectStuckPrint
+        #public static void detectStuckPrint()
+        #{
+        #    Jay_PrintGovernorState s;
+        #    utcDateTime            nowUtc = DateTimeUtil::utcNow();
+        #
+        #    int stuckMinutes      = 30;  // configurable if needed
+        #    int thresholdSeconds  = stuckMinutes * 60;
+        #    int ageSeconds;
+        #
+        #    select firstOnly s;
+        #
+        #    if (!s.RecId)
+        #        return;
+        #
+        #    if (s.IsPrinting == NoYes::Yes)
+        #    {
+        #        ageSeconds = DateTimeUtil::getDifference(nowUtc, s.LastUpdateUtc);
+        #
+        #        if (ageSeconds > thresholdSeconds)
+        #        {
+        #            warning(strFmt(
+        #                "🖨️ Print Governor appears STUCK (> %1 min). " +
+        #                "No progress for %2 seconds.",
+        #                stuckMinutes,
+        #                ageSeconds));
+        #        }
+        #    }
+        #}
+        #
+      ENDSOURCE
+      SOURCE #detectStuckScans
+        #public static void detectStuckScans(Jay_ExportQueueType _queueType)
+        #{
+        #    Jay_ScanCtrl scan;
+        #    utcDateTime nowUtc = DateTimeUtil::utcNow();
+        #    int horizonMinutes;
+        #    int ageSeconds;
+        #    int thresholdMinutes;
+        #    int thresholdSeconds;
+        #    ;
+        #
+        #    while select scan
+        #        where scan.ScanStatus == Jay_ScanStatus::Running
+        #    {
+        #        // Compute the scan horizon in minutes
+        #        horizonMinutes = DateTimeUtil::getDifference(scan.RangeToUTC, scan.RangeFromUTC) / 60;
+        #
+        #        // Dynamic threshold selection (bounded)
+        #        if (horizonMinutes <= 1440) // ≤ 1 day
+        #            thresholdMinutes = 120;
+        #        else if (horizonMinutes <= 10080) // ≤ 7d
+        #            thresholdMinutes = 240;
+        #        else if (horizonMinutes <= 43200) // ≤ 30d
+        #            thresholdMinutes = 480;
+        #        else if (horizonMinutes <= 259200) // ≤ 180d
+        #            thresholdMinutes = 720;
+        #        else
+        #            thresholdMinutes = 1440; // > 180 days = 24h max
+        #
+        #        thresholdSeconds = thresholdMinutes * 60;
+        #        ageSeconds = DateTimeUtil::getDifference(nowUtc, scan.ModifiedDateTime);
+        #
+        #        // Classify state
+        #        if (ageSeconds > thresholdSeconds)
+        #        {
+        #            warning(strFmt("❌ SCAN %1 DEFUNCT. Horizon=%2 min, Age=%3 sec, Limit=%4 min.",
+        #                           scan.RecId, horizonMinutes, ageSeconds, thresholdMinutes));
+        #        }
+        #        else if (ageSeconds > (thresholdSeconds * 3 / 4))
+        #        {
+        #            warning(strFmt("⛔ SCAN %1 Danger Zone (>75%% threshold). Horizon=%2 min, Age=%3 sec.",
+        #                           scan.RecId, horizonMinutes, ageSeconds));
+        #        }
+        #        else if (ageSeconds > (thresholdSeconds / 2))
+        #        {
+        #            warning(strFmt("⚠ SCAN %1 Warning Zone (>50%% threshold). Horizon=%2 min, Age=%3 sec.",
+        #                           scan.RecId, horizonMinutes, ageSeconds));
+        #        }
+        #    }
+        #}
+        #
+      ENDSOURCE
+      SOURCE #detectStuckSlices
+        #public static void detectStuckSlices(Jay_ExportQueueType _queueType)
+        #{
+        #    Jay_SliceCtrl slice;
+        #    utcDateTime nowUtc = DateTimeUtil::utcNow();
+        #    int ageSeconds;
+        #    int warnSec  = 30 * 60;    // 30 minutes
+        #    int dangerSec = 60 * 60;   // 60 minutes
+        #    int stuckSec  = 90 * 60;   // 90 minutes
+        #    int fatalSec  = 120 * 60;  // 120 minutes
+        #    ;
+        #
+        #    while select slice
+        #        where slice.SliceStatus == Jay_SliceStatus::Running
+        #           || slice.SliceStatus == Jay_SliceStatus::Enqueued
+        #    {
+        #        // How long since last progress?
+        #        ageSeconds = DateTimeUtil::getDifference(nowUtc, slice.ModifiedDateTime);
+        #
+        #        if (ageSeconds > fatalSec)
+        #        {
+        #            warning(strFmt("❌ Slice %1 appears FATAL (>120 min). Status=%2, Age=%3 sec.",
+        #                           slice.RecId,
+        #                           enum2str(slice.SliceStatus),
+        #                           ageSeconds));
+        #        }
+        #        else if (ageSeconds > stuckSec)
+        #        {
+        #            warning(strFmt("⛔ Slice %1 appears STUCK (>90 min). Status=%2, Age=%3 sec.",
+        #                           slice.RecId,
+        #                           enum2str(slice.SliceStatus),
+        #                           ageSeconds));
+        #        }
+        #        else if (ageSeconds > dangerSec)
+        #        {
+        #            warning(strFmt("⚠ Slice %1 in DANGER (>60 min). Status=%2, Age=%3 sec.",
+        #                           slice.RecId,
+        #                           enum2str(slice.SliceStatus),
+        #                           ageSeconds));
+        #        }
+        #        else if (ageSeconds > warnSec)
+        #        {
+        #            warning(strFmt("🟡 Slice %1 WARNING (>30 min). Status=%2, Age=%3 sec.",
+        #                           slice.RecId,
+        #                           enum2str(slice.SliceStatus),
+        #                           ageSeconds));
+        #        }
+        #    }
+        #}
+        #
+      ENDSOURCE
+      SOURCE #runAll
+        #public static void runAll(Jay_ExportQueueType _queueType)
+        #{
+        #    Jay_ArbitrationMaintenance::detectStuckScans(_queueType);
+        #    Jay_ArbitrationMaintenance::detectStuckSlices(_queueType);
+        #    Jay_ArbitrationMaintenance::detectStuckPrint();
+        #}
+        #
+      ENDSOURCE
+    ENDMETHODS
+  ENDCLASS
+
+***Element: END

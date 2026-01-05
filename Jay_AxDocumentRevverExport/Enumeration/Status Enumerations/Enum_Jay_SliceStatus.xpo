@@ -1,0 +1,78 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: DBE
+
+; Microsoft Dynamics AX Enumtype : Jay_SliceStatus unloaded
+; --------------------------------------------------------------------------------
+  ENUMTYPEVERSION 1
+  
+  ENUMTYPE #Jay_SliceStatus
+    PROPERTIES
+      Name                #Jay_SliceStatus
+      UseEnumValue        #Yes
+      Origin              #{EEA1AA8A-CC89-4A85-B606-A4286AA6ECEC}
+    ENDPROPERTIES
+    
+    TYPEELEMENTS
+      #Pending
+      PROPERTIES
+        Name                #Pending
+        Label               #Pending
+        EnumValue           #0
+      ENDPROPERTIES
+      
+      #Running
+      PROPERTIES
+        Name                #Running
+        Label               #Running
+        EnumValue           #1
+      ENDPROPERTIES
+      
+      #Deferred
+      PROPERTIES
+        Name                #Deferred
+        Label               #Deferred
+        EnumValue           #5
+      ENDPROPERTIES
+      
+      #Completed
+      PROPERTIES
+        Name                #Completed
+        Label               #Completed
+        EnumValue           #6
+      ENDPROPERTIES
+      
+      #Failed
+      PROPERTIES
+        Name                #Failed
+        Label               #Failed
+        EnumValue           #7
+      ENDPROPERTIES
+      
+      #Enqueued
+      PROPERTIES
+        Name                #Enqueued
+        Label               #Enqueued
+        EnumValue           #2
+      ENDPROPERTIES
+      
+      #Printed
+      PROPERTIES
+        Name                #Printed
+        Label               #Printed
+        EnumValue           #3
+      ENDPROPERTIES
+      
+      #Partial
+      PROPERTIES
+        Name                #Partial
+        Label               #Partial
+        EnumValue           #4
+      ENDPROPERTIES
+      
+    ENDTYPEELEMENTS
+  ENDENUMTYPE
+  
+
+***Element: END

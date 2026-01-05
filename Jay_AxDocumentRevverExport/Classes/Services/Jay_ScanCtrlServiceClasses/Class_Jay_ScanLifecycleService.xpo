@@ -1,0 +1,320 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: CLS
+
+; Microsoft Dynamics AX Class: Jay_ScanLifecycleService unloaded
+; --------------------------------------------------------------------------------
+  CLSVERSION 1
+  
+  CLASS #Jay_ScanLifecycleService
+    PROPERTIES
+      Name                #Jay_ScanLifecycleService
+      Origin              #{839141CB-8072-4009-AE36-9664E1FE9277}
+    ENDPROPERTIES
+    
+    METHODS
+      SOURCE #classDeclaration
+        #public class Jay_ScanLifecycleService
+        #{
+        #    // Service for scan lifecycle operations: child creation, parent consumption, etc.
+        #}
+      ENDSOURCE
+      SOURCE #consumeParent
+        #public static void consumeParent(RecId _parentRecId, RecId _childRecId)
+        #{
+        #    // ─── Declarations (AX requires all up top) ────────────────────────────
+        #    Jay_ScanCtrl  parentLock;
+        #    Jay_ScanCtrl  childLock;
+        #
+        #    Jay_SliceCtrl slice;
+        #    Jay_ScanScope scope;
+        #
+        #    utcDateTime parentFrom;
+        #    utcDateTime parentTo;
+        #    utcDateTime childFrom;
+        #    utcDateTime childTo;
+        #
+        #    boolean parentHasFrom;
+        #    boolean parentHasTo;
+        #    boolean childHasFrom;
+        #    boolean childHasTo;
+        #
+        #    // ─── Debug (remove later) ─────────────────────────────────────────────
+        #    warning(strFmt("DEBUG: Jay_ScanLifecycleService.consumeParent() parent=%1 child=%2",
+        #                   _parentRecId, _childRecId));
+        #
+        #    // ─── Sanity ───────────────────────────────────────────────────────────
+        #    if (!_parentRecId || !_childRecId)
+        #        return;
+        #
+        #    // ───────────────────────────────────────────────────────────────────────
+        #    // 1. Lock parent & child first — but *no* update_recordset inside this TTS
+        #    // ───────────────────────────────────────────────────────────────────────
+        #    ttsBegin;
+        #
+        #    select forUpdate parentLock
+        #        where parentLock.RecId == _parentRecId;
+        #
+        #    select forUpdate childLock
+        #        where childLock.RecId == _childRecId;
+        #
+        #    if (!parentLock.RecId || !childLock.RecId)
+        #    {
+        #        ttsAbort;
+        #        return;
+        #    }
+        #
+        #    // cache values — cannot reuse locked buffer after commit
+        #    parentFrom = parentLock.RangeFromUTC;
+        #    parentTo   = parentLock.RangeToUTC;
+        #    childFrom  = childLock.ExtendedRangeFromUTC;
+        #    childTo    = childLock.ExtendedRangeToUTC;
+        #
+        #    // mark parent consumed *before* releasing lock
+        #    parentLock.ScanStatus = Jay_ScanStatus::Consumed;
+        #    parentLock.update();
+        #
+        #    ttsCommit;  // important — frees lock before bulk operations
+        #
+        #
+        #    // ───────────────────────────────────────────────────────────────────────
+        #    // 2. Move slices to child (bulk, safe)
+        #    // ───────────────────────────────────────────────────────────────────────
+        #    ttsBegin;
+        #
+        #    update_recordset slice
+        #        setting ParentScanId = _childRecId
+        #        where slice.ParentScanId == _parentRecId;
+        #
+        #    ttsCommit;
+        #
+        #
+        #    // ───────────────────────────────────────────────────────────────────────
+        #    // 3. Move scopes to child (bulk, safe)
+        #    // ───────────────────────────────────────────────────────────────────────
+        #    ttsBegin;
+        #
+        #    update_recordset scope
+        #        setting ParentScanId = _childRecId
+        #        where scope.ParentScanId == _parentRecId;
+        #
+        #    ttsCommit;
+        #
+        #
+        #    // ───────────────────────────────────────────────────────────────────────
+        #    // 4. Extend child's effective range (must re-lock child)
+        #    // ───────────────────────────────────────────────────────────────────────
+        #    ttsBegin;
+        #
+        #    select forUpdate childLock
+        #        where childLock.RecId == _childRecId;
+        #
+        #    // value existence tests
+        #    parentHasFrom = (parentFrom != DateTimeUtil::minValue());
+        #    parentHasTo   = (parentTo   != DateTimeUtil::minValue());
+        #    childHasFrom  = (childFrom  != DateTimeUtil::minValue());
+        #    childHasTo    = (childTo    != DateTimeUtil::minValue());
+        #
+        #    // Lower bound (From)
+        #    if (parentHasFrom)
+        #    {
+        #        if (!childHasFrom || parentFrom < childFrom)
+        #        {
+        #            childLock.ExtendedRangeFromUTC = parentFrom;
+        #        }
+        #    }
+        #
+        #    // Upper bound (To)
+        #    if (parentHasTo)
+        #    {
+        #        if (!childHasTo || parentTo > childTo)
+        #        {
+        #            childLock.ExtendedRangeToUTC = parentTo;
+        #        }
+        #    }
+        #
+        #    childLock.update();
+        #
+        #    ttsCommit;
+        #
+        #
+        #    // ───────────────────────────────────────────────────────────────────────
+        #    // 5. Log completion
+        #    // ───────────────────────────────────────────────────────────────────────
+        #    info(strFmt("⏩ Parent scan %1 consumed into child %2.", _parentRecId, _childRecId));
+        #}
+        #
+      ENDSOURCE
+      SOURCE #createChildAndCopyScopesWithParentUpdate
+        #public static RecId createChildAndCopyScopesWithParentUpdate(RecId       _parentRecId,
+        #                                                             utcDateTime _nextStartUtc,
+        #                                                             utcDateTime _nextEndUtc,
+        #                                                             NoYes       _isFinal)
+        #{
+        #    // ─── Declarations ────────────────────────────────────────────────────
+        #    Jay_ScanCtrl   parent;
+        #    Jay_ScanCtrl   child;
+        #    Jay_ScanScope  parentScope;
+        #    Jay_ScanScope  newScope;
+        #
+        #    RecId          childRecId = 0;
+        #    utcDateTime    parentHorizonUtc;
+        #
+        #    // ─── Sanity: parent must exist ───────────────────────────────────────
+        #    select firstOnly parent
+        #        where parent.RecId == _parentRecId;
+        #
+        #    if (!parent.RecId)
+        #    {
+        #        return 0;
+        #    }
+        #
+        #    // ─── Validate window (non-zero and start < end) ──────────────────────
+        #    if (_nextStartUtc == DateTimeUtil::maxValue()
+        #     || _nextEndUtc   == DateTimeUtil::maxValue()
+        #     || _nextStartUtc >= _nextEndUtc)
+        #    {
+        #        error(strFmt(
+        #            "createChildAndCopyScopesWithParentUpdate: invalid window for parent %1 (start=%2 end=%3).",
+        #            _parentRecId,
+        #            DateTimeUtil::toStr(_nextStartUtc),
+        #            DateTimeUtil::toStr(_nextEndUtc)));
+        #        return 0;
+        #    }
+        #
+        #    // ─── Compute or reuse absolute horizon for lineage ───────────────────
+        #    parentHorizonUtc = parent.Horizon
+        #        ? parent.Horizon
+        #        : Jay_ScanMetadataService::computeHorizon(parent);
+        #
+        #    // ─── Main TTS: lock parent, create child, copy scopes, update parent ─
+        #    ttsBegin;
+        #
+        #    // Re-lock parent in the same TTS where we update it
+        #    select forUpdate parent
+        #        where parent.RecId == _parentRecId;
+        #
+        #    if (!parent.RecId)
+        #    {
+        #        ttsAbort;
+        #        return 0;
+        #    }
+        #
+        #    // Create child (inherit from parent)
+        #    child.clear();
+        #    child.data(parent);
+        #    child.RecId               = 0;               // force new insert
+        #    child.ParentScanRecId     = _parentRecId;
+        #    child.ScanStartDateTime   = _nextStartUtc;
+        #    child.RangeFromUTC        = _nextStartUtc;
+        #    child.RangeToUTC          = _nextEndUtc;
+        #    child.ExtendedRangeFromUTC = _nextStartUtc;
+        #    child.ExtendedRangeToUTC   = _nextEndUtc;
+        #
+        #    // Horizon / lineage
+        #    child.Horizon      = parentHorizonUtc;
+        #    child.HorizonValue = parent.HorizonValue;
+        #    child.HorizonUnit  = parent.HorizonUnit;
+        #    child.LengthUnit   = parent.LengthUnit;
+        #    child.LengthValue  = parent.LengthValue;
+        #
+        #    // Status of child
+        #    if (_isFinal == NoYes::Yes)
+        #    {
+        #        child.ScanStatus = Jay_ScanStatus::Completed;
+        #    }
+        #    else
+        #    {
+        #        child.ScanStatus = Jay_ScanStatus::Pending;
+        #    }
+        #
+        #    child.HealthStatus = Jay_HealthStatus::Healthy;
+        #    child.insert();
+        #    childRecId = child.RecId;
+        #
+        #    // Copy scopes from parent to child
+        #    while select * from parentScope
+        #        where parentScope.ParentScanId == _parentRecId
+        #    {
+        #        newScope.clear();
+        #        newScope.data(parentScope);
+        #        newScope.RecId        = 0;
+        #        newScope.ParentScanId = childRecId;
+        #        newScope.insert();
+        #    }
+        #
+        #    // Persist any parent-side metadata change if needed
+        #    // (right now this is effectively a no-op, but safe)
+        #    parent.update();
+        #
+        #    ttsCommit;
+        #
+        #    info(strFmt("🧬 Created child scan %1 from parent %2 (%3 → %4).",
+        #                childRecId, _parentRecId,
+        #                DateTimeUtil::toStr(_nextStartUtc),
+        #                DateTimeUtil::toStr(_nextEndUtc)));
+        #
+        #    return childRecId;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #createChildRecord
+        #public static Jay_ScanCtrl createChildRecord(Jay_ScanCtrl _parent)
+        #{
+        #    Jay_ScanCtrl child;
+        #    Jay_RunMode runMode;
+        #    Jay_ScanStrategy strategy;
+        #    utcDateTime nextIntervalStart = Jay_ScanTemporalService::computeNextIntervalStart(
+        #                                        _parent.NextIntervalStart,
+        #                                        _parent.ScanValue,
+        #                                        _parent.ScanUnit,
+        #                                        _parent.Direction);
+        #    ttsBegin;
+        #    child.clear();
+        #    child.initValue();
+        #    // Relationship / lineage
+        #    child.ParentScanRecId      = _parent.RecId;
+        #    // Temporal parameters
+        #    runMode = Jay_RunMode::construct(_parent.RunMode);
+        #    strategy = Jay_ScanStrategy::construct(_parent.Direction);
+        #    child.ScanStartDateTime    = runMode.childStartTimeUtc(_parent);      // Next child start:contentReference[oaicite:29]{index=29}:contentReference[oaicite:30]{index=30}
+        #    child.ScanValue           = _parent.ScanValue;
+        #    child.ScanUnit            = _parent.ScanUnit;
+        #    child.Direction           = _parent.Direction;
+        #    child.HorizonValue        = _parent.HorizonValue;
+        #    child.HorizonUnit         = _parent.HorizonUnit;
+        #    child.LengthUnit          = _parent.LengthUnit;
+        #    child.LengthValue         = _parent.LengthValue;
+        #    child.Horizon             = _parent.Horizon;
+        #    child.NextIntervalStart   = nextIntervalStart;
+        #    // Operational metadata
+        #    child.QueueType           = _parent.QueueType;
+        #    child.RunMode             = _parent.RunMode;
+        #    child.HealthStatus        = Jay_HealthStatus::Healthy;
+        #    // Temporal window for child (compute from parent context)
+        #    child.RangeFromUTC        = strategy.nextRangeFromUtc(_parent);
+        #    child.RangeToUTC          = strategy.nextRangeToUtc(_parent, child.RangeFromUTC);
+        #    child.insert();
+        #    ttsCommit;
+        #    return child;
+        #}
+      ENDSOURCE
+      SOURCE #findChild
+        #public static RecId findChild(RecId _parentRecId)
+        #{
+        #    Jay_ScanCtrl child;
+        #
+        #    select firstOnly RecId
+        #        from child
+        #        order by child.RecId desc   // deterministic newest
+        #        where child.ParentScanRecId == _parentRecId;
+        #
+        #    return child.RecId;
+        #}
+        #
+      ENDSOURCE
+    ENDMETHODS
+  ENDCLASS
+
+***Element: END

@@ -1,0 +1,349 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: DBT
+
+; Microsoft Dynamics AX Table : Jay_ExportRuntimeSettingsTable unloaded
+; --------------------------------------------------------------------------------
+  TABLEVERSION 1
+  
+  TABLE #Jay_ExportRuntimeSettingsTable
+    EnforceFKRelation 1
+    PROPERTIES
+      Name                #Jay_ExportRuntimeSettingsTable
+      CreateRecIdIndex    #Yes
+      PrimaryIndex        #SurrogateKey
+      ClusterIndex        #SurrogateKey
+      Origin              #{0307A64A-2303-463A-BD26-82D88CABEEFC}
+    ENDPROPERTIES
+    
+    FIELDS
+      FIELD #BatchGroupName
+        STRING
+        PROPERTIES
+          Name                #BatchGroupName
+          Label               #Batch Group
+          Table               #Jay_ExportRuntimeSettingsTable
+          Origin              #{4799BCAA-88C3-4EA2-AE09-163297663349}
+          ExtendedDataType    #Name
+          StringSize          #60
+        ENDPROPERTIES
+        
+      FIELD #CapacityDeferMinutes
+        INT
+        PROPERTIES
+          Name                #CapacityDeferMinutes
+          Label               #Defer Minutes when Capacity Exceeded
+          Table               #Jay_ExportRuntimeSettingsTable
+          Origin              #{C0022A8B-1F9E-4C7C-AA0E-9E94D4607B88}
+        ENDPROPERTIES
+        
+      FIELD #DefaultHorizonUnit
+        ENUM
+        PROPERTIES
+          Name                #DefaultHorizonUnit
+          Label               #Default Horizon Unit
+          Table               #Jay_ExportRuntimeSettingsTable
+          Origin              #{6FCAD026-42AE-431A-8A71-0A09C804D719}
+          EnumType            #Jay_CadenceUnit
+        ENDPROPERTIES
+        
+      FIELD #DefaultHorizonValue
+        INT
+        PROPERTIES
+          Name                #DefaultHorizonValue
+          Label               #Default Horizon Value
+          Table               #Jay_ExportRuntimeSettingsTable
+          Origin              #{BF73855B-B6C5-4094-B884-5326198A8F81}
+        ENDPROPERTIES
+        
+      FIELD #DefaultScanUnit
+        ENUM
+        PROPERTIES
+          Name                #DefaultScanUnit
+          Label               #Default Scan Unit
+          Table               #Jay_ExportRuntimeSettingsTable
+          Origin              #{41ECF049-16C4-4AC2-BEF6-6B9612FA1636}
+          EnumType            #Jay_CadenceUnit
+        ENDPROPERTIES
+        
+      FIELD #DefaultScanValue
+        INT
+        PROPERTIES
+          Name                #DefaultScanValue
+          Label               #Default Scan Value
+          Table               #Jay_ExportRuntimeSettingsTable
+          Origin              #{B503024A-35AD-4F19-BF01-B43A78C10198}
+        ENDPROPERTIES
+        
+      FIELD #EnqueueType
+        ENUM
+        PROPERTIES
+          Name                #EnqueueType
+          Label               #Enqueue Speed
+          Table               #Jay_ExportRuntimeSettingsTable
+          Origin              #{7AE1AF1A-166B-42A3-88AC-2D0730938E98}
+          EnumType            #Jay_EnqueueType
+        ENDPROPERTIES
+        
+      FIELD #HeartbeatLock
+        ENUM
+        PROPERTIES
+          Name                #HeartbeatLock
+          Label               #HeartBeatRunningLock
+          Table               #Jay_ExportRuntimeSettingsTable
+          Origin              #{40064E23-B463-466A-B7A9-8B17E4149345}
+          EnumType            #NoYes
+        ENDPROPERTIES
+        
+      FIELD #HeartbeatMinutes
+        INT
+        PROPERTIES
+          Name                #HeartbeatMinutes
+          Label               #Heartbeat Interval (minutes)
+          Table               #Jay_ExportRuntimeSettingsTable
+          Origin              #{E8CC0CA2-73CF-474A-8291-665BE2F92B7A}
+        ENDPROPERTIES
+        
+      FIELD #HistEnqueuePause
+        ENUM
+        PROPERTIES
+          Name                #HistEnqueuePause
+          Label               #Historical Enqueue Pause
+          Table               #Jay_ExportRuntimeSettingsTable
+          Origin              #{A1664C3C-ED87-42C8-959F-220F297CE22E}
+          EnumType            #NoYes
+        ENDPROPERTIES
+        
+      FIELD #Jay_ScanDirection
+        ENUM
+        PROPERTIES
+          Name                #Jay_ScanDirection
+          Label               #Direction
+          Table               #Jay_ExportRuntimeSettingsTable
+          Origin              #{AF759DCF-07D8-4270-A059-03EFD25CEB54}
+          EnumType            #Jay_ScanDirection
+        ENDPROPERTIES
+        
+      FIELD #LastHeartbeatUTC
+        DATETIME
+        PROPERTIES
+          Name                #LastHeartbeatUTC
+          Table               #Jay_ExportRuntimeSettingsTable
+          Origin              #{5EEE8D19-FA7A-4298-8C50-1F1525BD85DB}
+        ENDPROPERTIES
+        
+      FIELD #MaxAllowedPrintAttempts
+        INT
+        PROPERTIES
+          Name                #MaxAllowedPrintAttempts
+          Label               #Max Allowed Print Attempts
+          Table               #Jay_ExportRuntimeSettingsTable
+          Origin              #{C716F6C2-BCA3-42E7-BDDC-EA2D9E27B290}
+        ENDPROPERTIES
+        
+      FIELD #MaxConcurrentEnqueues
+        INT
+        PROPERTIES
+          Name                #MaxConcurrentEnqueues
+          Table               #Jay_ExportRuntimeSettingsTable
+          Origin              #{B63D635B-3D2F-47B7-9AF8-8B1AD3176C8C}
+        ENDPROPERTIES
+        
+      FIELD #MaxDeferredRetries
+        INT
+        PROPERTIES
+          Name                #MaxDeferredRetries
+          Label               #Max Deferred Retries
+          Table               #Jay_ExportRuntimeSettingsTable
+          Origin              #{6DE972A7-CF5D-4BD5-B258-412EDF9CF2E1}
+        ENDPROPERTIES
+        
+      FIELD #MaxDocumentCountPerBatch
+        INT
+        PROPERTIES
+          Name                #MaxDocumentCountPerBatch
+          Table               #Jay_ExportRuntimeSettingsTable
+          Origin              #{0493961B-27ED-4BC6-A42D-A81B6B63423F}
+        ENDPROPERTIES
+        
+      FIELD #PrintCadenceMs
+        INT
+        PROPERTIES
+          Name                #PrintCadenceMs
+          Label               #Print Cadence (ms)
+          Table               #Jay_ExportRuntimeSettingsTable
+          Origin              #{735C6C38-CF5E-40BB-850A-16FF4DF61A03}
+        ENDPROPERTIES
+        
+      FIELD #PrintCapacityPerHour
+        INT
+        PROPERTIES
+          Name                #PrintCapacityPerHour
+          Label               #Historical Print Capacity / Hour
+          Table               #Jay_ExportRuntimeSettingsTable
+          Origin              #{DFEEDDC4-6E5D-4763-BDF2-05E80E0CED3D}
+        ENDPROPERTIES
+        
+      FIELD #PrintWindowEnabled
+        ENUM
+        PROPERTIES
+          Name                #PrintWindowEnabled
+          Label               #Print Window Constraints Enabled
+          Table               #Jay_ExportRuntimeSettingsTable
+          Origin              #{C4D9F87F-C709-470B-8A89-550CE7126031}
+          EnumType            #NoYes
+        ENDPROPERTIES
+        
+      FIELD #PrintWindowEndTime
+        TIME
+        PROPERTIES
+          Name                #PrintWindowEndTime
+          Table               #Jay_ExportRuntimeSettingsTable
+          Origin              #{42F86DA5-EAB1-4D16-9CEA-09610828CB19}
+          ExtendedDataType    #TimeOfDay
+        ENDPROPERTIES
+        
+      FIELD #PrintWindowStartTime
+        TIME
+        PROPERTIES
+          Name                #PrintWindowStartTime
+          Table               #Jay_ExportRuntimeSettingsTable
+          Origin              #{526CC1E7-1016-4902-8A58-D0DBF9B6EB54}
+          ExtendedDataType    #TimeOfDay
+        ENDPROPERTIES
+        
+      FIELD #ProdEnqueuePause
+        ENUM
+        PROPERTIES
+          Name                #ProdEnqueuePause
+          Label               #Production Enqueue Paused
+          Table               #Jay_ExportRuntimeSettingsTable
+          Origin              #{426E8DD7-2F09-4813-BB73-74B71438FF36}
+          EnumType            #NoYes
+        ENDPROPERTIES
+        
+      FIELD #SliceMergeThresholdPct
+        INT
+        PROPERTIES
+          Name                #SliceMergeThresholdPct
+          Table               #Jay_ExportRuntimeSettingsTable
+          Origin              #{34FE8695-F925-49BE-840D-6B8DD10D0521}
+        ENDPROPERTIES
+        
+      FIELD #Username
+        STRING
+        PROPERTIES
+          Name                #Username
+          Table               #Jay_ExportRuntimeSettingsTable
+          Origin              #{8ABBA9C1-ADE8-4857-9B42-132132BA5298}
+          ExtendedDataType    #Name
+          StringSize          #60
+        ENDPROPERTIES
+        
+    ENDFIELDS
+    GROUPS
+    ENDGROUPS
+    
+    INDICES
+    ENDINDICES
+    FULLTEXTINDICES
+    ENDFULLTEXTINDICES
+    REFERENCES
+    ENDREFERENCES
+    
+    DELETEACTIONS
+    ENDDELETEACTIONS
+    
+    METHODS
+      SOURCE #initValue
+        #public void initValue()
+        #{
+        #    super();
+        #
+        #    // ------------------------------------------------------------
+        #    // PRINT CAPACITY / PACING
+        #    // ------------------------------------------------------------
+        #    this.PrintCapacityPerHour      = 5000;
+        #    this.PrintCadenceMs            = 1000;
+        #    this.CapacityDeferMinutes      = 15;
+        #    this.MaxAllowedPrintAttempts   = 3;
+        #
+        #    // ------------------------------------------------------------
+        #    // DEFAULT SCAN / HORIZON
+        #    // ------------------------------------------------------------
+        #    this.DefaultScanUnit           = Jay_CadenceUnit::Day;
+        #    this.DefaultScanValue          = 1;
+        #    this.DefaultHorizonUnit        = Jay_CadenceUnit::Month;
+        #    this.DefaultHorizonValue       = 1;
+        #
+        #    // ------------------------------------------------------------
+        #    // ARBITRATION / RETRIES
+        #    // ------------------------------------------------------------
+        #    this.MaxDeferredRetries        = 3;
+        #
+        #    // ------------------------------------------------------------
+        #    // PAUSE FLAGS
+        #    // ------------------------------------------------------------
+        #    this.HistEnqueuePause          = NoYes::No;
+        #    this.ProdEnqueuePause          = NoYes::No;
+        #
+        #    // ------------------------------------------------------------
+        #    // BATCH / SLICE CONTROL
+        #    // ------------------------------------------------------------
+        #    this.MaxDocumentCountPerBatch  = 5000;
+        #    this.MaxConcurrentEnqueues     = 3;
+        #    this.SliceMergeThresholdPct    = 75;
+        #
+        #    // ------------------------------------------------------------
+        #    // ENQUEUE / SCAN BEHAVIOR
+        #    // ------------------------------------------------------------
+        #    this.EnqueueType               = Jay_EnqueueType::Fast;
+        #    this.Jay_ScanDirection         = Jay_ScanDirection::Backward;
+        #
+        #    // ------------------------------------------------------------
+        #    // BATCH / HEARTBEAT
+        #    // ------------------------------------------------------------
+        #    this.Username                  ="RevverAd";
+        #    this.BatchGroupName            = "";
+        #    this.HeartbeatMinutes          = 15;
+        #    this.UserName                  = "";
+        #    this.HeartbeatLock             = NoYes::No;
+        #    this.LastHeartbeatUTC          = DateTimeUtil::minValue();
+        #
+        #    // ------------------------------------------------------------
+        #    // PRINT WINDOW (EST → UTC NORMALIZED)
+        #    // ------------------------------------------------------------
+        #    // Conceptual intent: 5:00 PM → 6:00 AM EST
+        #    // Stored values:     22:00 → 11:00 UTC
+        #    //
+        #    this.PrintWindowEnabled        = NoYes::No;
+        #    this.PrintWindowStartTime      = str2time("22:00:00"); // 5:00 PM EST
+        #    this.PrintWindowEndTime        = str2time("11:00:00"); // 6:00 AM EST
+        #}
+        #
+      ENDSOURCE
+      SOURCE #findOrCreate
+        #public static Jay_ExportRuntimeSettingsTable findOrCreate()
+        #{
+        #    Jay_ExportRuntimeSettingsTable s;
+        #
+        #    select firstOnly s where s.DataAreaId == curext();
+        #
+        #    if (!s.RecId)
+        #    {
+        #        ttsBegin;
+        #        s.clear();
+        #        s.initValue();
+        #        s.insert();
+        #        ttsCommit;
+        #    }
+        #
+        #    return s;
+        #}
+      ENDSOURCE
+    ENDMETHODS
+  ENDTABLE
+  
+
+***Element: END

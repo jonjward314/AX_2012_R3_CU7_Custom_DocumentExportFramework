@@ -1,0 +1,118 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: CLS
+
+; Microsoft Dynamics AX Class: Jay_RunMode unloaded
+; --------------------------------------------------------------------------------
+  CLSVERSION 1
+  
+  CLASS #Jay_RunMode
+    PROPERTIES
+      Name                #Jay_RunMode
+      Origin              #{9317F735-3EA2-4A5D-8B8A-608A992D57B2}
+    ENDPROPERTIES
+    
+    METHODS
+      SOURCE #calcNextStartAfterNow
+        #protected utcDateTime calcNextStartAfterNow(
+        #    utcDateTime     _baseTime,
+        #    int             _scanValue,
+        #    Jay_CadenceUnit _scanUnit)
+        #{
+        #    utcDateTime nowUtc = DateTimeUtil::utcNow();
+        #    int intervalMinutes;
+        #    utcDateTime nextTime;
+        #    utcDateTime maxFutureUtc;
+        #
+        #    // ── Sanity validation ───────────────────────────────────────────────
+        #    if (!_baseTime || _baseTime == DateTimeUtil::minValue() || _baseTime == DateTimeUtil::maxValue())
+        #    {
+        #        warning("Jay_RunMode.calcNextStartAfterNow: invalid baseTime; defaulting to utcNow().");
+        #        _baseTime = nowUtc;
+        #    }
+        #
+        #    if (_scanValue == 0 || !_scanUnit)
+        #    {
+        #        warning("Jay_RunMode.calcNextStartAfterNow: invalid cadence (0 or None); using 2-minute fallback.");
+        #        return DateTimeUtil::addMinutes(nowUtc, 2);
+        #    }
+        #
+        #    intervalMinutes = abs(_scanValue) * Jay_CadenceModel::unitToMinutes(_scanUnit);
+        #    if (intervalMinutes <= 0)
+        #    {
+        #        warning(strFmt("Jay_RunMode.calcNextStartAfterNow: intervalMinutes invalid (%1); using 2-minute fallback.", intervalMinutes));
+        #        intervalMinutes = 2;
+        #    }
+        #
+        #    // ── Compute initial candidate ───────────────────────────────────────
+        #    try
+        #    {
+        #        nextTime = DateTimeUtil::addMinutes(_baseTime, intervalMinutes);
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        warning(strFmt("Jay_RunMode.calcNextStartAfterNow: addMinutes failed (base=%1, minutes=%2). Using now+2min.",
+        #                       DateTimeUtil::toStr(_baseTime), intervalMinutes));
+        #        return DateTimeUtil::addMinutes(nowUtc, 2);
+        #    }
+        #
+        #    // ── Safety cap: do not exceed 1 year into future ────────────────────
+        #    maxFutureUtc = DateTimeUtil::addYears(nowUtc, 1);
+        #
+        #    while (nextTime <= nowUtc && nextTime < maxFutureUtc)
+        #    {
+        #        nextTime = DateTimeUtil::addMinutes(nextTime, intervalMinutes);
+        #    }
+        #
+        #    if (nextTime > maxFutureUtc)
+        #    {
+        #        warning(strFmt("Jay_RunMode.calcNextStartAfterNow: exceeded 1-year forward cap (interval %1 min, base=%2). Clamped to now+2min.",
+        #                       intervalMinutes, DateTimeUtil::toStr(_baseTime)));
+        #        nextTime = DateTimeUtil::addMinutes(nowUtc, 2);
+        #    }
+        #
+        #    return nextTime;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #childStartTimeUtc
+        #public utcDateTime childStartTimeUtc(Jay_ScanCtrl _parent)
+        #{
+        #          throw error("Jay_RunMode::childStartTimeUtc must be implemented by subclass.");
+        #}
+      ENDSOURCE
+      SOURCE #classDeclaration
+        #public abstract class Jay_RunMode
+        #{
+        #    // Base class for scan run modes (OneOff, AutoRepeat, Continuous)
+        #    // Provides default cadence scheduling logic for repeated scans.
+        #}
+      ENDSOURCE
+      SOURCE #nextStartTimeUtc
+        #public utcDateTime nextStartTimeUtc(utcDateTime    _baseTime,
+        #                                                int            _scanValue,
+        #                                                Jay_CadenceUnit _scanUnit)
+        #{
+        #          throw error("Jay_RunMode::nextStartTimeUtc must be implemented by subclass.");
+        #}
+      ENDSOURCE
+      SOURCE #construct
+        #public static Jay_RunMode construct(Jay_ExportRunMode _runMode)
+        #{
+        #    switch (_runMode)
+        #    {
+        #        case Jay_ExportRunMode::Continuous:
+        #            return new Jay_RunMode_Continuous();
+        #        case Jay_ExportRunMode::AutoRepeat:
+        #            return new Jay_RunMode_AutoRepeat();
+        #        case Jay_ExportRunMode::OneOff:
+        #        default:
+        #            return new Jay_RunMode_OneOff();
+        #    }
+        #}
+      ENDSOURCE
+    ENDMETHODS
+  ENDCLASS
+
+***Element: END

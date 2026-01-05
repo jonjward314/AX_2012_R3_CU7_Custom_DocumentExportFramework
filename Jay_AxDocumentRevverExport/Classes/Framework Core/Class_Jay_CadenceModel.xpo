@@ -1,0 +1,398 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: CLS
+
+; Microsoft Dynamics AX Class: Jay_ExportRuntimeSettings unloaded
+; --------------------------------------------------------------------------------
+  CLSVERSION 1
+  
+  CLASS #Jay_ExportRuntimeSettings
+    PROPERTIES
+      Name                #Jay_ExportRuntimeSettings
+      Origin              #{84CC0670-F045-4071-AF9F-A1D4ECC78D0A}
+    ENDPROPERTIES
+    
+    METHODS
+      SOURCE #classDeclaration
+        #public class Jay_ExportRuntimeSettings
+        #{
+        #
+        #}
+      ENDSOURCE
+      SOURCE #batchGroupName
+        #public static str batchGroupName()
+        #{
+        #    Jay_ExportRuntimeSettingsTable s = Jay_ExportRuntimeSettings::findOrCreate();
+        #    return s.BatchGroupName ? s.BatchGroupName : "JAY_EXPORT";
+        #}
+        #
+      ENDSOURCE
+      SOURCE #capacityDeferMinutes
+        #public static int capacityDeferMinutes()
+        #{
+        #    Jay_ExportRuntimeSettingsTable s = Jay_ExportRuntimeSettings::findOrCreate();
+        #    return s.CapacityDeferMinutes ? s.CapacityDeferMinutes : 15;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #defaultHorizonUnit
+        #public static Jay_CadenceUnit defaultHorizonUnit()
+        #{
+        #    Jay_ExportRuntimeSettingsTable s = Jay_ExportRuntimeSettings::findOrCreate();
+        #    return s.DefaultHorizonUnit ? s.DefaultHorizonUnit : Jay_CadenceUnit::Month;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #defaultHorizonValue
+        #public static int defaultHorizonValue()
+        #{
+        #    Jay_ExportRuntimeSettingsTable s = Jay_ExportRuntimeSettings::findOrCreate();
+        #    return s.DefaultHorizonValue ? s.DefaultHorizonValue : 1;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #defaultScanUnit
+        #public static Jay_CadenceUnit defaultScanUnit()
+        #{
+        #    Jay_ExportRuntimeSettingsTable s = Jay_ExportRuntimeSettings::findOrCreate();
+        #    return s.DefaultScanUnit ? s.DefaultScanUnit : Jay_CadenceUnit::Day;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #defaultScanValue
+        #public static int defaultScanValue()
+        #{
+        #    Jay_ExportRuntimeSettingsTable s = Jay_ExportRuntimeSettings::findOrCreate();
+        #    return s.DefaultScanValue ? s.DefaultScanValue : 1;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #enqueueType
+        #public static Jay_EnqueueType enqueueType()
+        #{
+        #    return Jay_ExportRuntimeSettings::findOrCreate().EnqueueType;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #findOrCreate
+        #public static Jay_ExportRuntimeSettingsTable findOrCreate()
+        #{
+        #    Jay_ExportRuntimeSettingsTable s;
+        #
+        #    select firstOnly s
+        #        where s.DataAreaId == curext();
+        #
+        #    if (!s.RecId)
+        #    {
+        #        ttsBegin;
+        #        s.clear();
+        #        s.initValue();
+        #        s.insert();
+        #        ttsCommit;
+        #    }
+        #
+        #    return s;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #getForUpdate
+        #private static Jay_ExportRuntimeSettingsTable getForUpdate()
+        #{
+        #    Jay_ExportRuntimeSettingsTable s;
+        #
+        #    select firstOnly forUpdate s
+        #        where s.DataAreaId == curext();
+        #
+        #    return s;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #heartbeatMinutes
+        #
+        #public static int heartbeatMinutes()
+        #{
+        #    return Jay_ExportRuntimeSettings::findOrCreate().HeartbeatMinutes;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #lastHeartbeatUTC
+        #
+        #public static utcDateTime lastHeartbeatUTC()
+        #{
+        #    return Jay_ExportRuntimeSettings::findOrCreate().LastHeartbeatUTC;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #maxAllowedPrintAttempts
+        #
+        #public static int maxAllowedPrintAttempts()
+        #{
+        #    Jay_ExportRuntimeSettingsTable s = Jay_ExportRuntimeSettings::findOrCreate();
+        #    return s.MaxAllowedPrintAttempts ? s.MaxAllowedPrintAttempts : 3;
+        #}
+        #
+        #
+      ENDSOURCE
+      SOURCE #maxConcurrentEnqueues
+        #public static int maxConcurrentEnqueues()
+        #{
+        #    return Jay_ExportRuntimeSettings::findOrCreate().MaxConcurrentEnqueues;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #maxDeferredRetries
+        #public static int maxDeferredRetries()
+        #{
+        #    Jay_ExportRuntimeSettingsTable s = Jay_ExportRuntimeSettings::findOrCreate();
+        #    return s.MaxDeferredRetries ? s.MaxDeferredRetries : 3;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #maxDocumentCountPerBatch
+        #public static int maxDocumentCountPerBatch()
+        #{
+        #    return Jay_ExportRuntimeSettings::findOrCreate().MaxDocumentCountPerBatch;
+        #}
+      ENDSOURCE
+      SOURCE #printCadenceMs
+        #
+        #public static int printCadenceMs()
+        #{
+        #    Jay_ExportRuntimeSettingsTable s = Jay_ExportRuntimeSettings::findOrCreate();
+        #    return s.PrintCadenceMs ? s.PrintCadenceMs : 1000;
+        #}
+        #
+        #
+      ENDSOURCE
+      SOURCE #PrintCapacityPerHour
+        #
+        #public static int PrintCapacityPerHour()
+        #{
+        #    Jay_ExportRuntimeSettingsTable s = Jay_ExportRuntimeSettings::findOrCreate();
+        #    return s.PrintCapacityPerHour ? s.PrintCapacityPerHour : 5000;
+        #}
+        #
+        #
+      ENDSOURCE
+      SOURCE #scanDirection
+        #public static Jay_ScanDirection scanDirection()
+        #{
+        #    return Jay_ExportRuntimeSettings::findOrCreate().Jay_ScanDirection;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #setBatchGroupName
+        #public static void setBatchGroupName(str _value)
+        #{
+        #    Jay_ExportRuntimeSettings::updateField(
+        #        fieldNum(Jay_ExportRuntimeSettingsTable, BatchGroupName),
+        #        _value);
+        #}
+        #
+      ENDSOURCE
+      SOURCE #setCapacityDeferMinutes
+        #
+        #public static void setCapacityDeferMinutes(int _value)
+        #{
+        #    Jay_ExportRuntimeSettings::updateField(
+        #        fieldNum(Jay_ExportRuntimeSettingsTable, CapacityDeferMinutes),
+        #        _value);
+        #}
+        #
+      ENDSOURCE
+      SOURCE #setDefaultHorizonUnit
+        #
+        #public static void setDefaultHorizonUnit(Jay_CadenceUnit _value)
+        #{
+        #    Jay_ExportRuntimeSettings::updateField(
+        #        fieldNum(Jay_ExportRuntimeSettingsTable, DefaultHorizonUnit),
+        #        _value);
+        #}
+        #
+      ENDSOURCE
+      SOURCE #setDefaultHorizonValue
+        #
+        #public static void setDefaultHorizonValue(int _value)
+        #{
+        #    Jay_ExportRuntimeSettings::updateField(
+        #        fieldNum(Jay_ExportRuntimeSettingsTable, DefaultHorizonValue),
+        #        _value);
+        #}
+        #
+      ENDSOURCE
+      SOURCE #setDefaultScanUnit
+        #
+        #public static void setDefaultScanUnit(Jay_CadenceUnit _value)
+        #{
+        #    Jay_ExportRuntimeSettings::updateField(
+        #        fieldNum(Jay_ExportRuntimeSettingsTable, DefaultScanUnit),
+        #        _value);
+        #}
+        #
+      ENDSOURCE
+      SOURCE #setDefaultScanValue
+        #
+        #public static void setDefaultScanValue(int _value)
+        #{
+        #    Jay_ExportRuntimeSettings::updateField(
+        #        fieldNum(Jay_ExportRuntimeSettingsTable, DefaultScanValue),
+        #        _value);
+        #}
+        #
+      ENDSOURCE
+      SOURCE #setEnqueueType
+        #
+        #public static void setEnqueueType(Jay_EnqueueType _value)
+        #{
+        #    Jay_ExportRuntimeSettings::updateField(
+        #        fieldNum(Jay_ExportRuntimeSettingsTable, EnqueueType),
+        #        _value);
+        #}
+        #
+      ENDSOURCE
+      SOURCE #setHeartbeatMinutes
+        #
+        #public static void setHeartbeatMinutes(int _value)
+        #{
+        #    Jay_ExportRuntimeSettings::updateField(
+        #        fieldNum(Jay_ExportRuntimeSettingsTable, HeartbeatMinutes),
+        #        _value);
+        #}
+        #
+      ENDSOURCE
+      SOURCE #setLastHeartbeatUTC
+        #public static void setLastHeartbeatUTC(utcDateTime _value)
+        #{
+        #    Jay_ExportRuntimeSettings::updateField(
+        #        fieldNum(Jay_ExportRuntimeSettingsTable, LastHeartbeatUTC),
+        #        _value);
+        #}
+        #
+      ENDSOURCE
+      SOURCE #setMaxAllowedPrintAttempts
+        #
+        #public static void setMaxAllowedPrintAttempts(int _value)
+        #{
+        #    Jay_ExportRuntimeSettings::updateField(
+        #        fieldNum(Jay_ExportRuntimeSettingsTable, MaxAllowedPrintAttempts),
+        #        _value);
+        #}
+        #
+      ENDSOURCE
+      SOURCE #setMaxConcurrentEnqueues
+        #
+        #public static void setMaxConcurrentEnqueues(int _value)
+        #{
+        #    Jay_ExportRuntimeSettings::updateField(
+        #        fieldNum(Jay_ExportRuntimeSettingsTable, MaxConcurrentEnqueues),
+        #        _value);
+        #}
+        #
+      ENDSOURCE
+      SOURCE #setMaxDeferredRetries
+        #
+        #public static void setMaxDeferredRetries(int _value)
+        #{
+        #    Jay_ExportRuntimeSettings::updateField(
+        #        fieldNum(Jay_ExportRuntimeSettingsTable, MaxDeferredRetries),
+        #        _value);
+        #}
+        #
+      ENDSOURCE
+      SOURCE #setMaxDocumentCountPerBatch
+        #
+        #public static void setMaxDocumentCountPerBatch(int _value)
+        #{
+        #    Jay_ExportRuntimeSettings::updateField(
+        #        fieldNum(Jay_ExportRuntimeSettingsTable, MaxDocumentCountPerBatch),
+        #        _value);
+        #}
+        #
+      ENDSOURCE
+      SOURCE #setPrintCadenceMs
+        #
+        #public static void setPrintCadenceMs(int _value)
+        #{
+        #    Jay_ExportRuntimeSettings::updateField(
+        #        fieldNum(Jay_ExportRuntimeSettingsTable, PrintCadenceMs),
+        #        _value);
+        #}
+        #
+      ENDSOURCE
+      SOURCE #setPrintCapacityPerHour
+        #
+        #public static void setPrintCapacityPerHour(int _value)
+        #{
+        #    Jay_ExportRuntimeSettings::updateField(
+        #        fieldNum(Jay_ExportRuntimeSettingsTable, PrintCapacityPerHour),
+        #        _value);
+        #}
+        #
+        #
+      ENDSOURCE
+      SOURCE #setScanDirection
+        #public static void setScanDirection(Jay_ScanDirection _value)
+        #{
+        #    Jay_ExportRuntimeSettings::updateField(
+        #        fieldNum(Jay_ExportRuntimeSettingsTable, Jay_ScanDirection),
+        #        _value);
+        #}
+        #
+        #
+      ENDSOURCE
+      SOURCE #setSliceMergeThresholdPct
+        #public static void setSliceMergeThresholdPct(int _value)
+        #{
+        #    Jay_ExportRuntimeSettings::updateField(
+        #        fieldNum(Jay_ExportRuntimeSettingsTable, SliceMergeThresholdPct),
+        #        _value);
+        #}
+        #
+      ENDSOURCE
+      SOURCE #setUsername
+        #
+        #public static void setUsername(str _value)
+        #{
+        #    Jay_ExportRuntimeSettings::updateField(
+        #        fieldNum(Jay_ExportRuntimeSettingsTable, Username),
+        #        _value);
+        #}
+      ENDSOURCE
+      SOURCE #sliceMergeThresholdPct
+        #
+        #public static int sliceMergeThresholdPct()
+        #{
+        #    Jay_ExportRuntimeSettingsTable s = Jay_ExportRuntimeSettings::findOrCreate();
+        #    return s.SliceMergeThresholdPct ? s.SliceMergeThresholdPct : 75;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #updateField
+        #private static void updateField(FieldId _fieldId, anytype _value)
+        #{
+        #    Jay_ExportRuntimeSettingsTable s = Jay_ExportRuntimeSettings::findOrCreate();
+        #
+        #    ttsBegin;
+        #    select forUpdate s
+        #        where s.DataAreaId == curext();
+        #
+        #    s.(_fieldId) = _value;
+        #    s.update();
+        #    ttsCommit;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #username
+        #
+        #public static str username()
+        #{
+        #    Jay_ExportRuntimeSettingsTable s = Jay_ExportRuntimeSettings::findOrCreate();
+        #    return s.Username ? s.Username : curUserId();
+        #}
+        #
+      ENDSOURCE
+    ENDMETHODS
+  ENDCLASS
+
+***Element: END

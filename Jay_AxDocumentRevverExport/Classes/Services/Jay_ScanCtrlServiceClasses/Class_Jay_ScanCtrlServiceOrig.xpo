@@ -1,0 +1,1800 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: CLS
+
+; Microsoft Dynamics AX Class: Jay_ScanCtrlServiceOrig unloaded
+; --------------------------------------------------------------------------------
+  CLSVERSION 1
+  
+  CLASS #Jay_ScanCtrlServiceOrig
+    PROPERTIES
+      Name                #Jay_ScanCtrlServiceOrig
+      Origin              #{D81ABE79-A785-44F2-AFD6-8670306E5B3B}
+    ENDPROPERTIES
+    
+    METHODS
+      SOURCE #classDeclaration
+        #public class Jay_ScanCtrlServiceOrig
+        #{
+        #
+        #}
+        #
+      ENDSOURCE
+      SOURCE #computeHorizon
+        #public static utcDateTime computeHorizon(Jay_ScanCtrl _scan)
+        #{
+        #    utcDateTime horizonUtc;
+        #    int signedVal;
+        #
+        #    if (!_scan.RecId)
+        #        return DateTimeUtil::maxValue();
+        #
+        #    // If already has an absolute horizon stored, use it
+        #    if (_scan.Horizon)
+        #        return _scan.Horizon;
+        #
+        #    // Otherwise compute from user inputs
+        #    if (_scan.HorizonValue > 0)
+        #    {
+        #        signedVal = (_scan.Direction == Jay_ScanDirection::Forward)
+        #                            ? _scan.HorizonValue
+        #                            : -_scan.HorizonValue;
+        #
+        #        horizonUtc = Jay_CadenceModel::addCadence(
+        #            _scan.ScanStartDateTime,
+        #            signedVal,
+        #            _scan.HorizonUnit);
+        #    }
+        #    else
+        #    {
+        #        horizonUtc = DateTimeUtil::maxValue();
+        #    }
+        #
+        #    // Persist the absolute horizon once
+        #    if (!_scan.Horizon)
+        #    {
+        #        ttsBegin;
+        #        select forUpdate _scan;
+        #        _scan.Horizon = horizonUtc;
+        #        _scan.update();
+        #        ttsCommit;
+        #    }
+        #
+        #    return horizonUtc;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #computeHorizonStatic
+        #public static utcDateTime computeHorizonStatic(
+        #    utcDateTime     _scanStartDateTime,
+        #    int             _horizonValue,
+        #    Jay_CadenceUnit _horizonUnit,
+        #    Jay_ScanDirection _direction
+        #    )
+        #{
+        #    utcDateTime horizonUtc;
+        #    int signedVal;
+        #
+        #    // Otherwise compute from user inputs
+        #    if (_horizonValue > 0)
+        #    {
+        #        signedVal = (_direction == Jay_ScanDirection::Forward)
+        #                    ? _horizonValue
+        #                    : -_horizonValue;
+        #
+        #        horizonUtc = Jay_CadenceModel::addCadence(
+        #            _scanStartDateTime,
+        #            signedVal,
+        #            _horizonUnit);
+        #    }
+        #    else
+        #    {
+        #        horizonUtc = DateTimeUtil::maxValue();
+        #    }
+        #
+        #    return horizonUtc;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #computeInitialRange
+        #public static container computeInitialRange(
+        #    utcDateTime      _startUtc,
+        #    Jay_ScanDirection _direction,
+        #    Jay_ExportQueueType _queueType,
+        #    int              _scanValue,
+        #    Jay_CadenceUnit  _scanUnit,
+        #    int              _lengthValue,
+        #    Jay_CadenceUnit  _lengthUnit)
+        #{
+        #    utcDateTime rangeFromUtc, rangeToUtc;
+        #    int windowMinutes;
+        #
+        #    // Determine window size
+        #    if (_queueType == Jay_ExportQueueType::Historical && _lengthValue > 0)
+        #        windowMinutes = abs(_lengthValue) * Jay_CadenceModel::unitToMinutes(_lengthUnit);
+        #    else
+        #        windowMinutes = abs(_scanValue) * Jay_CadenceModel::unitToMinutes(_scanUnit);
+        #
+        #    if (_direction == Jay_ScanDirection::Forward)
+        #    {
+        #        rangeFromUtc = _startUtc;
+        #        rangeToUtc   = DateTimeUtil::addMinutes(rangeFromUtc, windowMinutes);
+        #    }
+        #    else
+        #    {
+        #        rangeToUtc   = _startUtc;
+        #        rangeFromUtc = DateTimeUtil::addMinutes(rangeToUtc, -windowMinutes);
+        #    }
+        #
+        #    return [rangeFromUtc, rangeToUtc];
+        #}
+        #
+      ENDSOURCE
+      SOURCE #computeNextIntervalStartStatic
+        #public static utcDateTime computeNextIntervalStartStatic(
+        #    utcDateTime      _currentStartUtc,
+        #    int              _scanValue,
+        #    Jay_CadenceUnit  _scanUnit,
+        #    Jay_ScanDirection _direction)
+        #{
+        #    utcDateTime nextStartUtc;
+        #    int signedVal;
+        #
+        #    // Validate inputs
+        #    if (!_currentStartUtc)
+        #        return DateTimeUtil::minValue();
+        #
+        #    if (_scanValue == 0)
+        #        return _currentStartUtc;
+        #
+        #    // Apply direction (forward or backward)
+        #    signedVal = (_direction == Jay_ScanDirection::Forward)
+        #                ? _scanValue
+        #                : -_scanValue;
+        #
+        #    // Compute next start based on cadence unit and direction
+        #    nextStartUtc = Jay_CadenceModel::addCadence(
+        #        _currentStartUtc,
+        #        signedVal,
+        #        _scanUnit);
+        #
+        #    return nextStartUtc;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #computeNextWindow
+        #public static container computeNextWindow(
+        #    Jay_ScanCtrl _parent,
+        #    utcDateTime  _currentAnchor,
+        #    utcDateTime  _horizonUtc)        // pass DateTimeUtil::maxValue() to indicate no horizon
+        #{
+        #    utcDateTime nextStartUtc;
+        #    utcDateTime nextEndUtc;
+        #    NoYes       isFinal;
+        #    boolean     hasHorizon;
+        #    int         fallbackMins;
+        #    int         scanMins;
+        #
+        #    int               effectiveValue;
+        #    Jay_CadenceUnit   effectiveUnit;
+        #    Jay_ExportQueueType qType = _parent.QueueType;
+        #
+        #    // ─── Determine effective window length (historical override) ─────────────────────
+        #    if (qType == Jay_ExportQueueType::Historical && _parent.LengthValue > 0)
+        #    {
+        #        effectiveValue = _parent.LengthValue;
+        #        effectiveUnit  = _parent.LengthUnit;
+        #    }
+        #    else
+        #    {
+        #        effectiveValue = _parent.ScanValue;
+        #        effectiveUnit  = _parent.ScanUnit;
+        #    }
+        #
+        #    nextStartUtc = DateTimeUtil::maxValue();
+        #    nextEndUtc   = DateTimeUtil::maxValue();
+        #    isFinal      = NoYes::No;
+        #    hasHorizon   = (_horizonUtc != DateTimeUtil::maxValue());
+        #
+        #    if (!_parent.RecId)
+        #        return [NoYes::No, DateTimeUtil::maxValue(), DateTimeUtil::maxValue(), NoYes::No];
+        #
+        #    // compute total minutes of this window for fallback safety
+        #    scanMins = Jay_CadenceModel::toMinutes(effectiveValue, effectiveUnit, _currentAnchor);
+        #    if (scanMins <= 0)
+        #        return [NoYes::No, DateTimeUtil::maxValue(), DateTimeUtil::maxValue(), NoYes::No];
+        #
+        #    // ─── Forward direction (look-back model) ─────────────────────────────────────────
+        #    if (_parent.Direction == Jay_ScanDirection::Forward)
+        #    {
+        #        nextEndUtc   = _currentAnchor;
+        #        nextStartUtc = Jay_ScanCtrlServiceOrig::safeAddCadence(_currentAnchor, -effectiveValue, effectiveUnit);
+        #
+        #        if (nextStartUtc >= _currentAnchor)
+        #            nextStartUtc = DateTimeUtil::addMinutes(_currentAnchor, -scanMins);
+        #
+        #        if (hasHorizon)
+        #        {
+        #            if (nextEndUtc <= _horizonUtc)
+        #                return [NoYes::No, DateTimeUtil::maxValue(), DateTimeUtil::maxValue(), NoYes::No];
+        #
+        #            if (nextStartUtc < _horizonUtc)
+        #            {
+        #                nextStartUtc = _horizonUtc;
+        #                isFinal      = NoYes::Yes;
+        #            }
+        #        }
+        #    }
+        #    else // ─── Backward direction ─────────────────────────────────────────────────────
+        #    {
+        #        nextEndUtc = _parent.RangeFromUTC
+        #                     ? _parent.RangeFromUTC
+        #                     : Jay_ScanCtrlServiceOrig::safeAddCadence(_currentAnchor, -effectiveValue, effectiveUnit);
+        #
+        #        if (nextEndUtc >= _currentAnchor)
+        #            nextEndUtc = DateTimeUtil::addMinutes(_currentAnchor, -scanMins);
+        #
+        #        nextStartUtc = Jay_ScanCtrlServiceOrig::safeAddCadence(nextEndUtc, -effectiveValue, effectiveUnit);
+        #        if (nextStartUtc >= nextEndUtc)
+        #            nextStartUtc = DateTimeUtil::addMinutes(nextEndUtc, -scanMins);
+        #
+        #        if (hasHorizon && nextEndUtc <= _horizonUtc)
+        #            return [NoYes::No, DateTimeUtil::maxValue(), DateTimeUtil::maxValue(), NoYes::No];
+        #
+        #        if (hasHorizon && nextStartUtc < _horizonUtc)
+        #        {
+        #            nextStartUtc = _horizonUtc;
+        #            isFinal      = NoYes::Yes;
+        #        }
+        #    }
+        #
+        #    if (nextStartUtc >= nextEndUtc)
+        #        return [NoYes::No, DateTimeUtil::maxValue(), DateTimeUtil::maxValue(), NoYes::No];
+        #
+        #    return [NoYes::Yes, nextStartUtc, nextEndUtc, isFinal];
+        #}
+        #
+      ENDSOURCE
+      SOURCE #consumeParent
+        #// Merge parent's workload into child and mark parent consumed.
+        #private static void consumeParent(RecId _parentRecId, RecId _childRecId)
+        #{
+        #    Jay_ScanCtrl parentForUpdate;
+        #    Jay_ScanCtrl childForUpdate;
+        #    Jay_SliceCtrl slice;
+        #    Jay_ScanScope scope;
+        #    warning(strFmt("DEBUG: Jay_ScanCtrlServiceOrig.consumeParent() recId=%1 ", _parentRecId));
+        #    // sanity
+        #    if (!_parentRecId || !_childRecId)
+        #        return;
+        #
+        #    ttsBegin;
+        #
+        #    // re-lock authoritative parent/child rows
+        #    select forUpdate parentForUpdate
+        #        where parentForUpdate.RecId == _parentRecId;
+        #
+        #    select forUpdate childForUpdate
+        #        where childForUpdate.RecId == _childRecId;
+        #
+        #    if (!parentForUpdate.RecId || !childForUpdate.RecId)
+        #    {
+        #        ttsAbort;
+        #        return;
+        #    }
+        #
+        #    // ─── Reassign slices atomically ───────────────────────────────────────────
+        #    update_recordset slice
+        #        setting ParentScanId = _childRecId
+        #        where slice.ParentScanId == _parentRecId;
+        #
+        #    // ─── Reassign scopes atomically ───────────────────────────────────────────
+        #    update_recordset scope
+        #        setting ParentScanId = _childRecId
+        #        where scope.ParentScanId == _parentRecId;
+        #
+        #    // ─── Extend child's extended range backward/forward if parent contained wider range
+        #    // Note: ExtendedRangeFromUTC/ToUTC expected to be non-zero UTC values
+        #    if (childForUpdate.ExtendedRangeFromUTC && parentForUpdate.RangeFromUTC)
+        #    {
+        #        if (childForUpdate.ExtendedRangeFromUTC > parentForUpdate.RangeFromUTC)
+        #            childForUpdate.ExtendedRangeFromUTC = parentForUpdate.RangeFromUTC;
+        #    }
+        #    else if (!childForUpdate.ExtendedRangeFromUTC && parentForUpdate.RangeFromUTC)
+        #    {
+        #        // if child had no extended-from, inherit parent's
+        #        childForUpdate.ExtendedRangeFromUTC = parentForUpdate.RangeFromUTC;
+        #    }
+        #
+        #    if (childForUpdate.ExtendedRangeToUTC && parentForUpdate.RangeToUTC)
+        #    {
+        #        if (childForUpdate.ExtendedRangeToUTC < parentForUpdate.RangeToUTC)
+        #            childForUpdate.ExtendedRangeToUTC = parentForUpdate.RangeToUTC;
+        #    }
+        #    else if (!childForUpdate.ExtendedRangeToUTC && parentForUpdate.RangeToUTC)
+        #    {
+        #        // if child had no extended-to, inherit parent's
+        #        childForUpdate.ExtendedRangeToUTC = parentForUpdate.RangeToUTC;
+        #    }
+        #
+        #    // persist child changes
+        #    childForUpdate.update();
+        #
+        #    // ─── Mark parent consumed and persist ───────────────────────────────────────
+        #    parentForUpdate.ScanStatus = Jay_ScanStatus::Consumed;
+        #    parentForUpdate.update();
+        #
+        #    ttsCommit;
+        #
+        #    info(strFmt("⏩ Parent scan %1 consumed into child %2.", _parentRecId, _childRecId));
+        #}
+        #
+      ENDSOURCE
+      SOURCE #createChildAndCopyScopesWithParentUpdate
+        #private static RecId createChildAndCopyScopesWithParentUpdate(
+        #    RecId        _parentRecId,
+        #    utcDateTime  _nextStartUtc,
+        #    utcDateTime  _nextEndUtc,
+        #    NoYes        _isFinal)
+        #{
+        #    Jay_ScanCtrl  parent;
+        #    Jay_ScanCtrl  child;
+        #    Jay_ScanScope parentScope;
+        #    Jay_ScanScope newScope;
+        #    RecId         childRecId = 0;
+        #    utcDateTime   parentHorizonUtc;
+        #
+        #    // ─── Re-read parent (locks authoritative record) ───────────────────────────────
+        #    select forUpdate parent
+        #        where parent.RecId == _parentRecId;
+        #
+        #    if (!parent.RecId)
+        #        return 0;
+        #
+        #    // ─── Validate window sanity ────────────────────────────────────────────────────
+        #    if (_nextStartUtc == DateTimeUtil::maxValue()
+        #        || _nextEndUtc   == DateTimeUtil::maxValue()
+        #        || _nextStartUtc >= _nextEndUtc)
+        #    {
+        #        error(strFmt("createChildAndCopyScopesWithParentUpdate: invalid window for parent %1 (start=%2 end=%3).",
+        #                     _parentRecId, _nextStartUtc, _nextEndUtc));
+        #        return 0;
+        #    }
+        #
+        #    // ─── Compute or reuse absolute horizon ─────────────────────────────────────────
+        #    parentHorizonUtc = parent.Horizon
+        #        ? parent.Horizon
+        #        : Jay_ScanCtrlServiceOrig::computeHorizon(parent);
+        #
+        #    ttsBegin;
+        #
+        #    // ─── Create child record ───────────────────────────────────────────────────────
+        #    child.clear();
+        #    child.data(parent);                  // inherit base fields
+        #    child.RecId               = 0;       // force insert
+        #    child.ParentScanRecId     = _parentRecId;
+        #    child.ScanStartDateTime   = _nextStartUtc;
+        #    child.RangeFromUTC        = _nextStartUtc;
+        #    child.RangeToUTC          = _nextEndUtc;
+        #    child.ExtendedRangeFromUTC = _nextStartUtc;
+        #    child.ExtendedRangeToUTC   = _nextEndUtc;
+        #
+        #    // inherit lineage horizon (absolute UTC), not relative fields
+        #    child.Horizon       = parentHorizonUtc;
+        #    child.HorizonValue  = parent.HorizonValue;
+        #    child.HorizonUnit   = parent.HorizonUnit;
+        #    child.Horizon       = parent.Horizon;
+        #    child.LengthUnit    = parent.LengthUnit;
+        #    child.LengthValue   = parent. LengthValue;
+        #
+        #    // If this child reaches the lineage horizon, mark final
+        #    if (_isFinal == NoYes::Yes)
+        #        child.ScanStatus = Jay_ScanStatus::Completed;
+        #    else
+        #        child.ScanStatus = Jay_ScanStatus::Pending;
+        #
+        #    child.HealthStatus  = Jay_HealthStatus::Healthy;
+        #    child.insert();
+        #    childRecId = child.RecId;
+        #
+        #    // ─── Copy scopes from parent → child ───────────────────────────────────────────
+        #    while select * from parentScope
+        #        where parentScope.ParentScanId == parent.RecId
+        #    {
+        #        newScope.clear();
+        #        newScope.data(parentScope);
+        #        newScope.RecId        = 0;
+        #        newScope.ParentScanId = childRecId;
+        #        newScope.insert();
+        #    }
+        #
+        #    // ─── Update parent metadata ────────────────────────────────────────────────────
+        #    parent.update();
+        #
+        #    ttsCommit;
+        #
+        #    info(strFmt("🧬 Created child scan %1 from parent %2  (%3 → %4).",
+        #                childRecId,
+        #                _parentRecId,
+        #                DateTimeUtil::toStr(_nextStartUtc),
+        #                DateTimeUtil::toStr(_nextEndUtc)));
+        #
+        #    return childRecId;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #createChildRecord
+        #private static Jay_ScanCtrl createChildRecord(Jay_ScanCtrl _parent)
+        #{
+        #    Jay_ScanCtrl child;
+        #    utcDateTime NextIntervalStart = Jay_ScanCtrlServiceOrig::computeNextIntervalStartStatic(
+        #    _parent.NextIntervalStart,
+        #    _parent.ScanValue,
+        #    _parent.ScanUnit,
+        #    _parent.Direction
+        #    );
+        #    ttsBegin;
+        #
+        #    child.clear();
+        #    child.initValue();
+        #
+        #    // ─────────────────────────────────────────────
+        #    // Relationship / lineage
+        #    // ─────────────────────────────────────────────
+        #    child.ParentScanRecId        = _parent.RecId;
+        #
+        #    // ─────────────────────────────────────────────
+        #    // Temporal parameters
+        #    // ─────────────────────────────────────────────
+        #    child.ScanStartDateTime   = Jay_ScanCtrlServiceOrig::determineChildScanStartTime(_parent);
+        #    child.ScanValue           = _parent.ScanValue;
+        #    child.ScanUnit            = _parent.ScanUnit;
+        #    child.Direction           = _parent.Direction;
+        #    child.HorizonValue        = _parent.HorizonValue;
+        #    child.HorizonUnit         = _parent.HorizonUnit;
+        #    child.LengthUnit          = _parent.LengthUnit;
+        #    child.LengthValue         = _parent.LengthValue;
+        #    child.Horizon             = _parent.Horizon;
+        #    child.NextIntervalStart   = NextIntervalStart;
+        #
+        #    // ─────────────────────────────────────────────
+        #    // Operational metadata
+        #    // ─────────────────────────────────────────────
+        #    child.QueueType           = _parent.QueueType;
+        #    child.RunMode             = _parent.RunMode;
+        #    child.HealthStatus        = Jay_HealthStatus::Healthy;
+        #
+        #    // ─────────────────────────────────────────────
+        #    // Temporal window (subfunction placeholders)
+        #    // ─────────────────────────────────────────────
+        #    child.RangeFromUtc        = Jay_ScanCtrlServiceOrig::determineChildRangeFromUtc(_parent);
+        #    child.RangeToUtc          = Jay_ScanCtrlServiceOrig::determineChildRangeToUtc(_parent, child.RangeFromUtc);
+        #
+        #    child.insert();
+        #
+        #    ttsCommit;
+        #
+        #    return child;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #createFromFormInput
+        #public static Jay_ScanCtrl createFromFormInput(
+        #    utcDateTime        _scanStartDateTime,
+        #    Jay_ScanDirection  _direction,
+        #    int                _scanValue,
+        #    Jay_CadenceUnit    _scanUnit,
+        #    int                _horizonValue,
+        #    Jay_CadenceUnit    _horizonUnit,
+        #    int                _lengthValue,
+        #    Jay_CadenceUnit    _lengthUnit,
+        #    Jay_ExportQueueType _queueType,
+        #    Jay_ExportRunMode   _runMode,
+        #    Common             _tmpScopeTable)
+        #{
+        #    Jay_ScanCtrl     scanCtrl;
+        #    Jay_ScanScope    newScope;
+        #    Jay_TmpScanScope tmpScope;
+        #    utcDateTime      rangeFromUtc, rangeToUtc;
+        #    utcDateTime      normalizedStartUtc;
+        #
+        #    // ─────────────────────────────────────────────────────────────
+        #    // 1. Compute the normalized start time (for batch kickoff only)
+        #    // ─────────────────────────────────────────────────────────────
+        #    normalizedStartUtc = Jay_ScanCtrlServiceOrig::determineNextScanStartTimeStatic(
+        #    _scanStartDateTime,
+        #    _scanValue,
+        #    _scanUnit, _runMode);
+        #
+        #    // ─────────────────────────────────────────────────────────────
+        #    // 2. Compute the logical range from the *entered* date (anchor)
+        #    // ─────────────────────────────────────────────────────────────
+        #    [rangeFromUtc, rangeToUtc] = Jay_ScanCtrlServiceOrig::computeInitialRange(
+        #        _scanStartDateTime,  // use raw date for logical window
+        #        _direction,
+        #        _queueType,
+        #        _scanValue,
+        #        _scanUnit,
+        #        _lengthValue,
+        #        _lengthUnit
+        #    );
+        #
+        #    // ─────────────────────────────────────────────────────────────
+        #    // 3. Initialize and insert ScanCtrl record
+        #    // ─────────────────────────────────────────────────────────────
+        #    scanCtrl.clear();
+        #    scanCtrl.initValue();
+        #
+        #    scanCtrl.ScanStartDateTime = normalizedStartUtc;   // as entered
+        #    scanCtrl.Direction         = _direction;
+        #    scanCtrl.ScanValue         = _scanValue;
+        #    scanCtrl.ScanUnit          = _scanUnit;
+        #    scanCtrl.HorizonValue      = _horizonValue;
+        #    scanCtrl.HorizonUnit       = _horizonUnit;
+        #    scanCtrl.LengthValue       = _lengthValue;
+        #    scanCtrl.LengthUnit        = _lengthUnit;
+        #    scanCtrl.QueueType         = _queueType;
+        #    scanCtrl.RunMode           = _runMode;
+        #    scanCtrl.HealthStatus      = Jay_HealthStatus::Healthy;
+        #    scanCtrl.RangeFromUtc      = rangeFromUtc;
+        #    scanCtrl.RangeToUtc        = rangeToUtc;
+        #    scanCtrl.Horizon           = Jay_ScanCtrlServiceOrig::computeHorizonStatic(_scanStartDateTime,_horizonValue,_horizonUnit,_direction);
+        #    ScanCtrl.NextIntervalStart = _scanStartDateTime;
+        #    scanCtrl.insert();
+        #
+        #    // ─────────────────────────────────────────────────────────────
+        #    // 4. Log summary for verification
+        #    // ─────────────────────────────────────────────────────────────
+        #    info(strFmt(
+        #        "Jay_ScanCtrlServiceOrig initialized:\n" +
+        #        "  • Entered Start  : %1\n" +
+        #        "  • Normalized Run : %2\n" +
+        #        "  • RangeFromUtc   : %3\n" +
+        #        "  • RangeToUtc     : %4",
+        #        DateTimeUtil::toStr(_scanStartDateTime),
+        #        DateTimeUtil::toStr(normalizedStartUtc),
+        #        DateTimeUtil::toStr(rangeFromUtc),
+        #        DateTimeUtil::toStr(rangeToUtc)
+        #    ));
+        #
+        #    // ─────────────────────────────────────────────────────────────
+        #    // 5. Copy selected scopes
+        #    // ─────────────────────────────────────────────────────────────
+        #    while select * from tmpScope where tmpScope.Include == NoYes::Yes
+        #    {
+        #        newScope.clear();
+        #        newScope.ParentScanId = scanCtrl.RecId;
+        #        newScope.DocType      = tmpScope.DocType;
+        #        newScope.DocSubType   = tmpScope.DocSubType;
+        #        newScope.Include      = tmpScope.Include;
+        #        newScope.insert();
+        #    }
+        #
+        #    return scanCtrl;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #defer
+        #public static void defer(RecId _scanRecId, int _delayMinutes)
+        #{
+        #    Jay_ScanCtrl                    parent;
+        #    Jay_ScanCtrl                    child;
+        #    RecId                           childRecId = 0;
+        #    utcDateTime                     nowUtc;
+        #    utcDateTime                     scheduledUtc;
+        #    boolean                         consumed = false;
+        #    BatchHeader                     header;
+        #    Batch                           batch;
+        #    Jay_ScanCtrlBatch               job;
+        #    Jay_ExportRuntimeSettingsTable  settings = Jay_ExportRuntimeSettingsTable::findOrCreate();
+        #    int                             safetyFloorMinutes = 2;
+        #    int                             diffSeconds;
+        #
+        #    // ─── 1. Sanity ────────────────────────────────────────────────
+        #    if (!_scanRecId || _delayMinutes <= 0)
+        #        return;
+        #
+        #    parent = Jay_ScanCtrl::find(_scanRecId);
+        #    if (!parent.RecId)
+        #        return;
+        #
+        #    // ─── 2. Compute safe schedule time ────────────────────────────
+        #    nowUtc       = DateTimeUtil::utcNow();
+        #    scheduledUtc = DateTimeUtil::addMinutes(nowUtc, _delayMinutes);
+        #    diffSeconds  = DateTimeUtil::getDifference(scheduledUtc, nowUtc);
+        #
+        #    if (diffSeconds < (safetyFloorMinutes * 60))
+        #    {
+        #        scheduledUtc = DateTimeUtil::addMinutes(nowUtc, safetyFloorMinutes);
+        #    }
+        #
+        #    // ─── 3. Prepare job and handle child handoff ─────────────────
+        #    job = new Jay_ScanCtrlBatch();
+        #    childRecId = Jay_ScanCtrlServiceOrig::findChild(parent.RecId);
+        #
+        #    if (childRecId)
+        #    {
+        #        child = Jay_ScanCtrl::find(childRecId);
+        #
+        #        if (child.RecId && child.RangeFromUTC && scheduledUtc >= child.RangeFromUTC)
+        #        {
+        #            Jay_ScanCtrlServiceOrig::consumeParent(parent.RecId, childRecId);
+        #            consumed = true;
+        #            child = Jay_ScanCtrl::find(childRecId); // reload for updated ranges
+        #        }
+        #    }
+        #
+        #    job.parmRecId(consumed && childRecId ? childRecId : parent.RecId);
+        #    job.parmFunctionName("StartScan");
+        #
+        #    // ─── 4. Create batch header ──────────────────────────────────
+        #    header = BatchHeader::construct();
+        #    header.parmCaption(strFmt("Scan Start: %1 → %2",
+        #        DateTimeUtil::toStr(consumed && child.RecId ? child.RangeFromUTC : parent.RangeFromUTC),
+        #        DateTimeUtil::toStr(consumed && child.RecId ? child.RangeToUTC   : parent.RangeToUTC)));
+        #    header.parmStartDateTime(scheduledUtc);
+        #    header.addTask(job);
+        #    header.save();
+        #
+        #    // ─── 5. Post-save Batch record update ─────────────────────────
+        #    ttsbegin;
+        #    select forupdate batch
+        #        where batch.RecId == header.parmBatchHeaderId();
+        #    if (batch.RecId)
+        #    {
+        #        batch.GroupId    = settings.BatchGroupName;
+        #        batch.ExecutedBy = settings.Username;
+        #        batch.update();
+        #    }
+        #    ttscommit;
+        #
+        #    // ─── 6. Log result ────────────────────────────────────────────
+        #    info(strFmt("⏳ Deferred scan %1 scheduled for %2. Consumed=%3. (Safety floor %4 min)",
+        #                _scanRecId,
+        #                DateTimeUtil::toStr(scheduledUtc),
+        #                consumed ? "Yes" : "No",
+        #                safetyFloorMinutes));
+        #}
+        #
+      ENDSOURCE
+      SOURCE #determineChildRangeFromUtc
+        #public static utcDateTime determineChildRangeFromUtc(Jay_ScanCtrl _parent)
+        #{
+        #    utcDateTime newRangeFromUtc;
+        #    int         scanIntervalMinutes;
+        #    int         lengthMinutes;
+        #    int         effectiveWindowMinutes;
+        #    Jay_ExportQueueType queueType = _parent.QueueType;
+        #    utcDateTime horizonUtc;
+        #
+        #    // ─────────────────────────────────────────────
+        #    // Compute minutes for scan + optional length
+        #    // ─────────────────────────────────────────────
+        #    scanIntervalMinutes = abs(_parent.ScanValue) * Jay_CadenceModel::unitToMinutes(_parent.ScanUnit);
+        #    lengthMinutes       = abs(_parent.LengthValue) * Jay_CadenceModel::unitToMinutes(_parent.LengthUnit);
+        #
+        #    // Choose window size (historical may use Length; production uses Scan)
+        #    if (queueType == Jay_ExportQueueType::Historical && _parent.LengthValue > 0)
+        #        effectiveWindowMinutes = lengthMinutes;
+        #    else
+        #        effectiveWindowMinutes = scanIntervalMinutes;
+        #
+        #    // ─────────────────────────────────────────────
+        #    // Compute new RangeFromUtc (abutting model)
+        #    // ─────────────────────────────────────────────
+        #    if (_parent.Direction == Jay_ScanDirection::Forward)
+        #    {
+        #        newRangeFromUtc = _parent.RangeToUtc;
+        #    }
+        #    else
+        #    {
+        #        newRangeFromUtc = DateTimeUtil::addMinutes(_parent.RangeFromUtc, -effectiveWindowMinutes);
+        #    }
+        #
+        #    // ─────────────────────────────────────────────
+        #    // Clamp to horizon (only applies backward)
+        #    // ─────────────────────────────────────────────
+        #    if (_parent.Direction == Jay_ScanDirection::Backward &&
+        #        _parent.HorizonValue > 0)
+        #    {
+        #            horizonUtc = Jay_CadenceModel::addCadence(
+        #            _parent.NextIntervalStart,
+        #            -abs(_parent.HorizonValue),
+        #            _parent.HorizonUnit);
+        #
+        #        if (newRangeFromUtc < horizonUtc)
+        #            newRangeFromUtc = horizonUtc;
+        #    }
+        #
+        #    return newRangeFromUtc;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #determineChildRangeToUtc
+        #public static utcDateTime determineChildRangeToUtc(Jay_ScanCtrl _parent, utcDateTime _rangeFromUtc)
+        #{
+        #    utcDateTime newRangeToUtc, horizonUtc;
+        #    int         scanIntervalMinutes;
+        #    int         lengthMinutes;
+        #    int         effectiveWindowMinutes;
+        #    Jay_ExportQueueType queueType = _parent.QueueType;
+        #
+        #
+        #    // ─────────────────────────────────────────────
+        #    // Compute minutes for scan + optional length
+        #    // ─────────────────────────────────────────────
+        #    scanIntervalMinutes = abs(_parent.ScanValue) * Jay_CadenceModel::unitToMinutes(_parent.ScanUnit);
+        #    lengthMinutes       = abs(_parent.LengthValue) * Jay_CadenceModel::unitToMinutes(_parent.LengthUnit);
+        #
+        #    // Choose window size (historical may use Length; production uses Scan)
+        #    if (queueType == Jay_ExportQueueType::Historical && _parent.LengthValue > 0)
+        #        effectiveWindowMinutes = lengthMinutes;
+        #    else
+        #        effectiveWindowMinutes = scanIntervalMinutes;
+        #
+        #    // ─────────────────────────────────────────────
+        #    // Compute new RangeToUtc (abutting model)
+        #    // ─────────────────────────────────────────────
+        #    if (_parent.Direction == Jay_ScanDirection::Forward)
+        #    {
+        #        newRangeToUtc = DateTimeUtil::addMinutes(_rangeFromUtc, effectiveWindowMinutes);
+        #    }
+        #    else
+        #    {
+        #        newRangeToUtc = DateTimeUtil::addMinutes(_rangeFromUtc, -effectiveWindowMinutes);
+        #    }
+        #
+        #    // ─────────────────────────────────────────────
+        #    // Clamp to horizon (only applies forward)
+        #    // ─────────────────────────────────────────────
+        #    if (_parent.Direction == Jay_ScanDirection::Forward &&
+        #        _parent.HorizonValue > 0)
+        #    {
+        #            horizonUtc = Jay_CadenceModel::addCadence(
+        #            _parent.NextIntervalStart,
+        #            abs(_parent.HorizonValue),
+        #            _parent.HorizonUnit);
+        #
+        #        if (newRangeToUtc > horizonUtc)
+        #            newRangeToUtc = horizonUtc;
+        #    }
+        #
+        #    return newRangeToUtc;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #determineChildScanStartTime
+        #public static utcDateTime determineChildScanStartTime(Jay_ScanCtrl _parent)
+        #{
+        #    utcDateTime nowUtc = DateTimeUtil::utcNow();
+        #    int scanIntervalMinutes =
+        #        abs(_parent.ScanValue) * Jay_CadenceModel::unitToMinutes(_parent.ScanUnit);
+        #
+        #    utcDateTime childStartUtc;
+        #
+        #    switch (_parent.RunMode)
+        #    {
+        #        case Jay_ExportRunMode::Continuous:
+        #            // Continuous scans start as soon as parent completes (respect safety floor)
+        #            childStartUtc = DateTimeUtil::addMinutes(nowUtc, 2); // 2-minute buffer
+        #            break;
+        #
+        #        default:
+        #            // AutoRepeat and others follow cadence pattern
+        #            childStartUtc = DateTimeUtil::addMinutes(_parent.ScanStartDateTime, scanIntervalMinutes);
+        #
+        #            // if behind schedule, walk forward to next valid slot
+        #            while (childStartUtc <= nowUtc)
+        #            {
+        #                childStartUtc = DateTimeUtil::addMinutes(childStartUtc, scanIntervalMinutes);
+        #            }
+        #            break;
+        #    }
+        #
+        #    return childStartUtc;
+        #}
+      ENDSOURCE
+      SOURCE #determineNextScanStartTimeStatic
+        #public static utcDateTime determineNextScanStartTimeStatic(
+        #    utcDateTime        _parentScanStartDateTime,
+        #    int                _scanValue,
+        #    Jay_CadenceUnit    _scanUnit,
+        #    Jay_ExportRunMode  _runMode,
+        #    int                _safetyFloorMinutes = 2)
+        #{
+        #    utcDateTime nowUtc = DateTimeUtil::utcNow();
+        #    utcDateTime nextScanStartUtc;
+        #    int         scanIntervalMinutes;
+        #
+        #    // Compute absolute interval length
+        #    scanIntervalMinutes = abs(_scanValue) * Jay_CadenceModel::unitToMinutes(_scanUnit);
+        #
+        #    switch (_runMode)
+        #    {
+        #        case Jay_ExportRunMode::Continuous:
+        #            // Continuous scans start as soon as possible, plus minimal safety floor
+        #            nextScanStartUtc = DateTimeUtil::addMinutes(nowUtc, _safetyFloorMinutes);
+        #            break;
+        #
+        #        default:
+        #            // AutoRepeat and similar follow cadence pattern from provided parent start
+        #            nextScanStartUtc = DateTimeUtil::addMinutes(_parentScanStartDateTime, scanIntervalMinutes);
+        #
+        #            // If already behind schedule, advance forward until next valid slot
+        #            while (nextScanStartUtc <= nowUtc)
+        #            {
+        #                nextScanStartUtc = DateTimeUtil::addMinutes(nextScanStartUtc, scanIntervalMinutes);
+        #            }
+        #            break;
+        #    }
+        #
+        #    return nextScanStartUtc;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #execute
+        #public static void execute(RecId _scanRecId)
+        #{
+        #    Jay_ScanCtrl                scanCtrl = Jay_ScanCtrl::find(_scanRecId);
+        #
+        #    Jay_ExportRuntimeSettingsTable settings = Jay_ExportRuntimeSettingsTable::findOrCreate();
+        #
+        #    boolean shouldDefer = false;
+        #
+        #    //Function Callout Comment Out After Testing.
+        #    warning(strFmt("DEBUG: Jay_ScanCtrlServiceOrig.execute() recId=%1 ", _scanRecId));
+        #
+        #    //Verify Record Validity Prior to Proceeding.
+        #    If(!Jay_ScanCtrlServiceOrig::ValidRecord(scanCtrl.RecId)){return;}
+        #
+        #
+        #    //Begin Main Function Logic
+        #    // ─── 1️ Schedule next scan first ────────────────────────────────────────────
+        #    if (scanCtrl.RunMode == Jay_ExportRunMode::AutoRepeat)
+        #    {
+        #        Jay_ScanCtrlServiceOrig::scheduleOffspring(_scanRecId);
+        #    }
+        #
+        #    // ─── 2️ Global pause / deferral setting ─────────────────────────────────────
+        #    switch (scanCtrl.QueueType)
+        #    {
+        #        case Jay_ExportQueueType::Production:
+        #            shouldDefer = (settings.ProdEnqueuePause == NoYes::Yes);
+        #            break;
+        #        case Jay_ExportQueueType::Historical:
+        #            shouldDefer = (settings.HistEnqueuePause == NoYes::Yes);
+        #            break;
+        #        default:
+        #            // safety fallback — apply production pause if unknown
+        #            shouldDefer = (settings.ProdEnqueuePause == NoYes::Yes);
+        #            break;
+        #    }
+        #
+        #    if (shouldDefer)
+        #    {
+        #        info(strFmt("⏸ Enqueue paused by global setting for %1 queue. Scan deferred 15 min.",
+        #                    enum2str(scanCtrl.QueueType)));
+        #        Jay_ScanCtrlServiceOrig::defer(_scanRecId, 15);
+        #        return;
+        #    }
+        #
+        #    // ─── 3️⃣ Arbitration check ──────────────────────────────────────────────────
+        #    if (!Jay_ArbitrationService::allowScan(_scanRecId))
+        #    {
+        #        info(strFmt("⚖️ Scan %1 deferred. Arbitration denied.", _scanRecId));
+        #        Jay_ScanCtrlServiceOrig::defer(_scanRecId, 15);
+        #        return;
+        #    }
+        #
+        #    // ─── 4️⃣ Generate slices and enqueue work ───────────────────────────────────
+        #    Jay_ScanCtrlServiceOrig::generateSlices(_scanRecId);
+        #
+        #    Jay_ArbitrationService::RequestProcessScanSlices(_scanRecId);
+        #
+        #    info(strFmt("✅ Scan %1 completed successfully.", _scanRecId));
+        #}
+      ENDSOURCE
+      SOURCE #findChild
+        #/// <summary>
+        #/// Find the immediate child of a scan (if any).
+        #/// </summary>
+        #private static RecId findChild(RecId _parentRecId)
+        #{
+        #    Jay_ScanCtrl child;
+        #    select firstOnly RecId from child
+        #        where child.ParentScanRecId == _parentRecId;
+        #
+        #    return child.RecId;
+        #}
+      ENDSOURCE
+      SOURCE #generateSlices
+        #public static void generateSlices(RecId _scanRecId)
+        #{
+        #    Jay_ExportRuntimeSettingsTable settings = Jay_ExportRuntimeSettingsTable::findOrCreate();
+        #    Jay_ScanCtrl                  scan      = Jay_ScanCtrl::find(_scanRecId);
+        #    List                          windowList;
+        #    ListIterator                  it;
+        #    utcDateTime                   winFrom, winTo;
+        #    int                           docTypeInt, docSubTypeInt;
+        #    int                           approxDocs, predictedBatches;
+        #    Jay_SliceCtrl                 slice, sliceUpd;
+        #    container                     rec;
+        #    int                           created = 0;
+        #    int                           chunk   = 0;
+        #    int                           CHUNK_SIZE = 200;
+        #
+        #    if (!scan.RecId)
+        #    {
+        #        warning(strFmt("generateSlices: invalid scan %1", _scanRecId));
+        #        return;
+        #    }
+        #
+        #    // STEP 1 — probe windows
+        #    windowList = Jay_ScanCtrlServiceOrig::RetrieveSliceWindows(_scanRecId);
+        #
+        #    if (!windowList || windowList.empty())
+        #    {
+        #        info(strFmt("generateSlices: no candidate windows for scan %1.", _scanRecId));
+        #
+        #        // Mark completed
+        #        ttsBegin;
+        #        select forUpdate scan where scan.RecId == _scanRecId;
+        #        if (scan.RecId)
+        #        {
+        #            scan.ScanStatus = Jay_ScanStatus::Completed;
+        #            scan.update();
+        #        }
+        #        ttsCommit;
+        #
+        #        Jay_ScanCtrlServiceOrig::handlePostCompletion(_scanRecId);
+        #        return;
+        #    }
+        #
+        #    it = new ListIterator(windowList);
+        #
+        #    while (it.more())
+        #    {
+        #        rec = it.value();
+        #        it.next();
+        #
+        #        if (!rec || conLen(rec) < 6)
+        #            continue;
+        #
+        #        winFrom       = conPeek(rec, 1);
+        #        winTo         = conPeek(rec, 2);
+        #        docTypeInt    = any2Int(conPeek(rec, 3));
+        #        docSubTypeInt = any2Int(conPeek(rec, 4));
+        #        approxDocs    = any2Int(conPeek(rec, 5)); // full probe result
+        #        if (approxDocs <= 0)
+        #            continue;
+        #
+        #        // Predict batches
+        #        if (settings.MaxDocumentCountPerBatch <= 0)
+        #            predictedBatches = 1;
+        #        else
+        #            predictedBatches = max(
+        #                1,
+        #                (approxDocs + settings.MaxDocumentCountPerBatch - 1)
+        #                    / settings.MaxDocumentCountPerBatch
+        #            );
+        #
+        #        // STEP 2 — try to find existing slice (idempotent)
+        #        select firstOnly RecId, ParentScanId, FromUtc, ToUtc, DocType, DocSubType
+        #            from slice
+        #            where slice.ParentScanId == _scanRecId
+        #              && slice.FromUtc       == winFrom
+        #              && slice.ToUtc         == winTo
+        #              && slice.DocType       == docTypeInt
+        #              && slice.DocSubType    == docSubTypeInt;
+        #
+        #        // ---------------------------------------------------------------------
+        #        // CASE A: existing slice → safe update using forUpdate
+        #        // ---------------------------------------------------------------------
+        #        if (slice.RecId)
+        #        {
+        #            ttsBegin;
+        #            select forUpdate sliceUpd
+        #                where sliceUpd.RecId == slice.RecId;
+        #
+        #            if (sliceUpd.RecId) // ONLY update if lock succeeded
+        #            {
+        #                if (sliceUpd.PredictedDocs != approxDocs
+        #                 || sliceUpd.TotalDocs     != approxDocs)
+        #                {
+        #                    sliceUpd.PredictedDocs     = approxDocs;
+        #                    sliceUpd.TotalDocs         = approxDocs;
+        #                    sliceUpd.PredictedBatches  = predictedBatches;
+        #                    sliceUpd.update();
+        #                }
+        #            }
+        #            // If the record vanished due to consolidation, simply skip safely.
+        #            ttsCommit;
+        #
+        #            continue;
+        #        }
+        #
+        #        // ---------------------------------------------------------------------
+        #        // CASE B: No slice exists → create new
+        #        // ---------------------------------------------------------------------
+        #
+        #        if (chunk == 0)
+        #            ttsBegin;
+        #
+        #        slice.clear();
+        #        slice.initValue();
+        #
+        #        slice.ParentScanId     = _scanRecId;
+        #        slice.QueueType        = scan.QueueType;
+        #        slice.FromUtc          = winFrom;
+        #        slice.ToUtc            = winTo;
+        #        slice.DocType          = docTypeInt;
+        #        slice.DocSubType       = docSubTypeInt;
+        #
+        #        slice.TotalDocs        = approxDocs;
+        #        slice.PredictedDocs    = approxDocs;
+        #        slice.PredictedBatches = predictedBatches;
+        #
+        #        slice.SliceStatus      = Jay_SliceStatus::Pending;
+        #        slice.ProofStampUtc    = DateTimeUtil::utcNow();
+        #        slice.SourceTableId    = Jay_DocHandlerRegistryTable::tableIdForDocTypeSubType(docTypeInt, docSubTypeInt);
+        #
+        #        slice.insert();
+        #        created++;
+        #
+        #        chunk++;
+        #
+        #        if (chunk >= CHUNK_SIZE)
+        #        {
+        #            ttsCommit;
+        #            chunk = 0;
+        #        }
+        #    }
+        #
+        #    if (chunk > 0)
+        #        ttsCommit;
+        #
+        #    info(strFmt("generateSlices: created %1 new slices for scan %2.", created, _scanRecId));
+        #}
+        #
+      ENDSOURCE
+      SOURCE #GenerateSliceWindowTimeList_Adaptive
+        #public static List GenerateSliceWindowTimeList_Adaptive(utcDateTime _fromUtc, utcDateTime _toUtc, Jay_ScanCtrl _scan, List _existingSlices)
+        #{
+        #    // Declarations (top of method)
+        #    List        result = new List(Types::Container);    // containers: [fromUtc, toUtc]
+        #    List        gaps   = new List(Types::Container);    // containers: [fromUtc, toUtc]
+        #    ListIterator git;
+        #    container   gapRec;
+        #    utcDateTime gapFrom;
+        #    utcDateTime gapTo;
+        #    int64       gapMinutes;
+        #    int64       windows;
+        #    int         stepMinutes;
+        #    utcDateTime cursor;
+        #    utcDateTime nextDate;
+        #    int64       minutesPerDay   = 24 * 60;
+        #    int64       minutesPerMonth = 30 * minutesPerDay;     // 30-day month approximation
+        #    int64       minutesPerYear  = 365 * minutesPerDay;
+        #    int64       years;
+        #    int         cadenceStep;
+        #    int         MAX_WINDOWS = 120; // safety cap for huge ranges
+        #    ;
+        #
+        #    // quick sanity
+        #    if (_fromUtc >= _toUtc)
+        #        return result;
+        #
+        #    // get uncovered gaps (returns List(Types::Container) of [from,to])
+        #    gaps = Jay_ScanCtrlServiceOrig::removeTimeFromWindow(_fromUtc, _toUtc, _existingSlices);
+        #
+        #    // iterate gaps using value()/next() pattern
+        #    git = new ListIterator(gaps);
+        #    while (git.more())
+        #    {
+        #        // read current gap and advance iterator
+        #        gapRec = git.value();
+        #        git.next();
+        #
+        #        // defensive check
+        #        if (!gapRec || conLen(gapRec) < 2)
+        #            continue;
+        #
+        #        gapFrom = conPeek(gapRec, 1);
+        #        gapTo   = conPeek(gapRec, 2);
+        #
+        #        // compute gap minutes (calendar-aware)
+        #        gapMinutes = Jay_CadenceModel::minutesInRange(gapFrom, gapTo);
+        #
+        #        if (gapMinutes <= 0)
+        #            continue; // skip tiny / invalid gaps
+        #
+        #        // ------ Preferred: cadence-driven step size ------
+        #        // Compute cadence-based step (calendar-aware). Use gapFrom as anchor.
+        #        // NOTE: sliceMinutesForScan must be added to Jay_CadenceModel (see helper)
+        #        cadenceStep = Jay_CadenceModel::sliceMinutesForScan(_scan.ScanUnit, _scan.ScanValue, gapFrom);
+        #
+        #        // Defensive: if cadenceStep <= 0, fall back to heuristic below
+        #        if (cadenceStep > 0)
+        #        {
+        #            // If cadence step larger than gap -> single window for whole gap
+        #            if (cadenceStep >= gapMinutes)
+        #            {
+        #                stepMinutes = any2int(gapMinutes); // one window
+        #                windows = 1;
+        #            }
+        #            else
+        #            {
+        #                // Normal case: use cadence step but ensure we don't exceed MAX_WINDOWS
+        #                windows = (gapMinutes + cadenceStep - 1) / cadenceStep;
+        #                if (windows > MAX_WINDOWS)
+        #                {
+        #                    windows = MAX_WINDOWS;
+        #                    stepMinutes = any2int((gapMinutes + windows - 1) / windows); // spread approx evenly
+        #                }
+        #                else
+        #                {
+        #                    stepMinutes = cadenceStep;
+        #                }
+        #            }
+        #        }
+        #        else
+        #        {
+        #            // ---- Fallback heuristic (simpler version of your original rules) ----
+        #            if (gapMinutes <= 30)
+        #            {
+        #                windows     = 1;
+        #                stepMinutes = any2int(gapMinutes); // whole gap
+        #            }
+        #            else if (gapMinutes <= 6 * 60)              // up to 6 hours -> 30-minute windows
+        #            {
+        #                stepMinutes = 30;
+        #                windows     = (gapMinutes + stepMinutes - 1) / stepMinutes; // ceil
+        #            }
+        #            else if (gapMinutes <= 48 * 60)             // up to 48 hours -> hourly windows
+        #            {
+        #                stepMinutes = 60;
+        #                windows     = (gapMinutes + stepMinutes - 1) / stepMinutes;
+        #            }
+        #            else if (gapMinutes <= 14 * minutesPerDay)  // up to 14 days -> 6-hour windows
+        #            {
+        #                stepMinutes = 6 * 60;
+        #                windows     = (gapMinutes + stepMinutes - 1) / stepMinutes;
+        #            }
+        #            else if (gapMinutes <= 90 * minutesPerDay)  // up to ~3 months -> daily windows
+        #            {
+        #                stepMinutes = any2int(minutesPerDay);
+        #                windows     = (gapMinutes + stepMinutes - 1) / stepMinutes;
+        #            }
+        #            else if (gapMinutes <= minutesPerYear)      // up to 1 year -> monthly-ish windows (~30-day)
+        #            {
+        #                windows = (gapMinutes + minutesPerMonth / 2) / minutesPerMonth; // round to nearest month
+        #                if (windows < 1) windows = 1;
+        #                if (windows > 24) windows = 24; // safety cap
+        #                stepMinutes = any2int((gapMinutes + windows - 1) / windows);
+        #            }
+        #            else
+        #            {
+        #                // > 1 year: roughly 12 windows per year
+        #                years = (gapMinutes + minutesPerYear - 1) / minutesPerYear; // ceil years
+        #                windows = years * 12;
+        #                if (windows < 1) windows = 1;
+        #                if (windows > 120) windows = 120; // safety cap
+        #                stepMinutes = any2int((gapMinutes + windows - 1) / windows);
+        #            }
+        #        } // end fallback
+        #
+        #        // defensive fallback
+        #        if (stepMinutes <= 0)
+        #            stepMinutes = 1;
+        #
+        #        // slice the gap into stepMinutes windows using utcDateTime comparisons and add to result
+        #        cursor = gapFrom;
+        #        while (cursor < gapTo)
+        #        {
+        #            nextDate = DateTimeUtil::addMinutes(cursor, stepMinutes);
+        #            if (nextDate > gapTo)
+        #                nextDate = gapTo;
+        #
+        #            if (cursor < nextDate)
+        #            {
+        #                // store as container(cursor, nextDate)
+        #                result.addEnd([ cursor, nextDate ]);
+        #            }
+        #
+        #            cursor = nextDate;
+        #        }
+        #    } // gaps
+        #
+        #    return result;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #handlePostCompletion
+        #public static void handlePostCompletion(RecId _scanRecId)
+        #{
+        #    Jay_ScanCtrl scan = Jay_ScanCtrl::find(_scanRecId);
+        #
+        #    if (!scan.RecId)
+        #        return;
+        #
+        #    ttsBegin;
+        #    select forUpdate scan where scan.RecId == _scanRecId;
+        #    scan.ScanStatus = Jay_ScanStatus::Completed;
+        #    scan.update();
+        #    ttsCommit;
+        #
+        #    if (scan.RunMode == Jay_ExportRunMode::Continuous)
+        #    {
+        #        info(strFmt("♻ Continuous scan %1 completed; scheduling next cycle.", _scanRecId));
+        #        Jay_ScanCtrlServiceOrig::scheduleOffspring(_scanRecId);
+        #    }
+        #}
+        #
+      ENDSOURCE
+      SOURCE #normalizeScanStartTime
+        #public static utcDateTime normalizeScanStartTime(utcDateTime ScanStartDateTime)
+        #{
+        #    utcDateTime nowUtc      = DateTimeUtil::utcNow();
+        #    date        todayDate   = DateTimeUtil::date(nowUtc);
+        #    timeOfDay   anchorTime  = DateTimeUtil::time(ScanStartDateTime);
+        #    utcDateTime candidate   = DateTimeUtil::newDateTime(todayDate, anchorTime);
+        #
+        #    // If that time today has already passed, use tomorrow
+        #    if (candidate <= nowUtc)
+        #        candidate = DateTimeUtil::addDays(candidate, 1);
+        #
+        #    return candidate;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #removeTimeFromWindow
+        #/// Subtract existing intervals from master window — returns List(Types::Container) of uncovered gaps [fromUtc,toUtc]
+        #public static List removeTimeFromWindow(utcDateTime _fromUtc, utcDateTime _toUtc, List _existingSlices)
+        #{
+        #    // --- Declarations (must be at top in AX) ---
+        #    List            gaps     = new List(Types::Container);            // result: containers [fromUtc,toUtc]
+        #    List            merged   = new List(Types::Container);            // merged intervals [startUtc, endUtc]
+        #    List            newMerged = new List(Types::Container);           // helper when inserting/merging
+        #    ListIterator    itExisting;
+        #    ListIterator    itMerged;
+        #    container       rec;
+        #    container       curMerged;
+        #    container       outRec;
+        #    utcDateTime     exFrom;
+        #    utcDateTime     exTo;
+        #    utcDateTime     mFrom;
+        #    utcDateTime     mTo;
+        #    utcDateTime     cursor;
+        #    boolean         inserted;
+        #    ;
+        #
+        #    // quick sanity: empty/invalid master window -> no gaps
+        #    if (_fromUtc >= _toUtc)
+        #    {
+        #        return gaps;
+        #    }
+        #
+        #    // ---------- Step 1: read existing slices, clamp to master window, and incrementally merge ----------
+        #    if (_existingSlices)
+        #    {
+        #        itExisting = new ListIterator(_existingSlices);
+        #        while (itExisting.more())
+        #        {
+        #            // read current element then advance iterator
+        #            rec = itExisting.value();
+        #            itExisting.next();
+        #
+        #            // expect container: [ exFromUtc, exToUtc, ... ]
+        #            if (!rec || conLen(rec) < 2)
+        #                continue;
+        #
+        #            exFrom = conPeek(rec, 1);
+        #            exTo   = conPeek(rec, 2);
+        #
+        #            // validate
+        #            if (!exFrom || !exTo)
+        #                continue;
+        #
+        #            // skip intervals that are entirely outside the master window
+        #            if (exTo <= _fromUtc) // entirely before window
+        #                continue;
+        #            if (exFrom >= _toUtc) // entirely after window
+        #                continue;
+        #
+        #            // clamp to master window
+        #            if (exFrom < _fromUtc) exFrom = _fromUtc;
+        #            if (exTo   > _toUtc)   exTo   = _toUtc;
+        #
+        #            // Now merge [exFrom, exTo] into the 'merged' list.
+        #            newMerged = new List(Types::Container);
+        #            inserted = false;
+        #
+        #            itMerged = new ListIterator(merged);
+        #            while (itMerged.more())
+        #            {
+        #                curMerged = itMerged.value();
+        #                itMerged.next();
+        #
+        #                mFrom = conPeek(curMerged, 1);
+        #                mTo   = conPeek(curMerged, 2);
+        #
+        #                // Case: new interval is completely before current merged interval and not yet inserted
+        #                if (!inserted && exTo < mFrom)
+        #                {
+        #                    newMerged.addEnd([ exFrom, exTo ]);
+        #                    inserted = true;
+        #                    // then add current merged interval
+        #                    newMerged.addEnd([ mFrom, mTo ]);
+        #                }
+        #                // Case: new interval is completely after current merged interval
+        #                else if (exFrom > mTo)
+        #                {
+        #                    // keep current merged interval, continue
+        #                    newMerged.addEnd([ mFrom, mTo ]);
+        #                }
+        #                else
+        #                {
+        #                    // Overlap or adjacent -> merge with current interval
+        #                    if (mFrom < exFrom) exFrom = mFrom;
+        #                    if (mTo   > exTo)   exTo   = mTo;
+        #                    // absorbed — don't add current merged interval
+        #                }
+        #            } // end iterate merged
+        #
+        #            // If not yet inserted, add the merged/new interval at the end
+        #            if (!inserted)
+        #            {
+        #                newMerged.addEnd([ exFrom, exTo ]);
+        #            }
+        #
+        #            // Replace merged with newMerged for next iteration
+        #            merged = newMerged;
+        #        } // end while existing slices
+        #    } // end if _existingSlices
+        #
+        #    // ---------- If we have no merged coverage, the whole window is uncovered ----------
+        #    itMerged = new ListIterator(merged);
+        #    if (!itMerged.more())
+        #    {
+        #        gaps.addEnd([ _fromUtc, _toUtc ]);
+        #        return gaps;
+        #    }
+        #
+        #    // ---------- Step 2: subtract merged intervals from master window to produce gaps ----------
+        #    cursor = _fromUtc;
+        #    itMerged = new ListIterator(merged);
+        #    while (itMerged.more())
+        #    {
+        #        curMerged = itMerged.value();
+        #        itMerged.next();
+        #
+        #        mFrom = conPeek(curMerged, 1);
+        #        mTo   = conPeek(curMerged, 2);
+        #
+        #        // if area before this merged interval exists -> it's a gap
+        #        if (cursor < mFrom)
+        #        {
+        #            gaps.addEnd([ cursor, mFrom ]);
+        #        }
+        #
+        #        // advance cursor beyond merged interval
+        #        if (cursor < mTo)
+        #        {
+        #            cursor = mTo;
+        #        }
+        #    }
+        #
+        #    // trailing gap after last merged interval
+        #    if (cursor < _toUtc)
+        #    {
+        #        gaps.addEnd([ cursor, _toUtc ]);
+        #    }
+        #
+        #    return gaps;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #RetrieveSliceWindows
+        #public static List RetrieveSliceWindows(RecId _scanRecId)
+        #{
+        #    // --- Declarations (must be at top for AX) ---
+        #    List                    result          = new List(Types::Container); // containers: [FromUtc,ToUtc,DocType,SubType,Approx,Exact]
+        #    Jay_ScanCtrl            scan;
+        #    utcDateTime             minFromUtc;
+        #    utcDateTime             maxToUtc;
+        #    List                    existingSlices  = new List(Types::Container); // containers: [FromUtc,ToUtc]
+        #    List                    windows         = new List(Types::Container); // containers: [FromUtc,ToUtc]
+        #    ListIterator            wit;
+        #    ListIterator            dit;
+        #    container               win, dt, outRec;
+        #    utcDateTime             winFrom, winTo;
+        #    List                    docTypeList     = new List(Types::Container); // containers: [DocType,SubType]
+        #    Jay_ScanScope           scopeRec;
+        #    Jay_SliceCtrl           sliceRec;
+        #    int                     approx;
+        #    boolean                 exact;
+        #    int                     outCount = 0;
+        #    int                     docTypeCount = 0;
+        #    int                     winCount = 0;
+        #    anyType                 probeRes;
+        #    int                     docType;
+        #    int                     subType;
+        #    int                     i;
+        #    ListIterator            winIt;
+        #    Map                     dedupeMap;
+        #    int64                   productCells;
+        #    int                     MAX_CELLS = 5000; // safety threshold (windows * docTypes)
+        #    utcDateTime             cursor;
+        #    utcDateTime             dayMidnight;
+        #    utcDateTime             nextDayMidnight;
+        #    utcDateTime             bucketStart;
+        #    int full;
+        #    str key;
+        #    // --- End declarations ---
+        #
+        #    // load scan
+        #    select firstOnly scan
+        #        where scan.RecId == _scanRecId;
+        #    if (!scan.RecId)
+        #    {
+        #        warning(strFmt("RetrieveSliceWindows: invalid scan %1", _scanRecId));
+        #        return result;
+        #    }
+        #
+        #    // effective range (respect extended)
+        #    minFromUtc = scan.RangeFromUtc;
+        #    maxToUtc   = scan.RangeToUtc;
+        #    if (scan.ExtendedRangeFromUtc && scan.ExtendedRangeFromUtc < minFromUtc) minFromUtc = scan.ExtendedRangeFromUtc;
+        #    if (scan.ExtendedRangeToUtc   && scan.ExtendedRangeToUtc   > maxToUtc)   maxToUtc   = scan.ExtendedRangeToUtc;
+        #    if (minFromUtc >= maxToUtc)
+        #    {
+        #        info("RetrieveSliceWindows: computed range invalid; nothing to do.");
+        #        return result;
+        #    }
+        #
+        #    // load existing slices (no per-row logging)
+        #    while select sliceRec
+        #        where sliceRec.ParentScanId == _scanRecId
+        #    {
+        #        existingSlices.addEnd([ sliceRec.FromUtc, sliceRec.ToUtc ]);
+        #    }
+        #
+        #    // build docType list from scan scopes (dedupe to reduce work)
+        #    dedupeMap = new Map(Types::String, Types::Integer);
+        #    while select scopeRec
+        #        where scopeRec.ParentScanId == _scanRecId
+        #    {
+        #        key = strFmt("%1|%2", any2str(scopeRec.DocType), any2str(scopeRec.DocSubType));
+        #        if (!dedupeMap.exists(key))
+        #        {
+        #            dedupeMap.insert(key, 1);
+        #            docTypeList.addEnd([ scopeRec.DocType, scopeRec.DocSubType ]);
+        #        }
+        #    }
+        #    docTypeCount = docTypeList.usageCount();
+        #    if (docTypeCount == 0)
+        #    {
+        #        info(strFmt("RetrieveSliceWindows: scan %1 has no doc types configured.", _scanRecId));
+        #        return result;
+        #    }
+        #
+        #    // generate windows (adaptive)
+        #    windows = Jay_ScanCtrlServiceOrig::GenerateSliceWindowTimeList_Adaptive(minFromUtc, maxToUtc, scan, existingSlices);
+        #
+        #    // count windows
+        #    winIt = new ListIterator(windows);
+        #    winCount = 0;
+        #    while (winIt.more()) { winCount++; winIt.next(); }
+        #
+        #    // safety: if product explodes, coarsen automatically to daily windows
+        #    productCells = any2int64(winCount) * any2int64(docTypeCount);
+        #    if (productCells > MAX_CELLS)
+        #    {
+        #        windows = new List(Types::Container);
+        #        cursor = minFromUtc;
+        #
+        #        while (cursor < maxToUtc)
+        #        {
+        #            // calendar date midnight for cursor
+        #            dayMidnight = DateTimeUtil::newDateTime(DateTimeUtil::date(cursor), 0);
+        #
+        #            // if cursor is after today's midnight, start at cursor; otherwise start at midnight
+        #            bucketStart = (cursor > dayMidnight) ? cursor : dayMidnight;
+        #
+        #            // next day midnight (addDays expects utcDateTime)
+        #            nextDayMidnight = DateTimeUtil::addDays(dayMidnight, 1);
+        #
+        #            // clip to overall range
+        #            if (nextDayMidnight > maxToUtc) nextDayMidnight = maxToUtc;
+        #
+        #            if (bucketStart < nextDayMidnight)
+        #            {
+        #                windows.addEnd([ bucketStart, nextDayMidnight ]);
+        #            }
+        #
+        #            cursor = nextDayMidnight;
+        #        }
+        #
+        #        // refresh winCount
+        #        winCount = windows.usageCount();
+        #        info(strFmt("RetrieveSliceWindows: coarsened windows to %1 daily buckets to avoid explosion (docTypes=%2).",
+        #                    winCount, docTypeCount));
+        #    }
+        #
+        #    // --- Probe loop: quick probe first; if quick indicates presence, run full probe for exact count ---
+        #    wit = new ListIterator(windows);
+        #    while (wit.more())
+        #    {
+        #        win = wit.value(); wit.next();
+        #        if (!win || conLen(win) < 2) continue;
+        #
+        #        winFrom = conPeek(win, 1);
+        #        winTo   = conPeek(win, 2);
+        #        if (winFrom >= winTo) continue;
+        #
+        #        // iterate doc types
+        #        dit = new ListIterator(docTypeList);
+        #        while (dit.more())
+        #        {
+        #            dt = dit.value(); dit.next();
+        #            if (!dt || conLen(dt) < 2) continue;
+        #
+        #            docType = any2Int(conPeek(dt, 1));
+        #            subType = any2Int(conPeek(dt, 2));
+        #
+        #            // quick probe (fast existence check) - returns int 1/0
+        #            try
+        #            {
+        #                probeRes = Jay_DocProbeManager::quickProbeDocTypeSubType(docType, subType, winFrom, winTo);
+        #                approx = any2Int(probeRes);
+        #            }
+        #            catch (Exception::Error)
+        #            {
+        #                approx = 0;
+        #            }
+        #
+        #            // nothing present -> skip
+        #            if (approx == 0)
+        #                continue;
+        #
+        #            // accurate full probe (must run because quick said something exists)
+        #            full = -1;
+        #            try
+        #            {
+        #                full = Jay_DocProbeManager::fullProbeDocTypeSubType(docType, subType, winFrom, winTo);
+        #            }
+        #            catch (Exception::Error)
+        #            {
+        #                full = -1;
+        #            }
+        #
+        #            if (full >= 0)
+        #            {
+        #                approx = full;
+        #                exact  = true;
+        #            }
+        #            else
+        #            {
+        #                exact = false; // fallback if full probe errored
+        #            }
+        #
+        #            // append result: [From,To,DocType,SubType,Approx,Exact]
+        #            outRec = [ winFrom, winTo, docType, subType, approx, exact ];
+        #            result.addEnd(outRec);
+        #            outCount++;
+        #        }
+        #    }
+        #
+        #    info(strFmt("RetrieveSliceWindows: produced %1 candidate windows (%2 windows × %3 docTypes) for scan %4",
+        #                outCount, winCount, docTypeCount, _scanRecId));
+        #
+        #    return result;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #safeAddCadence
+        #/* ---------------------------------------------------------------------------
+        #   safeAddCadence
+        #   Calendar-aware add; falls back to minutes when addCadence fails to advance.
+        #   --------------------------------------------------------------------------- */
+        #public static utcDateTime safeAddCadence(utcDateTime _anchor, int _value, Jay_CadenceUnit _unit)
+        #{
+        #    utcDateTime result;
+        #    int         fallbackMins;
+        #
+        #    // all declarations at top per AX style
+        #    result = Jay_CadenceModel::addCadence(_anchor, _value, _unit);
+        #
+        #    // defensive fallback: if result didn't move (bad enum / zero), use fixed-minutes
+        #    if (result == _anchor || ( _value != 0 && (( _value > 0 && result <= _anchor) || ( _value < 0 && result >= _anchor) )))
+        #    {
+        #        fallbackMins = Jay_CadenceModel::toMinutes(abs(_value), _unit, _anchor); // abs because minutes always positive
+        #        if (_value < 0)
+        #            result = DateTimeUtil::addMinutes(_anchor, -fallbackMins);
+        #        else
+        #            result = DateTimeUtil::addMinutes(_anchor, fallbackMins);
+        #    }
+        #
+        #    return result;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #schedule
+        #public static void schedule(RecId _scanRecId)
+        #{
+        #    Jay_ScanCtrlBatch              job;
+        #    Jay_ScanCtrl                   scanCtrl;
+        #    BatchHeader                    header;
+        #    Batch                          batch;
+        #    utcDateTime                    runTime;
+        #    int                            safetyFloorMinutes = 2;
+        #    Jay_ExportRuntimeSettingsTable settings = Jay_ExportRuntimeSettingsTable::findOrCreate();
+        #    utcDateTime nowUtc = DateTimeUtil::utcNow();
+        #
+        #    if (!_scanRecId)
+        #        return;
+        #
+        #    scanCtrl = Jay_ScanCtrl::find(_scanRecId);
+        #    if (!scanCtrl.RecId)
+        #        return;
+        #
+        #    // ─── 1. Normalize to next time-of-day tick ───────────────────────────────
+        #    runTime = Jay_ScanCtrlServiceOrig::normalizeScanStartTime(scanCtrl.ScanStartDateTime);
+        #
+        #    // ─── 2. Safety floor guard ───────────────────────────────────────────────
+        #
+        #    if (runTime <= nowUtc)
+        #        runTime = DateTimeUtil::addMinutes(nowUtc, safetyFloorMinutes);
+        #
+        #    // ─── 3. Configure and schedule batch ─────────────────────────────────────
+        #    job = new Jay_ScanCtrlBatch();
+        #    job.parmRecId(_scanRecId);
+        #    job.parmFunctionName("StartScan");
+        #
+        #    header = BatchHeader::construct();
+        #    header.parmCaption(strFmt("Jay Scan – Scan %1", _scanRecId));
+        #    header.parmStartDateTime(runTime);
+        #    header.addTask(job);
+        #    header.save();
+        #
+        #    // ─── 4. Post-save CU7 patch ─────────────────────────────────────────────
+        #    ttsbegin;
+        #    select forupdate batch
+        #        where batch.RecId == header.parmBatchHeaderId();
+        #    if (batch.RecId)
+        #    {
+        #        batch.GroupId    = settings.BatchGroupName;
+        #        batch.ExecutedBy = settings.Username;
+        #        batch.update();
+        #    }
+        #    ttscommit;
+        #
+        #    info(strFmt("📅 Scheduled Scan %1 for %2 (%3, safety floor %4 min)",
+        #                _scanRecId,
+        #                DateTimeUtil::toStr(runTime),
+        #                enum2str(scanCtrl.Direction),
+        #                safetyFloorMinutes));
+        #}
+        #
+      ENDSOURCE
+      SOURCE #scheduleOffspring
+        #private static void scheduleOffspring(RecId _parentRecId)
+        #{
+        #    Jay_ScanCtrl                     parent, existingChild, child;
+        #    Jay_ExportRuntimeSettingsTable  settings = Jay_ExportRuntimeSettingsTable::findOrCreate();
+        #    RecId                           childRecId, existingChildRecId;
+        #    BatchHeader                     header;
+        #    Batch                           batch;
+        #    Jay_ScanCtrlBatch               job;
+        #    utcDateTime                     runTime;
+        #    int                             safetyFloorMinutes = 2;
+        #    utcDateTime                     nowUtc = DateTimeUtil::utcNow();
+        #
+        #    // ─── Validate parent ──────────────────────────────────────────────────────
+        #    parent = Jay_ScanCtrl::find(_parentRecId);
+        #    if (!parent.RecId)
+        #        return;
+        #
+        #    // ─── Prevent duplicate child ──────────────────────────────────────────────
+        #    existingChildRecId = Jay_ScanCtrlServiceOrig::findChild(parent.RecId);
+        #    if (existingChildRecId)
+        #        return;
+        #
+        #    // ─── Create child ─────────────────────────────────────────────────────────
+        #    child = Jay_ScanCtrlServiceOrig::CreateChildRecord(parent);
+        #
+        #    // ─── Safety floor calculation ─────────────────────────────────────────────
+        #    runTime = child.ScanStartDateTime;
+        #    if (runTime <= nowUtc)
+        #        runTime = DateTimeUtil::addMinutes(nowUtc, safetyFloorMinutes);
+        #
+        #    // ─── Create and configure batch ───────────────────────────────────────────
+        #    job = new Jay_ScanCtrlBatch();
+        #    job.parmRecId(child.RecId);
+        #    job.parmFunctionName("StartScan");
+        #
+        #    header = BatchHeader::construct();
+        #    header.parmCaption(strFmt("Child Scan Start: %1 → %2 (Parent %3): Start time: %4",
+        #                              DateTimeUtil::toStr(child.RangeFromUtc),
+        #                              DateTimeUtil::toStr(child.RangeToUtc),
+        #                              parent.RecId,
+        #                              child.ScanStartDateTime));
+        #    header.parmStartDateTime(runTime);
+        #    header.addTask(job);
+        #    header.save();
+        #
+        #    // ─── Patch batch header ───────────────────────────────────────────────────
+        #    ttsbegin;
+        #    select forupdate batch
+        #        where batch.RecId == header.parmBatchHeaderId();
+        #    if (batch.RecId)
+        #    {
+        #        batch.GroupId    = settings.BatchGroupName;
+        #        batch.ExecutedBy = settings.Username;
+        #        batch.update();
+        #    }
+        #    ttscommit;
+        #
+        #    info(strFmt("📅 Scheduled Child Scan %1 for %2 (with safety floor %3 minutes)",
+        #                child.RecId,
+        #                DateTimeUtil::toStr(runTime),
+        #                safetyFloorMinutes));
+        #}
+        #
+      ENDSOURCE
+      SOURCE #StartScanSliceProcessing
+        #public static int StartScanSliceProcessing(RecId _scanRecId, int _capacity = 9999)
+        #{
+        #    Jay_SliceCtrl slice;
+        #    int           started = 0;
+        #    utcDateTime   nowUtc;
+        #
+        #    // ─── Defensive ───────────────────────────────────────────────
+        #    if (!_scanRecId)
+        #        return 0;
+        #
+        #    nowUtc = DateTimeUtil::utcNow();
+        #
+        #    // ─── Iterate eligible slices ─────────────────────────────────
+        #    while select forUpdate slice
+        #        where slice.ParentScanId == _scanRecId
+        #          && (slice.SliceStatus == Jay_SliceStatus::Pending
+        #              || slice.SliceStatus == Jay_SliceStatus::Deferred)
+        #    {
+        #        // Arbitration guard — capacity, runtime settings, etc.
+        #        if (!Jay_ArbitrationService::allowSliceStart(slice.RecId))
+        #            continue;
+        #
+        #        // Mark slice as enqueued
+        #        slice.SliceStatus      = Jay_SliceStatus::Enqueued;
+        #        slice.update();
+        #
+        #        // Launch as batch job
+        #        Jay_ArbitrationService::launchSlice(slice.RecId);
+        #
+        #        started++;
+        #
+        #        if (started >= _capacity)
+        #            break;
+        #    }
+        #
+        #    return started;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #ValidRecord
+        #private static boolean ValidRecord(RecId _scanRecid)
+        #{
+        #    if (!_scanRecId)
+        #    {
+        #        warning(strFmt("⚠ Invalid Scan RecId %1", _scanRecId));
+        #        return false;
+        #    }
+        #    else {return true;}
+        #}
+      ENDSOURCE
+    ENDMETHODS
+  ENDCLASS
+
+***Element: END

@@ -1,0 +1,58 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: DBE
+
+; Microsoft Dynamics AX Enumtype : Jay_HealthStatus unloaded
+; --------------------------------------------------------------------------------
+  ENUMTYPEVERSION 1
+  
+  ENUMTYPE #Jay_HealthStatus
+    PROPERTIES
+      Name                #Jay_HealthStatus
+      Label               #Control Health Status
+      UseEnumValue        #Yes
+      Origin              #{E43A7187-BA74-4423-8322-5A56A7017590}
+    ENDPROPERTIES
+    
+    TYPEELEMENTS
+      #Healthy
+      PROPERTIES
+        Name                #Healthy
+        Label               #Healthy
+        EnumValue           #1
+      ENDPROPERTIES
+      
+      #Skipped
+      PROPERTIES
+        Name                #Skipped
+        Label               #Skipped
+        EnumValue           #2
+      ENDPROPERTIES
+      
+      #Anomalous
+      PROPERTIES
+        Name                #Anomalous
+        Label               #Anomalous
+        EnumValue           #3
+      ENDPROPERTIES
+      
+      #Failed
+      PROPERTIES
+        Name                #Failed
+        Label               #Failed
+        EnumValue           #4
+      ENDPROPERTIES
+      
+      #Degraded
+      PROPERTIES
+        Name                #Degraded
+        Label               #Degraded
+        EnumValue           #5
+      ENDPROPERTIES
+      
+    ENDTYPEELEMENTS
+  ENDENUMTYPE
+  
+
+***Element: END

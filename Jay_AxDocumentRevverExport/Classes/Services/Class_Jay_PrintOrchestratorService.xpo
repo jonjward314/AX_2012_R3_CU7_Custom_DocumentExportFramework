@@ -1,0 +1,1525 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: CLS
+
+; Microsoft Dynamics AX Class: Jay_PrintOrchestratorService unloaded
+; --------------------------------------------------------------------------------
+  CLSVERSION 1
+  
+  CLASS #Jay_PrintOrchestratorService
+    PROPERTIES
+      Name                #Jay_PrintOrchestratorService
+      Origin              #{DEE591E8-C149-4B28-AEE4-F47D0A4C2F32}
+    ENDPROPERTIES
+    
+    METHODS
+      SOURCE #classDeclaration
+        #class Jay_PrintOrchestratorService
+        #{
+        #
+        #}
+        #
+      ENDSOURCE
+      SOURCE #applyPacingFloor
+        #private static int applyPacingFloor(Jay_ExportDocType _docType, int _msDelay)
+        #{
+        #    int floor;
+        #
+        #    switch (_docType)
+        #    {
+        #        case Jay_ExportDocType::PurchaseOrder:
+        #            floor = 1000;   // PO is the heaviest — full 1 second minimum
+        #            break;
+        #
+        #        case Jay_ExportDocType::CertificateOfOrigin:
+        #            floor = 750;
+        #            break;
+        #
+        #        case Jay_ExportDocType::Invoice:
+        #            floor = 500;
+        #            break;
+        #
+        #        case Jay_ExportDocType::Confirmation:
+        #        case Jay_ExportDocType::MSRP:
+        #        default:
+        #            floor = 250;
+        #            break;
+        #    }
+        #
+        #    return (_msDelay < floor) ? floor : _msDelay;
+        #}
+      ENDSOURCE
+      SOURCE #clearPendingPrintCycle
+        #public static void clearPendingPrintCycle()
+        #{
+        #    Jay_PrintGovernorState sUpd = Jay_PrintGovernorState::findOrCreate();
+        #
+        #    ttsBegin;
+        #
+        #    select firstOnly forUpdate sUpd
+        #        where sUpd.RecId == sUpd.RecId;
+        #
+        #    sUpd.PendingPrintCycle = NoYes::No;
+        #    sUpd.update();
+        #
+        #    ttsCommit;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #computeBurst
+        #public static int computeBurst()
+        #{
+        #    int cap;
+        #    int burst;
+        #
+        #    cap = Jay_PrintOrchestratorService::printCapacityPerHour();
+        #
+        #    // Base burst: ~1% of hourly capacity
+        #    burst = cap / 100;
+        #
+        #    // Minimum safety: don't do absurdly tiny bursts
+        #    if (burst < 5)
+        #    {
+        #        burst = 5;
+        #    }
+        #
+        #    // Maximum safety: don't let a single burst be too huge
+        #    if (burst > 100)
+        #    {
+        #        burst = 100;
+        #    }
+        #
+        #    return burst;
+        #}
+        #
+        #
+        #
+      ENDSOURCE
+      SOURCE #computeCooldownMs
+        #private static int computeCooldownMs()
+        #{
+        #    int   cap;
+        #    int   burst;
+        #    real  numerator;
+        #    real  denominator;
+        #    real  cooldown;
+        #    int   result;
+        #
+        #    cap   = Jay_PrintOrchestratorService::printCapacityPerHour();
+        #    burst = Jay_PrintOrchestratorService::computeBurst();
+        #
+        #    // Cooldown = (3,600,000 ms * burst) / capacity
+        #    numerator   = 3600000.0 * burst;
+        #    denominator = cap;
+        #    cooldown    = numerator / denominator;
+        #
+        #    result = round(cooldown, 0);
+        #
+        #    // Never sleep less than 250ms
+        #    if (result < 250)
+        #    {
+        #        result = 250;
+        #    }
+        #
+        #    // Never sleep more than 90 seconds
+        #    if (result > 90000)
+        #    {
+        #        result = 90000;
+        #    }
+        #
+        #    return result;
+        #}
+      ENDSOURCE
+      SOURCE #depensurePrintCycleNotStuck
+        #public static void depensurePrintCycleNotStuck()
+        #{
+        #    Jay_PrintGovernorState s = Jay_PrintGovernorState::findOrCreate();
+        #    Jay_PrintGovernorState upd;
+        #    Batch bh;
+        #    boolean activeFound = false;
+        #
+        #    while select bh
+        #        where bh.Caption == Jay_PrintOrchestratorService::printCycleCaption()
+        #    {
+        #        if (bh.Status == BatchStatus::Executing)
+        #        {
+        #            activeFound = true;
+        #            break;
+        #        }
+        #    }
+        #
+        #    // If no active print job exists but semaphore is stuck → clear it
+        #    if (!activeFound && s.PendingPrintCycle == NoYes::Yes)
+        #    {
+        #        ttsBegin;
+        #        select forUpdate upd
+        #            where upd.RecId == s.RecId;
+        #
+        #        if (upd.RecId)
+        #        {
+        #            upd.PendingPrintCycle = NoYes::No;
+        #            upd.update();
+        #        }
+        #        ttsCommit;
+        #    }
+        #}
+        #
+      ENDSOURCE
+      SOURCE #deprecated_endScheduling
+        #public static void deprecated_endScheduling()
+        #{
+        #    /*Jay_PrintGovernorState s = Jay_PrintGovernorState::findOrCreate();
+        #
+        #    ttsBegin;
+        #
+        #    select firstOnly forUpdate s
+        #        where s.RecId == s.RecId;
+        #
+        #    if (s.SchedulerBusy)
+        #    {
+        #        s.SchedulerBusy = NoYes::No;
+        #        s.update();
+        #    }
+        #
+        #    ttsCommit;*/
+        #}
+        #
+      ENDSOURCE
+      SOURCE #deprecated_tryStartScheduling
+        #public static boolean deprecated_tryStartScheduling()
+        #{
+        #    /*Jay_PrintGovernorState s = Jay_PrintGovernorState::findOrCreate();
+        #    boolean acquired = false;
+        #
+        #    ttsBegin;
+        #
+        #    select firstOnly forUpdate s
+        #        where s.RecId == s.RecId;
+        #
+        #    if (!s.SchedulerBusy)
+        #    {
+        #        s.SchedulerBusy = NoYes::Yes;
+        #        s.update();
+        #        acquired = true;
+        #    }
+        #
+        #    ttsCommit;
+        #
+        #    return acquired;*/
+        #    return true;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #drainQueueChunk
+        #public static int drainQueueChunk(
+        #    Jay_ExportQueueType  _queueType,
+        #    Jay_PrintDedupeTable _dedupe)
+        #{
+        #    Jay_ExportRuntimeSettingsTable settings;
+        #    Jay_PrintDedupeTable           dedupe = _dedupe;
+        #
+        #    int         capacityPerHour;
+        #    int         msDelayPerDoc;
+        #    utcDateTime nowUtc;
+        #
+        #    int         printedCount = 0;
+        #    boolean     success;
+        #    boolean     didPrint;
+        #
+        #    boolean     isProd = (_queueType == Jay_ExportQueueType::Production);
+        #
+        #    Jay_DocExportProdQueue prodRec, prodLock;
+        #    Jay_DocExportHistQueue histRec, histLock;
+        #
+        #    Jay_BatchCtrl batchLock;
+        #    Jay_SliceCtrl sliceLock;
+        #
+        #    info(strFmt("→ Drain start (%1)", enum2str(_queueType)));
+        #
+        #    // =====================================================================
+        #    // MAIN DRAIN LOOP (STATE-DRIVEN)
+        #    // =====================================================================
+        #    while (Jay_PrintOrchestratorService::hasPrintableWork(_queueType)
+        #        && Jay_PrintOrchestratorService::IsPrinting()
+        #        && Jay_PrintOrchestratorService::isWithinPrintWindow())
+        #    {
+        #        didPrint = false;
+        #
+        #        settings = Jay_ExportRuntimeSettingsTable::findOrCreate();
+        #        nowUtc   = DateTimeUtil::utcNow();
+        #
+        #        capacityPerHour =
+        #            settings.PrintCapacityPerHour > 0
+        #                ? settings.PrintCapacityPerHour
+        #                : 1;
+        #
+        #        msDelayPerDoc = 3600000 / capacityPerHour;
+        #
+        #        // -------------------------------------------------------------
+        #        // SELECT NEXT RECORD
+        #        // -------------------------------------------------------------
+        #        if (isProd)
+        #        {
+        #            select firstOnly prodRec
+        #                order by prodRec.OrigQueueTime
+        #                where (prodRec.Status == Jay_ExportQueueStatus::Queued
+        #                    || prodRec.Status == Jay_ExportQueueStatus::FailedExport)
+        #                  && prodRec.Attempts < settings.MaxAllowedPrintAttempts;
+        #
+        #            if (!prodRec.RecId)
+        #                break;
+        #        }
+        #        else
+        #        {
+        #            select firstOnly histRec
+        #                order by histRec.OrigQueueTime
+        #                where (histRec.Status == Jay_ExportQueueStatus::Queued
+        #                    || histRec.Status == Jay_ExportQueueStatus::FailedExport)
+        #                  && histRec.Attempts < settings.MaxAllowedPrintAttempts;
+        #
+        #            if (!histRec.RecId)
+        #                break;
+        #        }
+        #
+        #        try
+        #        {
+        #            // ---------------------------------------------------------
+        #            // DEDUPE CHECK
+        #            // ---------------------------------------------------------
+        #            if (isProd)
+        #            {
+        #                if (Jay_PrintDedupe::exists(
+        #                        prodRec.ParentScanId,
+        #                        prodRec.DocType,
+        #                        prodRec.DocRecId))
+        #                {
+        #                    ttsBegin;
+        #                    select forUpdate prodLock
+        #                        where prodLock.RecId == prodRec.RecId;
+        #
+        #                    if (prodLock.RecId)
+        #                    {
+        #                        prodLock.Status         = Jay_ExportQueueStatus::Skipped;
+        #                        prodLock.Attempts++;
+        #                        prodLock.LastAttemptUtc = nowUtc;
+        #                        prodLock.update();
+        #                    }
+        #                    ttsCommit;
+        #                    continue;
+        #                }
+        #
+        #                success =
+        #                    Jay_DocHandler_Base::runPrint(
+        #                        prodRec.DocType,
+        #                        prodRec.DocRecId,
+        #                        Jay_ExportQueueType::Production,
+        #                        prodRec.RecId);
+        #            }
+        #            else
+        #            {
+        #                if (Jay_PrintDedupe::exists(
+        #                        histRec.ParentScanId,
+        #                        histRec.DocType,
+        #                        histRec.DocRecId))
+        #                {
+        #                    ttsBegin;
+        #                    select forUpdate histLock
+        #                        where histLock.RecId == histRec.RecId;
+        #
+        #                    if (histLock.RecId)
+        #                    {
+        #                        histLock.Status         = Jay_ExportQueueStatus::Skipped;
+        #                        histLock.Attempts++;
+        #                        histLock.LastAttemptUtc = nowUtc;
+        #                        histLock.update();
+        #                    }
+        #                    ttsCommit;
+        #                    continue;
+        #                }
+        #
+        #                success =
+        #                    Jay_DocHandler_Base::runPrint(
+        #                        histRec.DocType,
+        #                        histRec.DocRecId,
+        #                        Jay_ExportQueueType::Historical,
+        #                        histRec.RecId);
+        #            }
+        #
+        #            // ---------------------------------------------------------
+        #            // PERSIST RESULT
+        #            // ---------------------------------------------------------
+        #
+        #
+        #            if (isProd)
+        #            {
+        #                ttsBegin;
+        #                select forUpdate prodLock
+        #                    where prodLock.RecId == prodRec.RecId;
+        #
+        #                if (!prodLock.RecId)
+        #                {
+        #                    ttsCommit;
+        #                    continue;
+        #                }
+        #
+        #                prodLock.LastAttemptUtc = nowUtc;
+        #                prodLock.Attempts++;
+        #                prodLock.Status =
+        #                    success
+        #                        ? Jay_ExportQueueStatus::Exported
+        #                        : Jay_ExportQueueStatus::FailedExport;
+        #
+        #                prodLock.update();
+        #                ttsCommit;
+        #                if (success)
+        #                {
+        #                    didPrint = true;
+        #
+        #                    Jay_PrintDedupe::markPrinted(
+        #                        prodRec.ParentScanId,
+        #                        prodRec.DocType,
+        #                        prodRec.DocRecId);
+        #
+        #                    ttsBegin;
+        #                    select forUpdate batchLock
+        #                        where batchLock.RecId == prodRec.ParentBatchRecId;
+        #
+        #                    if (batchLock.RecId)
+        #                    {
+        #                        batchLock.PrintedDocs++;
+        #                        batchLock.update();
+        #                    }
+        #                    ttsCommit;
+        #                    ttsBegin;
+        #                    select forUpdate sliceLock
+        #                        where sliceLock.RecId == prodRec.SliceId;
+        #
+        #                    if (sliceLock.RecId)
+        #                    {
+        #                        sliceLock.ActualDocs++;
+        #                        sliceLock.update();
+        #                    }
+        #                    ttsCommit;
+        #                }
+        #            }
+        #            else
+        #            {
+        #                ttsBegin;
+        #                select forUpdate histLock
+        #                    where histLock.RecId == histRec.RecId;
+        #
+        #                if (!histLock.RecId)
+        #                {
+        #                    ttsCommit;
+        #                    continue;
+        #                }
+        #
+        #                histLock.LastAttemptUtc = nowUtc;
+        #                histLock.Attempts++;
+        #                histLock.Status =
+        #                    success
+        #                        ? Jay_ExportQueueStatus::Exported
+        #                        : Jay_ExportQueueStatus::FailedExport;
+        #
+        #                histLock.update();
+        #                 ttsCommit;
+        #                 if (success)
+        #                {
+        #                    didPrint = true;
+        #
+        #                    Jay_PrintDedupe::markPrinted(
+        #                        histRec.ParentScanId,
+        #                        histRec.DocType,
+        #                        histRec.DocRecId);
+        #                    ttsBegin;
+        #                    select forUpdate batchLock
+        #                        where batchLock.RecId == histRec.ParentBatchRecId;
+        #
+        #                    if (batchLock.RecId)
+        #                    {
+        #                        batchLock.PrintedDocs++;
+        #                        batchLock.update();
+        #                    }
+        #                    ttsCommit;
+        #
+        #                    ttsBegin;
+        #                    select forUpdate sliceLock
+        #                        where sliceLock.RecId == prodRec.SliceId;
+        #
+        #                    if (sliceLock.RecId)
+        #                    {
+        #                        sliceLock.ActualDocs++;
+        #                        sliceLock.update();
+        #                    }
+        #                    ttsCommit;
+        #
+        #                }
+        #            }
+        #
+        #        }
+        #        catch (Exception::Error)
+        #        {
+        #            Jay_PrintOrchestratorService::updateErrorMessage(
+        #                _queueType,
+        #                isProd ? prodRec.RecId : histRec.RecId,
+        #                Jay_PrintOrchestratorService::safeStr(infolog.text()));
+        #            continue;
+        #        }
+        #
+        #        // -------------------------------------------------------------
+        #        // SINGLE PACING POINT (OUTSIDE TTS)
+        #        // -------------------------------------------------------------
+        #        if (didPrint)
+        #        {
+        #            printedCount++;
+        #
+        #            msDelayPerDoc =
+        #                Jay_PrintOrchestratorService::applyPacingFloor(
+        #                    isProd ? prodRec.DocType : histRec.DocType,
+        #                    msDelayPerDoc);
+        #
+        #            info(strFmt(
+        #                "Printed #%1 %2 RecId=%3; sleeping %4 ms",
+        #                printedCount,
+        #                enum2str(_queueType),
+        #                int642str(isProd ? prodRec.RecId : histRec.RecId),
+        #                msDelayPerDoc));
+        #
+        #            if (msDelayPerDoc > 0)
+        #                sleep(msDelayPerDoc);
+        #        }
+        #    }
+        #
+        #    info(strFmt(
+        #        "← Drain complete: printed %1 documents (%2)",
+        #        printedCount,
+        #        enum2str(_queueType)));
+        #
+        #    return printedCount;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #endPrint
+        #private static void endPrint()
+        #{
+        #    Jay_PrintGovernorState s = Jay_PrintGovernorState::findOrCreate();
+        #
+        #    ttsBegin;
+        #
+        #    select firstOnly forUpdate s
+        #        where s.RecId == s.RecId;
+        #
+        #    s.IsPrinting    = NoYes::No;
+        #    s.LastUpdateUtc = DateTimeUtil::utcNow();
+        #    s.update();
+        #
+        #    ttsCommit;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #ensureGovernorNotStuck
+        #public static void ensureGovernorNotStuck()
+        #{
+        #    Jay_PrintGovernorState s = Jay_PrintGovernorState::findOrCreate();
+        #    Jay_PrintGovernorState sUpd;
+        #    Batch bh;
+        #    boolean activeFound = false;
+        #
+        #    if (s.IsPrinting != NoYes::Yes)
+        #        return;
+        #
+        #    // Scan for active print batches
+        #    while select bh
+        #        where bh.Caption == Jay_PrintOrchestratorService::printCycleCaption()
+        #    {
+        #        if (bh.Status == BatchStatus::Executing)
+        #        {
+        #            activeFound = true;
+        #            break;
+        #        }
+        #    }
+        #
+        #    // If no batch is actually printing, unlock the governor
+        #    if (!activeFound)
+        #    {
+        #
+        #
+        #        ttsBegin;
+        #
+        #        // Re-select inside the TTS block with forUpdate
+        #        select firstOnly forUpdate sUpd
+        #            where sUpd.RecId == s.RecId;
+        #
+        #        if (sUpd.RecId)
+        #        {
+        #            sUpd.IsPrinting = NoYes::No;
+        #            sUpd.update();
+        #        }
+        #
+        #        ttsCommit;
+        #    }
+        #}
+        #
+      ENDSOURCE
+      SOURCE #getActiveSsrsSpid
+        #public static int getActiveSsrsSpid()
+        #{
+        #    Connection  con       = new Connection();
+        #    Statement   stmt;
+        #    ResultSet   rs;
+        #    str         sql;
+        #    int         spid = 0;
+        #    str aosName = xGlobal::computerName();
+        #    str sqlLogin = SysSQLSystemInfo::construct().getLoginName();
+        #
+        #    sql = @"
+        #        SELECT TOP 1 session_id
+        #        FROM sys.dm_exec_sessions
+        #        WHERE program_name LIKE '%Report%'
+        #        ORDER BY last_request_start_time DESC;
+        #    ";
+        #
+        #    try
+        #    {
+        #        stmt = con.createStatement();
+        #        rs   = stmt.executeQuery(sql);
+        #
+        #        if (rs && rs.next())
+        #        {
+        #            spid = rs.getInt(1); // First column: session_id
+        #        }
+        #    }
+        #    catch
+        #    {
+        #        spid = 0;
+        #    }
+        #
+        #    return spid;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #getNextBatchForQueue
+        #private static RecId getNextBatchForQueue(Jay_ExportQueueType _queueType)
+        #{
+        #    Jay_BatchCtrl batch;
+        #
+        #    select firstOnly batch
+        #        where batch.QueueType == _queueType
+        #          && batch.Status != Jay_BatchStatus::Completed;
+        #
+        #    return batch.RecId;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #hasPrintableWork
+        #public static boolean hasPrintableWork(Jay_ExportQueueType _queueType)
+        #{
+        #    Jay_ExportRuntimeSettingsTable settings = Jay_ExportRuntimeSettingsTable::findOrCreate();
+        #    Jay_DocExportProdQueue  prodQ;
+        #    Jay_DocExportHistQueue  histQ;
+        #
+        #    if (_queueType == Jay_ExportQueueType::Production)
+        #    {
+        #        select firstOnly prodQ
+        #            order by prodQ.OrigQueueTime
+        #            where (prodQ.Status == Jay_ExportQueueStatus::Queued
+        #                || prodQ.Status == Jay_ExportQueueStatus::Processing
+        #                || prodQ.Status == Jay_ExportQueueStatus::FailedExport)
+        #              && prodQ.Attempts < settings.MaxAllowedPrintAttempts;
+        #
+        #        return prodQ.RecId ? true : false;
+        #    }
+        #    else
+        #    {
+        #        select firstOnly histQ
+        #            order by histQ.OrigQueueTime
+        #            where (histQ.Status == Jay_ExportQueueStatus::Queued
+        #                || histQ.Status == Jay_ExportQueueStatus::Processing
+        #                || histQ.Status == Jay_ExportQueueStatus::FailedExport)
+        #              && histQ.Attempts < settings.MaxAllowedPrintAttempts;
+        #
+        #        return histQ.RecId ? true : false;
+        #    }
+        #}
+        #
+      ENDSOURCE
+      SOURCE #healPrintLocks
+        #public static void healPrintLocks()
+        #{
+        #    Jay_PrintGovernorState s;
+        #    RecId governorRecId;
+        #    boolean batchExists;
+        #
+        #    try
+        #    {
+        #        // Always start by finding the row OUTSIDE TTS
+        #        s = Jay_PrintGovernorState::findOrCreate();
+        #        governorRecId = s.RecId;
+        #
+        #        // Also evaluate batchExists outside TTS
+        #        batchExists = Jay_PrintOrchestratorService::printBatchExists();
+        #
+        #        ttsBegin;
+        #
+        #        // Re-read WITH LOCK, guaranteed to be the exact record
+        #        select forUpdate s
+        #            where s.RecId == governorRecId;
+        #
+        #        if (!s.RecId)
+        #        {
+        #            // This should never happen… but AX loves chaos
+        #            throw error("PrintGovernorState missing during healPrintLocks()");
+        #        }
+        #
+        #        // ---------------------------------------------------------
+        #        // Heal PRINT LOCK
+        #        // ---------------------------------------------------------
+        #        if (s.IsPrinting == NoYes::Yes && !batchExists)
+        #        {
+        #            info("Arbiter: IsPrinting = Yes but no print batch exists → clearing.");
+        #            s.IsPrinting = NoYes::No;
+        #        }
+        #
+        #        s.update();
+        #
+        #        ttsCommit;
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        if (appl.ttsLevel() > 0)
+        #        {
+        #            ttsAbort;
+        #        }
+        #        error("💥 healPrintLocks() failed (Error). Locks NOT updated.");
+        #    }
+        #    catch
+        #    {
+        #        if (appl.ttsLevel() > 0)
+        #        {
+        #            ttsAbort;
+        #        }
+        #        error("💥 healPrintLocks() failed (non-Error exception). Locks NOT updated.");
+        #    }
+        #}
+        #
+      ENDSOURCE
+      SOURCE #IsPrinting
+        #public static boolean IsPrinting()
+        #{
+        #    Jay_PrintGovernorState s;
+        #
+        #    // Always retrieve the canonical singleton row
+        #    s = Jay_PrintGovernorState::findOrCreate();
+        #
+        #    // No guessing — directly return the authoritative flag
+        #    return (s.IsPrinting == NoYes::Yes);
+        #}
+      ENDSOURCE
+      SOURCE #isWithinPrintWindow
+        #public static boolean isWithinPrintWindow()
+        #{
+        #    Jay_ExportRuntimeSettingsTable settings =
+        #        Jay_ExportRuntimeSettingsTable::findOrCreate();
+        #
+        #    int nowTime;
+        #    int startT;
+        #    int endT;
+        #
+        #    startT = settings.PrintWindowStartTime;
+        #    endT   = settings.PrintWindowEndTime;
+        #
+        #    // ------------------------------------------------------------
+        #    // 1. Window disabled → always allowed
+        #    // ------------------------------------------------------------
+        #    if (settings.PrintWindowEnabled != NoYes::Yes)
+        #        return true;
+        #
+        #    // ------------------------------------------------------------
+        #    // 2. Identical times → treat as 24-hour window
+        #    // ------------------------------------------------------------
+        #    if (startT == endT)
+        #        return true;
+        #
+        #    // ------------------------------------------------------------
+        #    // 3. Compare against normalized server time
+        #    // ------------------------------------------------------------
+        #    nowTime = DateTimeUtil::time(DateTimeUtil::utcNow());
+        #
+        #    // ------------------------------------------------------------
+        #    // 4. Same-day window (e.g. 08:00 → 17:00)
+        #    // ------------------------------------------------------------
+        #    if (startT < endT)
+        #    {
+        #        return (nowTime >= startT
+        #             && nowTime <  endT);
+        #    }
+        #
+        #    // ------------------------------------------------------------
+        #    // 5. Overnight window (e.g. 22:00 → 06:00)
+        #    // ------------------------------------------------------------
+        #    return (nowTime >= startT
+        #         || nowTime <  endT);
+        #}
+        #
+      ENDSOURCE
+      SOURCE #logQueueError
+        #public static void logQueueError(
+        #    Jay_ExportQueueType _queueType,
+        #    RecId               _queueRecId,
+        #    str                 _message
+        #)
+        #{
+        #    Jay_DocExportProdQueue prodLock;
+        #    Jay_DocExportHistQueue histLock;
+        #    str safeMsg = Jay_PrintOrchestratorService::safeStr(_message);
+        #
+        #    try
+        #    {
+        #        ttsBegin;
+        #
+        #        if (_queueType == Jay_ExportQueueType::Production)
+        #        {
+        #
+        #
+        #            select firstOnly forUpdate prodLock
+        #                where prodLock.RecId == _queueRecId;
+        #
+        #            if (prodLock.RecId)
+        #            {
+        #                prodLock.ErrorMessage = safeMsg;
+        #                prodLock.update();
+        #            }
+        #        }
+        #        else
+        #        {
+        #
+        #
+        #            select firstOnly forUpdate histLock
+        #                where histLock.RecId == _queueRecId;
+        #
+        #            if (histLock.RecId)
+        #            {
+        #                histLock.ErrorMessage = safeMsg;
+        #                histLock.update();
+        #            }
+        #        }
+        #
+        #        ttsCommit;
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        // Never propagate exceptions from error logging
+        #        error(strFmt(
+        #            "logQueueError fallback: failed to write ErrorMessage for RecId=%1. Msg=%2",
+        #            _queueRecId,
+        #            safeMsg
+        #        ));
+        #    }
+        #}
+        #
+      ENDSOURCE
+      SOURCE #maybeTryStartPrint
+        #public static void maybeTryStartPrint()
+        #{
+        #    Jay_ExportQueueType qt;
+        #    boolean idle;
+        #    boolean hasWork;
+        #    RecId   batchRecId;
+        #
+        #    for (qt = 0; qt < enumCnt(Jay_ExportQueueType); qt++)
+        #    {
+        #        idle    = !Jay_PrintOrchestratorService::isPrinting();
+        #        hasWork = Jay_PrintOrchestratorService::hasPrintableWork(qt);
+        #
+        #        if (!idle || !hasWork)
+        #            continue;
+        #
+        #        batchRecId = Jay_PrintOrchestratorService::getNextBatchForQueue(qt);
+        #
+        #        if (batchRecId)
+        #        {
+        #            Jay_ArbitrationService::notifyBatchReady(batchRecId, qt);
+        #
+        #            // Let semaphore & batch updates settle
+        #            sleep(500);
+        #
+        #            // **Prevent scheduling multiple cycles**
+        #            break;
+        #        }
+        #    }
+        #}
+        #
+      ENDSOURCE
+      SOURCE #printBatchExists
+        #public static boolean printBatchExists()
+        #{
+        #    Batch bh;
+        #    Name  caption = Jay_PrintOrchestratorService::printCycleCaption();
+        #
+        #    select firstOnly bh
+        #        where bh.Caption == caption
+        #           && bh.Status  == BatchStatus::Executing;
+        #
+        #    return (bh.RecId != 0);
+        #}
+        #
+      ENDSOURCE
+      SOURCE #printCapacityPerHour
+        #private static int printCapacityPerHour()
+        #{
+        #    Jay_ExportRuntimeSettingsTable settings =
+        #        Jay_ExportRuntimeSettingsTable::findOrCreate();
+        #
+        #    // MUST be > 0 to avoid divide-by-zero
+        #    return (settings.PrintCapacityPerHour > 0)
+        #        ? settings.PrintCapacityPerHour
+        #        : 1;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #printCycleBatchExists
+        #public static boolean printCycleBatchExists()
+        #{
+        #    Batch bh;
+        #
+        #    while select bh
+        #        where bh.Caption == Jay_PrintOrchestratorService::printCycleCaption()
+        #    {
+        #        if (bh.Status == BatchStatus::Waiting
+        #         || bh.Status == BatchStatus::Ready
+        #         || bh.Status == BatchStatus::Executing)
+        #        {
+        #            return true;
+        #        }
+        #    }
+        #
+        #    return false;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #printCycleCaption
+        #public static str printCycleCaption()
+        #{
+        #    return "PrintCycle – Orchestrated Print Run";
+        #}
+      ENDSOURCE
+      SOURCE #reconcile
+        #public static void reconcile(Jay_ExportQueueType _queueType)
+        #{
+        #    Jay_ExportRuntimeSettingsTable settings =
+        #        Jay_ExportRuntimeSettingsTable::findOrCreate();
+        #
+        #    int maxAttempts = settings.MaxAllowedPrintAttempts;
+        #
+        #    Jay_BatchCtrl batchIter, batchLock;
+        #    Jay_SliceCtrl sliceIter, sliceLock;
+        #    Jay_ScanCtrl  scanIter,  scanLock;
+        #
+        #    Jay_DocExportProdQueue prodQ;
+        #    Jay_DocExportHistQueue histQ;
+        #
+        #    boolean openExists;
+        #
+        #    // =====================================================================
+        #    // 1. CLOSE BATCHES
+        #    // =====================================================================
+        #    try
+        #    {
+        #        while select * from batchIter
+        #            where batchIter.QueueType == _queueType
+        #        {
+        #            openExists = false;
+        #
+        #            try
+        #            {
+        #                if (_queueType == Jay_ExportQueueType::Production)
+        #                {
+        #                    select firstOnly RecId from prodQ
+        #                        where prodQ.ParentBatchRecId == batchIter.RecId
+        #                          && (prodQ.Status != Jay_ExportQueueStatus::Exported)
+        #                          && !(prodQ.Status == Jay_ExportQueueStatus::FailedExport
+        #                               && prodQ.Attempts < maxAttempts);
+        #
+        #                    if (prodQ.RecId)
+        #                        openExists = true;
+        #                }
+        #                else
+        #                {
+        #                    select firstOnly RecId from histQ
+        #                        where histQ.ParentBatchRecId == batchIter.RecId
+        #                          && (histQ.Status != Jay_ExportQueueStatus::Exported)
+        #                          && !(histQ.Status == Jay_ExportQueueStatus::FailedExport
+        #                               && histQ.Attempts < maxAttempts);
+        #
+        #                    if (histQ.RecId)
+        #                        openExists = true;
+        #                }
+        #            }
+        #            catch (Exception::Error)
+        #            {
+        #                error(Jay_PrintOrchestratorService::safeStr(
+        #                    strFmt("BATCH reconcile scan failed for BatchRecId=%1: %2",
+        #                           int642str(batchIter.RecId),
+        #                           infolog.text())
+        #                ));
+        #                continue;
+        #            }
+        #
+        #            if (!openExists)
+        #            {
+        #                try
+        #                {
+        #                    ttsBegin;
+        #
+        #                    select forUpdate batchLock
+        #                        where batchLock.RecId == batchIter.RecId;
+        #
+        #                    if (batchLock.RecId)
+        #                    {
+        #                        batchLock.Status = Jay_BatchStatus::Completed;
+        #                        batchLock.update();
+        #                    }
+        #
+        #                    ttsCommit;
+        #                }
+        #                catch (Exception::Error)
+        #                {
+        #                    error(Jay_PrintOrchestratorService::safeStr(
+        #                        strFmt("Failed to close BatchRecId=%1: %2",
+        #                               int642str(batchIter.RecId),
+        #                               infolog.text())
+        #                    ));
+        #                    continue;
+        #                }
+        #            }
+        #        }
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        error(Jay_PrintOrchestratorService::safeStr(
+        #            strFmt("🔥 reconcile(BATCH) crashed for queueType=%1: %2",
+        #                enum2str(_queueType),
+        #                infolog.text())
+        #        ));
+        #    }
+        #
+        #    // =====================================================================
+        #    // 2. CLOSE SLICES
+        #    // =====================================================================
+        #    try
+        #    {
+        #        while select * from sliceIter
+        #            where sliceIter.QueueType == _queueType
+        #        {
+        #            openExists = false;
+        #
+        #            try
+        #            {
+        #                select firstOnly RecId from batchIter
+        #                    where batchIter.ParentSliceRecId == sliceIter.RecId
+        #                      && batchIter.Status != Jay_BatchStatus::Completed;
+        #
+        #                if (batchIter.RecId)
+        #                    openExists = true;
+        #            }
+        #            catch (Exception::Error)
+        #            {
+        #                error(Jay_PrintOrchestratorService::safeStr(
+        #                    strFmt("Slice check failed for SliceRecId=%1: %2",
+        #                           int642str(sliceIter.RecId),
+        #                           infolog.text())
+        #                ));
+        #                continue;
+        #            }
+        #
+        #            if (!openExists)
+        #            {
+        #                try
+        #                {
+        #                    ttsBegin;
+        #
+        #                    select forUpdate sliceLock
+        #                        where sliceLock.RecId == sliceIter.RecId;
+        #
+        #                    if (sliceLock.RecId)
+        #                    {
+        #                        sliceLock.SliceStatus = Jay_SliceStatus::Completed;
+        #                        sliceLock.update();
+        #                    }
+        #
+        #                    ttsCommit;
+        #                }
+        #                catch (Exception::Error)
+        #                {
+        #                    error(Jay_PrintOrchestratorService::safeStr(
+        #                        strFmt("Failed to close SliceRecId=%1: %2",
+        #                               int642str(sliceIter.RecId),
+        #                               infolog.text())
+        #                    ));
+        #                    continue;
+        #                }
+        #            }
+        #        }
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        error(Jay_PrintOrchestratorService::safeStr(
+        #            strFmt("reconcile(SLICE) crashed for queueType=%1: %2",
+        #                enum2str(_queueType),
+        #                infolog.text())
+        #        ));
+        #    }
+        #
+        #    // =====================================================================
+        #    // 3. CLOSE SCANS
+        #    // =====================================================================
+        #    try
+        #    {
+        #        while select * from scanIter
+        #        {
+        #            try
+        #            {
+        #                // Check if any slices exist
+        #                select firstOnly RecId from sliceIter
+        #                    where sliceIter.ParentScanId == scanIter.RecId;
+        #
+        #                if (!sliceIter.RecId)
+        #                    continue;
+        #
+        #                // Check for incomplete slices
+        #                select firstOnly RecId from sliceIter
+        #                    where sliceIter.ParentScanId == scanIter.RecId
+        #                      && sliceIter.SliceStatus != Jay_SliceStatus::Completed;
+        #
+        #                if (sliceIter.RecId)
+        #                    continue;
+        #            }
+        #            catch (Exception::Error)
+        #            {
+        #                error(Jay_PrintOrchestratorService::safeStr(
+        #                    strFmt("Scan check failed for ScanRecId=%1: %2",
+        #                           int642str(scanIter.RecId),
+        #                           infolog.text())
+        #                ));
+        #                continue;
+        #            }
+        #
+        #            try
+        #            {
+        #                ttsBegin;
+        #
+        #                select forUpdate scanLock
+        #                    where scanLock.RecId == scanIter.RecId;
+        #
+        #                if (scanLock.RecId)
+        #                {
+        #                    scanLock.ScanStatus = Jay_ScanStatus::Completed;
+        #                    scanLock.update();
+        #                }
+        #
+        #                ttsCommit;
+        #
+        #                Jay_ScanCtrlService::handlePostCompletion(scanIter.RecId);
+        #            }
+        #            catch (Exception::Error)
+        #            {
+        #                error(Jay_PrintOrchestratorService::safeStr(
+        #                    strFmt("Failed to close ScanRecId=%1: %2",
+        #                           int642str(scanIter.RecId),
+        #                           infolog.text())
+        #                ));
+        #                continue;
+        #            }
+        #        }
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        error(Jay_PrintOrchestratorService::safeStr(
+        #            strFmt("reconcile(SCAN) crashed globally for queueType=%1: %2",
+        #                enum2str(_queueType),
+        #                infolog.text())
+        #        ));
+        #    }
+        #}
+        #
+      ENDSOURCE
+      SOURCE #runPrintCycle
+        #public static void runPrintCycle(Jay_ExportQueueType _queueType)
+        #{
+        #    boolean lockAcquired = false;
+        #    int     totalPrinted = 0;
+        #    int     passPrinted;
+        #    Jay_PrintDedupeTable dedupe;
+        #
+        #    dedupe.setTmp(); // In-memory dedupe for this cycle
+        #
+        #    info("→ [A] ENTER runPrintCycle");
+        #
+        #    // -------------------------------------------------------------
+        #    // 1. ACQUIRE PRINT LOCK
+        #    // -------------------------------------------------------------
+        #    try
+        #    {
+        #        lockAcquired = Jay_PrintOrchestratorService::tryStartPrint();
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        error("❌ [B-FAIL] tryStartPrint() threw");
+        #        return;
+        #    }
+        #
+        #    if (!lockAcquired)
+        #    {
+        #        warning("→ [B-SKIP] Print cycle skipped: printing already in progress.");
+        #        return;
+        #    }
+        #
+        #    info("✔ [B-OK] Print lock acquired");
+        #
+        #    // Clear pending immediately now that we are RUNNING
+        #    try
+        #    {
+        #        Jay_PrintOrchestratorService::clearPendingPrintCycle();
+        #        info("✔ [B2] PendingPrintCycle cleared");
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        error("❌ [B2-FAIL] Failed to clear PendingPrintCycle");
+        #    }
+        #
+        #    // -------------------------------------------------------------
+        #    // 2. MAIN RUN LOOP
+        #    // -------------------------------------------------------------
+        #    try
+        #    {
+        #        while (true)
+        #        {
+        #            // -----------------------------------------------------
+        #            // 2a. Exit only if NO work exists anywhere
+        #            // -----------------------------------------------------
+        #            if (!Jay_PrintOrchestratorService::hasPrintableWork(Jay_ExportQueueType::Production)
+        #             && !Jay_PrintOrchestratorService::hasPrintableWork(Jay_ExportQueueType::Historical))
+        #            {
+        #                info("→ [C-END] No PROD or HIST work left — exiting loop");
+        #                break;
+        #            }
+        #
+        #            // -----------------------------------------------------
+        #            // 2b. If printing not permitted, yield and wait
+        #            // -----------------------------------------------------
+        #            if (!Jay_PrintOrchestratorService::IsPrinting()
+        #             || !Jay_PrintOrchestratorService::isWithinPrintWindow())
+        #            {
+        #                info("⏸ Printing not permitted — waiting");
+        #                sleep(30000); // yield; wakes fast enough to be responsive
+        #                continue;
+        #            }
+        #
+        #            // -----------------------------------------------------
+        #            // 2c. PRODUCTION
+        #            // -----------------------------------------------------
+        #            try
+        #            {
+        #                passPrinted =
+        #                    Jay_PrintOrchestratorService::drainQueueChunk(
+        #                        Jay_ExportQueueType::Production,
+        #                        dedupe);
+        #            }
+        #            catch (Exception::Error)
+        #            {
+        #                error("❌ [C1-FAIL] drainQueueChunk(PROD) threw");
+        #                passPrinted = 0;
+        #            }
+        #
+        #            if (passPrinted > 0)
+        #            {
+        #                totalPrinted += passPrinted;
+        #                continue;
+        #            }
+        #
+        #            // -----------------------------------------------------
+        #            // 2d. HISTORICAL
+        #            // -----------------------------------------------------
+        #            try
+        #            {
+        #                passPrinted =
+        #                    Jay_PrintOrchestratorService::drainQueueChunk(
+        #                        Jay_ExportQueueType::Historical,
+        #                        dedupe);
+        #            }
+        #            catch (Exception::Error)
+        #            {
+        #                error("❌ [C2-FAIL] drainQueueChunk(HIST) threw");
+        #                passPrinted = 0;
+        #            }
+        #
+        #            if (passPrinted > 0)
+        #            {
+        #                totalPrinted += passPrinted;
+        #                continue;
+        #            }
+        #
+        #            // -----------------------------------------------------
+        #            // 2e. Work exists, but nothing printable right now
+        #            // -----------------------------------------------------
+        #            sleep(5000); // short yield to avoid spin
+        #        }
+        #
+        #        // ---------------------------------------------------------
+        #        // 3. RECONCILE
+        #        // ---------------------------------------------------------
+        #        try
+        #        {
+        #            Jay_PrintOrchestratorService::reconcile(Jay_ExportQueueType::Production);
+        #        }
+        #        catch (Exception::Error)
+        #        {
+        #            error("❌ [D1-FAIL] reconcile(PROD) threw");
+        #        }
+        #
+        #        try
+        #        {
+        #            Jay_PrintOrchestratorService::reconcile(Jay_ExportQueueType::Historical);
+        #        }
+        #        catch (Exception::Error)
+        #        {
+        #            error("❌ [D2-FAIL] reconcile(HIST) threw");
+        #        }
+        #
+        #        info("✔ [D-END] Reconcile completed");
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        error("🔥 [C-TOP-FAIL] Unexpected exception in run loop");
+        #    }
+        #
+        #    // -------------------------------------------------------------
+        #    // 4. ALWAYS RELEASE STATE
+        #    // -------------------------------------------------------------
+        #    try
+        #    {
+        #        Jay_PrintOrchestratorService::clearPendingPrintCycle();
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        error("❌ [E2-FAIL] clearPendingPrintCycle threw");
+        #    }
+        #
+        #    try
+        #    {
+        #        Jay_PrintOrchestratorService::endPrint();
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        error("❌ [E1-FAIL] endPrint() threw");
+        #    }
+        #
+        #    info(strFmt("✔ [F] Print cycle complete (%1 documents).", totalPrinted));
+        #}
+        #
+      ENDSOURCE
+      SOURCE #safeStr
+        #public static str safeStr(anytype _v)
+        #{
+        #    str s;
+        #
+        #    if (!_v)
+        #        return "";
+        #
+        #    // Convert anything into text
+        #    s = any2str(_v);
+        #
+        #    // Safety limit: SQL Notes field tops around 4K
+        #    if (strLen(s) > 4000)
+        #        s = subStr(s, 1, 4000);
+        #
+        #    return s;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #setPendingPrintCycle
+        #public static boolean setPendingPrintCycle()
+        #        {
+        #            Jay_PrintGovernorState upd = Jay_PrintGovernorState::findOrCreate();
+        #            boolean acquired = false;
+        #
+        #            ttsBegin;
+        #
+        #            select firstOnly forUpdate upd
+        #                where upd.RecId == upd.RecId;
+        #
+        #            if (upd.PendingPrintCycle == NoYes::No)
+        #            {
+        #                upd.PendingPrintCycle    = NoYes::Yes;
+        #                upd.LastPrintScheduleUtc = DateTimeUtil::utcNow();
+        #                upd.update();
+        #                acquired = true;
+        #            }
+        #
+        #            ttsCommit;
+        #
+        #            return acquired;
+        #        }
+      ENDSOURCE
+      SOURCE #setQueueSpid
+        #public static void setQueueSpid(
+        #    Jay_ExportQueueType _queueType,
+        #    RecId               _queueRecId,
+        #    int                 _spid
+        #)
+        #{
+        #    Jay_DocExportProdQueue prodLock;
+        #    Jay_DocExportHistQueue histLock;
+        #
+        #    if (_spid <= 0)
+        #        return; // invalid SPID; silently ignore
+        #
+        #    try
+        #    {
+        #        ttsBegin;
+        #
+        #        switch (_queueType)
+        #        {
+        #            case Jay_ExportQueueType::Production:
+        #                select forUpdate prodLock
+        #                    where prodLock.RecId == _queueRecId;
+        #
+        #                if (prodLock.RecId)
+        #                {
+        #                    prodLock.SPID = _spid;
+        #                    prodLock.update();
+        #                }
+        #                break;
+        #
+        #            case Jay_ExportQueueType::Historical:
+        #                select forUpdate histLock
+        #                    where histLock.RecId == _queueRecId;
+        #
+        #                if (histLock.RecId)
+        #                {
+        #                    histLock.SPID = _spid;
+        #                    histLock.update();
+        #                }
+        #                break;
+        #        }
+        #
+        #        ttsCommit;
+        #    }
+        #    catch (Exception::Deadlock)
+        #    {
+        #        // Don't crash print cycle because SPID write failed
+        #        warning(strFmt("SPID write deadlock: QueueType=%1 RecId=%2 SPID=%3",
+        #                       enum2str(_queueType), _queueRecId, _spid));
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        warning(strFmt("SPID write failed: QueueType=%1 RecId=%2 SPID=%3",
+        #                       enum2str(_queueType), _queueRecId, _spid));
+        #    }
+        #}
+      ENDSOURCE
+      SOURCE #tryStartPrint
+        #private static boolean tryStartPrint()
+        #{
+        #    Jay_PrintGovernorState s;
+        #    boolean acquired = false;
+        #
+        #    // Load the specific singleton row
+        #    s = Jay_PrintGovernorState::findOrCreate();
+        #
+        #    ttsBegin;
+        #
+        #    // Lock only the singleton row
+        #    select firstOnly forUpdate s
+        #        where s.RecId == s.RecId;
+        #
+        #    if (s.IsPrinting == NoYes::No)
+        #    {
+        #        s.IsPrinting    = NoYes::Yes;
+        #        s.LastUpdateUtc = DateTimeUtil::utcNow();
+        #        s.update();
+        #        acquired = true;
+        #    }
+        #
+        #    ttsCommit;
+        #
+        #    return acquired;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #updateErrorMessage
+        #public static void updateErrorMessage(
+        #        Jay_ExportQueueType   _queueType,
+        #        RecId                 _queueRecId,
+        #        str                   _errorMessage)
+        #{
+        #    Jay_DocExportProdQueue  prodLock;
+        #    Jay_DocExportHistQueue  histLock;
+        #    boolean                 isProd;
+        #    str                     msg;
+        #
+        #    // Soft sanitize for Notes
+        #    if (strLen(_errorMessage) > 5000)
+        #    {
+        #        msg = subStr(_errorMessage, 1, 5000);
+        #    }
+        #    else
+        #    {
+        #        msg = _errorMessage;
+        #    }
+        #
+        #    isProd = (_queueType == Jay_ExportQueueType::Production);
+        #
+        #    try
+        #    {
+        #        ttsBegin;
+        #
+        #        if (isProd)
+        #        {
+        #            select forUpdate prodLock
+        #                where prodLock.RecId == _queueRecId;
+        #
+        #            if (prodLock.RecId)
+        #            {
+        #                prodLock.ErrorMessage = msg;
+        #                prodLock.update();
+        #            }
+        #        }
+        #        else
+        #        {
+        #            select forUpdate histLock
+        #                where histLock.RecId == _queueRecId;
+        #
+        #            if (histLock.RecId)
+        #            {
+        #                histLock.ErrorMessage = msg;
+        #                histLock.update();
+        #            }
+        #        }
+        #
+        #        ttsCommit;
+        #    }
+        #    catch (Exception::Deadlock)
+        #    {
+        #        error(strFmt(
+        #            "Deadlock updating queue ErrorMessage: QueueType=%1 RecId=%2",
+        #            enum2str(_queueType),
+        #            int642str(_queueRecId)
+        #        ));
+        #    }
+        #    catch (Exception::Error)
+        #    {
+        #        error(strFmt(
+        #            "Unexpected failure updating queue ErrorMessage: QueueType=%1 RecId=%2",
+        #            enum2str(_queueType),
+        #            int642str(_queueRecId)
+        #        ));
+        #    }
+        #}
+        #
+      ENDSOURCE
+    ENDMETHODS
+  ENDCLASS
+
+***Element: END

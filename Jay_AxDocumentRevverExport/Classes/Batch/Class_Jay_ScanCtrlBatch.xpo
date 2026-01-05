@@ -1,0 +1,136 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: CLS
+
+; Microsoft Dynamics AX Class: Jay_ScanCtrlBatch unloaded
+; --------------------------------------------------------------------------------
+  CLSVERSION 1
+  
+  CLASS #Jay_ScanCtrlBatch
+    PROPERTIES
+      Name                #Jay_ScanCtrlBatch
+      Extends             #RunBaseBatch
+      Origin              #{DF05FB4E-65BC-4BB2-A951-F326DD2CB8B2}
+    ENDPROPERTIES
+    
+    METHODS
+      SOURCE #classDeclaration
+        #// Jay_ScanCtrlBatch
+        #class Jay_ScanCtrlBatch extends RunBaseBatch
+        #{
+        #    #define.CurrentVersion(1)
+        #
+        #    RecId _scanRecId;
+        #    Name   _functionName;   // e.g. "StartScan" | "Cleanup"
+        #    BatchCaption taskCaption;
+        #}
+        #
+        #
+      ENDSOURCE
+      SOURCE #pack
+        #public container pack()
+        #{
+        #    // Version first so unpack knows how to handle old/new shapes
+        #    return [#CurrentVersion, _scanRecId, _functionName];
+        #}
+        #
+      ENDSOURCE
+      SOURCE #parmCaption
+        #
+        #public BatchCaption parmCaption(BatchCaption _caption = taskCaption)
+        #{
+        #    taskCaption = _caption;
+        #    return taskCaption;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #parmFunctionName
+        #public str parmFunctionName(str _value = _functionName)
+        #{
+        #    _functionName = _value;
+        #    return _functionName;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #parmRecId
+        #
+        #public RecId parmRecId(RecId _value = _scanRecId)
+        #{
+        #    _scanRecId = _value;
+        #    return _scanRecId;
+        #}
+        #
+      ENDSOURCE
+      SOURCE #run
+        #public void run()
+        #{
+        #    RecId recId = this.parmRecId();
+        #    str   func  = this.parmFunctionName();
+        #
+        #    // Helpful debug line while testing — remove after verification
+        #    warning(strFmt("DEBUG: Jay_ScanCtrlBatch.run() recId=%1 func=%2", recId, func));
+        #
+        #    if (!recId)
+        #    {
+        #        warning("⚠️ No Scan RecId specified for Jay_ScanCtrlBatch.");
+        #        return;
+        #    }
+        #
+        #    if (!func || strLen(func) == 0)
+        #    {
+        #        // default behavior if function not provided
+        #        func = "StartScan";
+        #    }
+        #
+        #    if (func == "StartScan")
+        #    {
+        #        Jay_ScanCtrlService::execute(recId);
+        #    }
+        #    else if (func == "Cleanup")
+        #    {
+        #        Jay_ArbitrationService::maintainHealth();
+        #    }
+        #    else
+        #    {
+        #        warning(strFmt("⚠️ Jay_ScanCtrlBatch: unknown function '%1' for RecId %2", func, recId));
+        #    }
+        #}
+        #
+      ENDSOURCE
+      SOURCE #unpack
+        #public boolean unpack(container _packedClass)
+        #{
+        #    Version version = conPeek(_packedClass, 1);
+        #
+        #    switch (version)
+        #    {
+        #        case #CurrentVersion:
+        #            _scanRecId     = any2int64(conPeek(_packedClass, 2));
+        #            _functionName  = any2Str(conPeek(_packedClass, 3));
+        #            break;
+        #        default:
+        #            return false;
+        #    }
+        #
+        #    return true;
+        #}
+      ENDSOURCE
+      SOURCE #description
+        #public static ClassDescription description()
+        #{
+        #    return "Jay_ScanCtrlBatch – executes a ScanCtrl job (StartScan / Cleanup).";
+        #}
+        #
+      ENDSOURCE
+      SOURCE #main
+        #public static void main(Args _args)
+        #{
+        #    Jay_ScanCtrlBatch job = new Jay_ScanCtrlBatch();
+        #    job.run();
+        #}
+      ENDSOURCE
+    ENDMETHODS
+  ENDCLASS
+
+***Element: END

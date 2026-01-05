@@ -1,0 +1,44 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: CLS
+
+; Microsoft Dynamics AX Class: Jay_RunMode_OneOff unloaded
+; --------------------------------------------------------------------------------
+  CLSVERSION 1
+  
+  CLASS #Jay_RunMode_OneOff
+    PROPERTIES
+      Name                #Jay_RunMode_OneOff
+      Extends             #Jay_RunMode
+      Origin              #{4235B91A-57BC-44BA-B3D3-DCD08220CF33}
+    ENDPROPERTIES
+    
+    METHODS
+      SOURCE #childStartTimeUtc
+        #public utcDateTime childStartTimeUtc(Jay_ScanCtrl _parent)
+        #{
+        #    // One-off mode does not normally spawn children; default to cadence pattern
+        #    return this.calcNextStartAfterNow(_parent.ScanStartDateTime,
+        #                                        _parent.ScanValue,
+        #                                        _parent.ScanUnit);
+        #}
+      ENDSOURCE
+      SOURCE #classDeclaration
+        #public class Jay_RunMode_OneOff extends Jay_RunMode
+        #{
+        #}
+      ENDSOURCE
+      SOURCE #nextStartTimeUtc
+        #public utcDateTime nextStartTimeUtc(utcDateTime    _baseTime,
+        #                                    int            _scanValue,
+        #                                    Jay_CadenceUnit _scanUnit)
+        #{
+        #    // One-off mode: follow the same cadence pattern as AutoRepeat
+        #    return this.calcNextStartAfterNow(_baseTime, _scanValue, _scanUnit);
+        #}
+      ENDSOURCE
+    ENDMETHODS
+  ENDCLASS
+
+***Element: END

@@ -1,0 +1,76 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: DBT
+
+; Microsoft Dynamics AX Table : Jay_ExportDocReportTmp unloaded
+; --------------------------------------------------------------------------------
+  TABLEVERSION 1
+  
+  TABLE #Jay_ExportDocReportTmp
+    EnforceFKRelation 1
+    PROPERTIES
+      Name                #Jay_ExportDocReportTmp
+      Label               #Jay_ExportDocReportTmp
+      TableType           #TempDB
+      CreateRecIdIndex    #Yes
+      PrimaryIndex        #SurrogateKey
+      ClusterIndex        #SurrogateKey
+      Origin              #{61680FDD-1612-46CA-A43F-EC5F733E954F}
+    ENDPROPERTIES
+    
+    FIELDS
+      FIELD #DocType
+        STRING
+        PROPERTIES
+          Name                #DocType
+          Table               #Jay_ExportDocReportTmp
+          Origin              #{5B93EC5A-A468-42E4-ACEA-0D249E932AD5}
+          StringSize          #50
+        ENDPROPERTIES
+        
+      FIELD #RecCounter
+        INT
+        PROPERTIES
+          Name                #RecCounter
+          Table               #Jay_ExportDocReportTmp
+          Origin              #{8045A7DD-ABF7-40A9-B9E8-1F8E6E4316DF}
+        ENDPROPERTIES
+        
+      FIELD #RowType
+        STRING
+        PROPERTIES
+          Name                #RowType
+          Table               #Jay_ExportDocReportTmp
+          Origin              #{506ECD7D-15A2-42C0-A9C6-1A20ACA747A1}
+        ENDPROPERTIES
+        
+      FIELD #SubType
+        STRING
+        PROPERTIES
+          Name                #SubType
+          Table               #Jay_ExportDocReportTmp
+          Origin              #{FD2D100D-C851-4EDF-813F-DBD335EC01CC}
+          StringSize          #50
+        ENDPROPERTIES
+        
+    ENDFIELDS
+    GROUPS
+    ENDGROUPS
+    
+    INDICES
+    ENDINDICES
+    FULLTEXTINDICES
+    ENDFULLTEXTINDICES
+    REFERENCES
+    ENDREFERENCES
+    
+    DELETEACTIONS
+    ENDDELETEACTIONS
+    
+    METHODS
+    ENDMETHODS
+  ENDTABLE
+  
+
+***Element: END

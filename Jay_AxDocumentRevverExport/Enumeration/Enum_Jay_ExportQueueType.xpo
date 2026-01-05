@@ -1,0 +1,37 @@
+﻿Exportfile for AOT version 1.0 or later
+Formatversion: 1
+
+***Element: DBE
+
+; Microsoft Dynamics AX Enumtype : Jay_ExportQueueType unloaded
+; --------------------------------------------------------------------------------
+  ENUMTYPEVERSION 1
+  
+  ENUMTYPE #Jay_ExportQueueType
+    PROPERTIES
+      Name                #Jay_ExportQueueType
+      Label               #Queue Historical or Production
+      UseEnumValue        #Yes
+      Origin              #{0A703BED-C02A-42A2-9CC4-02CB3BB6A9B9}
+    ENDPROPERTIES
+    
+    TYPEELEMENTS
+      #Production
+      PROPERTIES
+        Name                #Production
+        Label               #Production
+        EnumValue           #0
+      ENDPROPERTIES
+      
+      #Historical
+      PROPERTIES
+        Name                #Historical
+        Label               #Historical
+        EnumValue           #1
+      ENDPROPERTIES
+      
+    ENDTYPEELEMENTS
+  ENDENUMTYPE
+  
+
+***Element: END
