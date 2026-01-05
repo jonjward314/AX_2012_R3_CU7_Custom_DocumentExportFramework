@@ -1340,27 +1340,29 @@ Formatversion: 1
       ENDSOURCE
       SOURCE #setPendingPrintCycle
         #public static boolean setPendingPrintCycle()
-        #        {
-        #            Jay_PrintGovernorState upd = Jay_PrintGovernorState::findOrCreate();
-        #            boolean acquired = false;
+        #{
+        #    Jay_PrintGovernorState s   = Jay_PrintGovernorState::findOrCreate();
+        #    Jay_PrintGovernorState lck;
+        #    boolean acquired = false;
         #
-        #            ttsBegin;
+        #    ttsBegin;
         #
-        #            select firstOnly forUpdate upd
-        #                where upd.RecId == upd.RecId;
+        #    select firstOnly forUpdate lck
+        #        where lck.RecId == s.RecId;   // lock the canonical row
         #
-        #            if (upd.PendingPrintCycle == NoYes::No)
-        #            {
-        #                upd.PendingPrintCycle    = NoYes::Yes;
-        #                upd.LastPrintScheduleUtc = DateTimeUtil::utcNow();
-        #                upd.update();
-        #                acquired = true;
-        #            }
+        #    if (lck.RecId
+        #     && lck.PendingPrintCycle == NoYes::No
+        #     && lck.IsPrinting == NoYes::No)
+        #    {
+        #        lck.PendingPrintCycle    = NoYes::Yes;
+        #        lck.LastPrintScheduleUtc = DateTimeUtil::utcNow();
+        #        lck.update();
+        #        acquired = true;
+        #    }
         #
-        #            ttsCommit;
-        #
-        #            return acquired;
-        #        }
+        #    ttsCommit;
+        #    return acquired;
+        #}
       ENDSOURCE
       SOURCE #setQueueSpid
         #public static void setQueueSpid(

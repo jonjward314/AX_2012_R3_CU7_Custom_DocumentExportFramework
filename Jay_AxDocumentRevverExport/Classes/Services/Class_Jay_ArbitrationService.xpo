@@ -401,134 +401,212 @@ Formatversion: 1
       SOURCE #DetectStuckPrinter
         #public static void DetectStuckPrinter()
         #{
-        #    Jay_DocExportProdQueue pq;
-        #    Jay_DocExportHistQueue hq;
-        #    Jay_PrintGovernorState gov;
-        #    BatchJob               job;
+        #    Jay_DocExportProdQueue  pq;
+        #    Jay_DocExportHistQueue  hq;
+        #    Jay_PrintGovernorState  gov;
+        #    BatchJob                job;
+        #    boolean changed;
         #
-        #    utcDateTime nowUtc   = DateTimeUtil::utcNow();
+        #    utcDateTime nowUtc = DateTimeUtil::utcNow();
         #    int         ageSeconds;
-        #    int         thresholdMinutes = 10;
+        #    int         thresholdMinutes = 15;
         #    int         thresholdSeconds = thresholdMinutes * 60;
         #
-        #    Name caption = Jay_PrintOrchestratorService::printCycleCaption();
+        #    Name        caption = Jay_PrintOrchestratorService::printCycleCaption();
         #
-        #    boolean isProd = false;
+        #    boolean     foundStuck     = false;
+        #    boolean     canceledJob    = false;
+        #    boolean     clearedGov     = false;
         #
-        #    //----------------------------------------------------------------------
-        #    // 1. Find the active processing row (PROD preferred)
-        #    //----------------------------------------------------------------------
-        #    select firstOnly pq
-        #        where pq.Status == Jay_ExportQueueStatus::Processing;
-        #
-        #    if (pq.RecId)
-        #    {
-        #        isProd = true;
-        #    }
-        #    else
-        #    {
-        #        select firstOnly hq
-        #            where hq.Status == Jay_ExportQueueStatus::Processing;
-        #
-        #        if (!hq.RecId)
-        #        {
-        #            // Nothing printing anywhere
-        #            return;
-        #        }
-        #    }
-        #
-        #    //----------------------------------------------------------------------
-        #    // 2. Compute age
-        #    //----------------------------------------------------------------------
-        #    if (isProd)
+        #    // ---------------------------------------------------------------------
+        #    // 1) Scan PROD processing rows; reset only truly stuck ones
+        #    // ---------------------------------------------------------------------
+        #    while select forUpdate pq
+        #        where pq.Status == Jay_ExportQueueStatus::Processing
         #    {
         #        if (pq.LastAttemptUtc == DateTimeUtil::minValue())
         #            ageSeconds = thresholdSeconds + 1;
         #        else
         #            ageSeconds = DateTimeUtil::getDifference(nowUtc, pq.LastAttemptUtc);
-        #    }
-        #    else
-        #    {
-        #        if (hq.LastAttemptUtc == DateTimeUtil::minValue())
-        #            ageSeconds = thresholdSeconds + 1;
-        #        else
-        #            ageSeconds = DateTimeUtil::getDifference(nowUtc, hq.LastAttemptUtc);
-        #    }
         #
-        #    if (ageSeconds <= thresholdSeconds)
-        #        return; // not stuck
+        #        if (ageSeconds <= thresholdSeconds)
+        #            continue; // leave active rows alone
         #
-        #    //----------------------------------------------------------------------
-        #    // 3. Locate the executing PrintCycle batch
-        #    //----------------------------------------------------------------------
-        #    select firstOnly job
-        #        where job.Caption == caption
-        #          && job.Status  == BatchStatus::Executing;
+        #        foundStuck = true;
         #
-        #    //----------------------------------------------------------------------
-        #    // 4. Cancel batch (CU7-safe)
-        #    //----------------------------------------------------------------------
-        #    if (job.RecId)
-        #    {
+        #        // -------------------------------------------------------------
+        #        // 2) Cancel PrintCycle batch ONCE (best-effort, CU7-safe)
+        #        // -------------------------------------------------------------
+        #        if (!canceledJob)
+        #        {
+        #            select firstOnly job
+        #                where job.Caption == caption
+        #                  && job.Status  == BatchStatus::Executing;
+        #
+        #            if (job.RecId)
+        #            {
+        #                ttsBegin;
+        #                select forUpdate job where job.RecId == job.RecId;
+        #                job.Status = BatchStatus::Canceled;
+        #                job.update();
+        #                ttsCommit;
+        #
+        #                warning(strFmt(
+        #                    "🛑 CU7-safe cancel: PrintCycle batch %1 canceled (age=%2 sec).",
+        #                    job.RecId,
+        #                    ageSeconds));
+        #            }
+        #
+        #            canceledJob = true; // even if not found, don't thrash the query
+        #        }
+        #
+        #        // -------------------------------------------------------------
+        #        // 3) Clear governor flags ONCE (best-effort)
+        #        // -------------------------------------------------------------
+        #        if (!clearedGov)
+        #        {
+        #            gov = Jay_PrintGovernorState::findOrCreate();
+        #
+        #            ttsBegin;
+        #            select firstOnly forUpdate gov
+        #                where gov.RecId == gov.RecId; // lock canonical row
+        #
+        #            if (gov.RecId)
+        #            {
+        #                changed = false;
+        #
+        #                if (gov.IsPrinting)
+        #                {
+        #                    gov.IsPrinting = NoYes::No;
+        #                    changed = true;
+        #                }
+        #
+        #                if (gov.PendingPrintCycle)
+        #                {
+        #                    gov.PendingPrintCycle = NoYes::No;
+        #                    changed = true;
+        #                }
+        #
+        #                if (changed)
+        #                {
+        #                    gov.update();
+        #                    warning("🔓 Governor flags cleared (IsPrinting/PendingPrintCycle).");
+        #                }
+        #            }
+        #            ttsCommit;
+        #
+        #            clearedGov = true;
+        #        }
+        #
+        #        // -------------------------------------------------------------
+        #        // 4) Reset owning PROD row (safe; pq is already forUpdate)
+        #        // -------------------------------------------------------------
         #        ttsBegin;
-        #        select forupdate job where job.RecId == job.RecId;
-        #        job.Status = BatchStatus::Canceled;
-        #        job.update();
-        #        ttsCommit;
-        #
-        #        warning(strFmt(
-        #            "🛑 CU7-safe cancel: PrintCycle batch %1 canceled (age=%2 sec).",
-        #            job.RecId,
-        #            ageSeconds));
-        #    }
-        #
-        #    //----------------------------------------------------------------------
-        #    // 5. Clear governor IsPrinting
-        #    //----------------------------------------------------------------------
-        #    gov = Jay_PrintGovernorState::findOrCreate();
-        #
-        #    ttsBegin;
-        #    select forupdate gov where gov.RecId == gov.RecId;
-        #
-        #    if (gov.IsPrinting)
-        #    {
-        #        gov.IsPrinting = NoYes::No;
-        #        gov.update();
-        #        warning("🔓 Governor IsPrinting cleared.");
-        #    }
-        #
-        #    ttsCommit;
-        #
-        #    //----------------------------------------------------------------------
-        #    // 6. Reset owning queue row ONLY
-        #    //----------------------------------------------------------------------
-        #    ttsBegin;
-        #
-        #    if (isProd)
-        #    {
-        #        select forupdate pq where pq.RecId == pq.RecId;
         #        pq.Attempts++;
         #        pq.Status = Jay_ExportQueueStatus::FailedExport; // or WaitingRetry
         #        pq.update();
+        #        ttsCommit;
         #
         #        warning(strFmt(
         #            "⟳ PROD queue row %1 reset due to stuck print.",
         #            pq.RecId));
         #    }
-        #    else
+        #
+        #    // ---------------------------------------------------------------------
+        #    // 5) Scan HIST processing rows; reset only truly stuck ones
+        #    // ---------------------------------------------------------------------
+        #    while select forUpdate hq
+        #        where hq.Status == Jay_ExportQueueStatus::Processing
         #    {
-        #        select forupdate hq where hq.RecId == hq.RecId;
-        #        hq.Status = Jay_ExportQueueStatus::FailedExport;
+        #        if (hq.LastAttemptUtc == DateTimeUtil::minValue())
+        #            ageSeconds = thresholdSeconds + 1;
+        #        else
+        #            ageSeconds = DateTimeUtil::getDifference(nowUtc, hq.LastAttemptUtc);
+        #
+        #        if (ageSeconds <= thresholdSeconds)
+        #            continue; // leave active rows alone
+        #
+        #        foundStuck = true;
+        #
+        #        // -------------------------------------------------------------
+        #        // 2) Cancel PrintCycle batch ONCE (best-effort, CU7-safe)
+        #        // -------------------------------------------------------------
+        #        if (!canceledJob)
+        #        {
+        #            select firstOnly job
+        #                where job.Caption == caption
+        #                  && job.Status  == BatchStatus::Executing;
+        #
+        #            if (job.RecId)
+        #            {
+        #                ttsBegin;
+        #                select forUpdate job where job.RecId == job.RecId;
+        #                job.Status = BatchStatus::Canceled;
+        #                job.update();
+        #                ttsCommit;
+        #
+        #                warning(strFmt(
+        #                    "🛑 CU7-safe cancel: PrintCycle batch %1 canceled (age=%2 sec).",
+        #                    job.RecId,
+        #                    ageSeconds));
+        #            }
+        #
+        #            canceledJob = true; // even if not found, don't thrash the query
+        #        }
+        #
+        #        // -------------------------------------------------------------
+        #        // 3) Clear governor flags ONCE (best-effort)
+        #        // -------------------------------------------------------------
+        #        if (!clearedGov)
+        #        {
+        #            gov = Jay_PrintGovernorState::findOrCreate();
+        #
+        #            ttsBegin;
+        #            select firstOnly forUpdate gov
+        #                where gov.RecId == gov.RecId; // lock canonical row
+        #
+        #            if (gov.RecId)
+        #            {
+        #                changed = false;
+        #
+        #                if (gov.IsPrinting)
+        #                {
+        #                    gov.IsPrinting = NoYes::No;
+        #                    changed = true;
+        #                }
+        #
+        #                if (gov.PendingPrintCycle)
+        #                {
+        #                    gov.PendingPrintCycle = NoYes::No;
+        #                    changed = true;
+        #                }
+        #
+        #                if (changed)
+        #                {
+        #                    gov.update();
+        #                    warning("🔓 Governor flags cleared (IsPrinting/PendingPrintCycle).");
+        #                }
+        #            }
+        #            ttsCommit;
+        #
+        #            clearedGov = true;
+        #        }
+        #
+        #        // -------------------------------------------------------------
+        #        // 6) Reset owning HIST row (safe; hq is already forUpdate)
+        #        // -------------------------------------------------------------
+        #        ttsBegin;
+        #        hq.Status = Jay_ExportQueueStatus::FailedExport; // or WaitingRetry
         #        hq.update();
+        #        ttsCommit;
         #
         #        warning(strFmt(
         #            "⟳ HIST queue row %1 reset due to stuck print.",
         #            hq.RecId));
         #    }
         #
-        #    ttsCommit;
-        #
-        #    warning("🧹 CU7-safe printer recovery complete.");
+        #    if (foundStuck)
+        #        warning("🧹 CU7-safe printer recovery complete.");
         #}
         #
       ENDSOURCE
