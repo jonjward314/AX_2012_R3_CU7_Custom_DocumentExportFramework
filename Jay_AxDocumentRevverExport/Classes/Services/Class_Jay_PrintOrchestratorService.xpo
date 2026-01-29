@@ -854,8 +854,8 @@ Formatversion: 1
       SOURCE #printBatchExists
         #public static boolean printBatchExists()
         #{
-        #    Batch bh;
-        #    Name  caption = Jay_PrintOrchestratorService::printCycleCaption();
+        #    BatchJob bh;
+        #    Name     caption = Jay_PrintOrchestratorService::printCycleCaption();
         #
         #    select firstOnly bh
         #        where bh.Caption == caption
