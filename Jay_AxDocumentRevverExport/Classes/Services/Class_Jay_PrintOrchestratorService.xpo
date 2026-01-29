@@ -523,7 +523,7 @@ Formatversion: 1
         #{
         #    Jay_PrintGovernorState s = Jay_PrintGovernorState::findOrCreate();
         #    Jay_PrintGovernorState sUpd;
-        #    Batch bh;
+        #    BatchJob bh;
         #    boolean activeFound = false;
         #
         #    if (s.IsPrinting != NoYes::Yes)
