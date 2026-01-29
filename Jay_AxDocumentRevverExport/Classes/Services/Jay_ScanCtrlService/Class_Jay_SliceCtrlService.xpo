@@ -74,6 +74,8 @@ Formatversion: 1
         #        scan.update();
         #        ttscommit;
         #
+        #        Jay_ScanCtrlService::handlePostCompletion(scan.RecId);
+        #
         #        return; // <-- Skip StartScanSliceProcessing
         #    }
         #
