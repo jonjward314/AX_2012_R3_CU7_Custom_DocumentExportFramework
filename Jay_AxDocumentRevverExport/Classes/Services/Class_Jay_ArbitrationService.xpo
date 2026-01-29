@@ -790,7 +790,7 @@ Formatversion: 1
         #    Jay_SliceCtrl         slice;
         #    Jay_DocExportProdQueue prod;
         #    Jay_DocExportHistQueue hist;
-        #    Batch                 job;
+        #    BatchJob                 job;
         #
         #    Jay_ExportQueueType   qt;
         #
