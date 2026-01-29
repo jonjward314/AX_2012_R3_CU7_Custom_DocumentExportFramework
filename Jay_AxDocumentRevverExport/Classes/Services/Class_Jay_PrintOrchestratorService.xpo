@@ -881,7 +881,7 @@ Formatversion: 1
       SOURCE #printCycleBatchExists
         #public static boolean printCycleBatchExists()
         #{
-        #    Batch bh;
+        #    BatchJob bh;
         #
         #    while select bh
         #        where bh.Caption == Jay_PrintOrchestratorService::printCycleCaption()
