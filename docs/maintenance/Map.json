@@ -1,0 +1,239 @@
+{
+  "entry_points": [
+    {
+      "name": "Jay_ArbitrationBatch",
+      "type": "RunBaseBatch",
+      "file": "Classes/Batch/Class_Jay_ArbitrationBatch.xpo",
+      "notes": "Batch worker for Heartbeat, GenerateScanSlices, RequestProcessPrintQueue."
+    },
+    {
+      "name": "Jay_ScanCtrlBatch",
+      "type": "RunBaseBatch",
+      "file": "Classes/Batch/Class_Jay_ScanCtrlBatch.xpo",
+      "notes": "Executes scan start/cleanup tasks."
+    },
+    {
+      "name": "Jay_SliceCtrlBatch",
+      "type": "RunBaseBatch",
+      "file": "Classes/Batch/Class_Jay_SliceCtrlBatch.xpo",
+      "notes": "Processes slice-level export enqueue tasks."
+    },
+    {
+      "name": "notifyBatchReady",
+      "type": "Job",
+      "file": "Job_notifyBatchReady.xpo",
+      "notes": "Schedules PrintCycle when queue work exists."
+    },
+    {
+      "name": "Jay_ClearAllExportTables",
+      "type": "Job",
+      "file": "Job_Jay_ClearAllExportTables.xpo",
+      "notes": "Destructive table clear utility."
+    },
+    {
+      "name": "Jay_OpenExportRuntimeSettings",
+      "type": "MenuEntryPoint",
+      "file": "Classes/MenuEntryPoint/Class_Jay_OpenExportRuntimeSettings.xpo",
+      "notes": "Opens runtime settings table."
+    }
+  ],
+  "governors": [
+    {
+      "name": "Jay_PrintOrchestratorService",
+      "file": "Classes/Services/Class_Jay_PrintOrchestratorService.xpo",
+      "locks": ["Jay_PrintGovernorState.IsPrinting"],
+      "flags": ["Jay_PrintGovernorState.PendingPrintCycle", "Jay_PrintGovernorState.LastPrintScheduleUtc"],
+      "clears_on": ["endPrint()", "clearPendingPrintCycle()", "ensureGovernorNotStuck()", "healPrintLocks()"],
+      "notes": "Single-run print cycle governor; schedules and reconciles printing."
+    },
+    {
+      "name": "Jay_ArbitrationService (Heartbeat)",
+      "file": "Classes/Services/Class_Jay_ArbitrationService.xpo",
+      "locks": ["Jay_ExportRuntimeSettingsTable.HeartbeatLock"],
+      "flags": ["Jay_ExportRuntimeSettingsTable.LastHeartbeatUTC"],
+      "clears_on": ["heartbeat() completion", "heartbeat() exception"],
+      "notes": "Prevents overlapping heartbeat runs and schedules periodic recovery."
+    }
+  ],
+  "batch_jobs": [
+    {
+      "name": "Jay_ArbitrationBatch",
+      "file": "Classes/Batch/Class_Jay_ArbitrationBatch.xpo",
+      "schedule_notes": "Used for heartbeat and print-cycle requests.",
+      "depends_on": ["Jay_ArbitrationService", "Jay_PrintOrchestratorService"]
+    },
+    {
+      "name": "Jay_ScanCtrlBatch",
+      "file": "Classes/Batch/Class_Jay_ScanCtrlBatch.xpo",
+      "schedule_notes": "Scan start/cleanup tasks.",
+      "depends_on": ["Jay_ScanCtrlService"]
+    },
+    {
+      "name": "Jay_SliceCtrlBatch",
+      "file": "Classes/Batch/Class_Jay_SliceCtrlBatch.xpo",
+      "schedule_notes": "Slice processing tasks.",
+      "depends_on": ["Jay_SliceCtrlService"]
+    }
+  ],
+  "tables": [
+    {
+      "name": "Jay_DocExportProdQueue",
+      "role": "queue",
+      "key_fields": ["RecId", "Status", "Attempts", "LastAttemptUtc", "ParentBatchRecId", "SliceId", "ParentScanId"],
+      "notes": "Production export/print queue."
+    },
+    {
+      "name": "Jay_DocExportHistQueue",
+      "role": "queue",
+      "key_fields": ["RecId", "Status", "Attempts", "LastAttemptUtc", "ParentBatchRecId", "SliceId", "ParentScanId"],
+      "notes": "Historical export/print queue."
+    },
+    {
+      "name": "Jay_BatchCtrl",
+      "role": "lock",
+      "key_fields": ["RecId", "Status", "ParentSliceRecId"],
+      "notes": "Batch lifecycle tracking for slice work."
+    },
+    {
+      "name": "Jay_SliceCtrl",
+      "role": "lock",
+      "key_fields": ["RecId", "SliceStatus", "ParentScanId", "EnqueueBatchHeaderId"],
+      "notes": "Slice lifecycle tracking."
+    },
+    {
+      "name": "Jay_ScanCtrl",
+      "role": "lock",
+      "key_fields": ["RecId", "ScanStatus", "BatchHeaderRecId_Enqueue", "BatchHeaderRecId_Print"],
+      "notes": "Scan lifecycle tracking."
+    },
+    {
+      "name": "Jay_PrintGovernorState",
+      "role": "lock",
+      "key_fields": ["IsPrinting", "PendingPrintCycle", "LastPrintScheduleUtc", "LastUpdateUtc"],
+      "notes": "Singleton governor row for print cycle."
+    },
+    {
+      "name": "Jay_ExportRuntimeSettingsTable",
+      "role": "settings",
+      "key_fields": ["HeartbeatLock", "LastHeartbeatUTC", "ProdEnqueuePause", "HistEnqueuePause", "PrintWindowEnabled"],
+      "notes": "Runtime settings + heartbeat lock."
+    },
+    {
+      "name": "Jay_PrintDedupeTable",
+      "role": "dedupe",
+      "key_fields": ["ScanId", "DocType", "DocumentRecId"],
+      "notes": "Dedupe markers for printed documents."
+    },
+    {
+      "name": "Jay_ArbitrationHistoryLog",
+      "role": "log",
+      "key_fields": ["LoggedDateTime", "Action", "QueueType"],
+      "notes": "Arbitration history log."
+    }
+  ],
+  "state_markers": [
+    {
+      "marker": "IsPrinting",
+      "table": "Jay_PrintGovernorState",
+      "field": "IsPrinting",
+      "set_by": ["Jay_PrintOrchestratorService::tryStartPrint"],
+      "cleared_by": ["Jay_PrintOrchestratorService::endPrint", "Jay_PrintOrchestratorService::ensureGovernorNotStuck", "Jay_PrintOrchestratorService::healPrintLocks", "Jay_ArbitrationService::DetectStuckPrinter"],
+      "failure_mode": "Governor stuck prevents new print cycles.",
+      "recovery": "Run ensureGovernorNotStuck()/healPrintLocks() or DetectStuckPrinter()."
+    },
+    {
+      "marker": "PendingPrintCycle",
+      "table": "Jay_PrintGovernorState",
+      "field": "PendingPrintCycle",
+      "set_by": ["Jay_PrintOrchestratorService::setPendingPrintCycle"],
+      "cleared_by": ["Jay_PrintOrchestratorService::clearPendingPrintCycle", "Jay_ArbitrationService::DetectStuckPrinter"],
+      "failure_mode": "Print cycle scheduling blocks on stale pending flag.",
+      "recovery": "ClearPendingPrintCycle() after verifying no PrintCycle batch exists."
+    },
+    {
+      "marker": "HeartbeatLock",
+      "table": "Jay_ExportRuntimeSettingsTable",
+      "field": "HeartbeatLock",
+      "set_by": ["Jay_ArbitrationService::heartbeat"],
+      "cleared_by": ["Jay_ArbitrationService::heartbeat"],
+      "failure_mode": "Heartbeat stops scheduling when lock remains set.",
+      "recovery": "Clear lock after confirming no heartbeat batch is executing."
+    },
+    {
+      "marker": "QueueStatus",
+      "table": "Jay_DocExportProdQueue/Jay_DocExportHistQueue",
+      "field": "Status",
+      "set_by": ["Jay_EnqueueService::bulkStageFromSlice", "Jay_PrintOrchestratorService::drainQueueChunk", "Jay_ArbitrationService::DetectStuckPrinter"],
+      "cleared_by": ["Transitioned to Exported/FailedExport"],
+      "failure_mode": "Rows stuck in Processing or FailedExport with retries exhausted.",
+      "recovery": "Run DetectStuckPrinter() or reconcile; adjust attempts if appropriate."
+    },
+    {
+      "marker": "DedupeRow",
+      "table": "Jay_PrintDedupeTable",
+      "field": "(ScanId, DocType, DocumentRecId)",
+      "set_by": ["Jay_PrintDedupe::markPrinted"],
+      "cleared_by": ["Jay_PrintDedupe::deleteForScan", "Jay_ArbitrationService::cleanupDedupe"],
+      "failure_mode": "Legitimate reprints are skipped.",
+      "recovery": "Delete dedupe entries for the affected scan."
+    }
+  ],
+  "runbooks": [
+    {
+      "name": "Stuck print cycle / export cycle",
+      "symptoms": ["IsPrinting=Yes but no progress", "Queue rows stuck in Processing"],
+      "diagnosis": ["Check Jay_PrintGovernorState flags", "Check PrintCycle batch existence"],
+      "actions": ["Run DetectStuckPrinter()", "Clear PendingPrintCycle", "Reschedule notifyBatchReady"],
+      "verify": ["IsPrinting=No and queue rows retry"]
+    },
+    {
+      "name": "Batch job killed mid-run",
+      "symptoms": ["Batch canceled", "Slices/scans stuck in Running"],
+      "diagnosis": ["Check ScanCtrl/SliceCtrl/BatchCtrl status"],
+      "actions": ["Run DetectAndResolveState()", "healPrintLocks()"],
+      "verify": ["Statuses advance or retry"]
+    },
+    {
+      "name": "AOS restart during processing",
+      "symptoms": ["Heartbeat missing", "Queues not progressing"],
+      "diagnosis": ["Check HeartbeatLock/LastHeartbeatUTC"],
+      "actions": ["ensureHeartbeatAlive()", "DetectAndResolveState()"],
+      "verify": ["Heartbeat scheduled", "Queue progress resumes"]
+    },
+    {
+      "name": "Dedupe table blocking legitimate reprints",
+      "symptoms": ["Queue rows skipped"],
+      "diagnosis": ["Check Jay_PrintDedupeTable entries"],
+      "actions": ["deleteForScan()", "cleanupDedupe()"],
+      "verify": ["Rows print normally"]
+    },
+    {
+      "name": "Queue backlog / slow drain",
+      "symptoms": ["Backlog grows", "Slow throughput"],
+      "diagnosis": ["Check PrintCapacityPerHour/PrintCadenceMs"],
+      "actions": ["Adjust runtime settings", "reconcile()"],
+      "verify": ["Backlog decreases"]
+    },
+    {
+      "name": "Orphaned locks / governor thinks it’s already running",
+      "symptoms": ["PendingPrintCycle stuck", "IsPrinting=Yes but no batch"],
+      "diagnosis": ["Check PrintCycle batch existence"],
+      "actions": ["ensureGovernorNotStuck()", "clearPendingPrintCycle()"],
+      "verify": ["Governor flags cleared"]
+    },
+    {
+      "name": "Nothing prints but jobs are running",
+      "symptoms": ["PrintCycle executing, no output"],
+      "diagnosis": ["Check dedupe and attempt counters"],
+      "actions": ["Clear dedupe for scan", "Adjust attempts", "Confirm print window"] ,
+      "verify": ["Queue rows move to Exported/FailedExport"]
+    },
+    {
+      "name": "Everything prints twice (dedupe failure)",
+      "symptoms": ["Duplicate prints"],
+      "diagnosis": ["Missing dedupe rows"],
+      "actions": ["Validate markPrinted() path"],
+      "verify": ["Dedupe rows created"]
+    }
+  ]
+}
