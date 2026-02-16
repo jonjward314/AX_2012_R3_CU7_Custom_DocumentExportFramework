@@ -86,8 +86,10 @@ Formatversion: 1
         #            warning(strFmt("Stage: Safe enqueue failed for seed RecId %1", seedRecId));
         #        }
         #
-        #        // Remove seedRecId from list
-        #        batchRecs = Jay_EnqueueService::removeRecIdFromContainer(_recIds, seedRecId);
+        #        // Build this batch's working set only (exclude seed already inserted safely).
+        #        // NOTE: Do NOT derive from the full _recIds container, otherwise every batch
+        #        // re-stages almost the entire slice and multiplies queue rows by batch count.
+        #        batchRecs = Jay_EnqueueService::getBatchRecIds(_recIds, startIndex, endIndex, seedRecId);
         #
         #        // Stage remaining rows into TempDB
         #        ttsBegin;
@@ -196,6 +198,7 @@ Formatversion: 1
         #    Jay_ExportRuntimeSettingsTable settings;
         #    container                      recIds;
         #    int                            countRecIds;
+        #    int                            rawCountRecIds;
         #    boolean                        ok = true;
         #    str                            tag;
         #
@@ -216,10 +219,12 @@ Formatversion: 1
         #        handler  = Jay_DocHandler_Base::construct(sliceRO.DocType);
         #        handler.init(sliceRO);
         #
-        #        recIds      = handler.enumerateRecIds();
-        #        countRecIds = conLen(recIds);
+        #        recIds         = handler.enumerateRecIds();
+        #        rawCountRecIds = conLen(recIds);
+        #        recIds         = Jay_EnqueueService::uniqueRecIds(recIds);
+        #        countRecIds    = conLen(recIds);
         #
-        #        info(strFmt("%1 Enumerated %2 RecIds.", tag, countRecIds));
+        #        info(strFmt("%1 Enumerated %2 RecIds (unique=%3).", tag, rawCountRecIds, countRecIds));
         #
         #        if (countRecIds == 0)
         #        {
@@ -498,6 +503,52 @@ Formatversion: 1
         #        if (conPeek(_c, i) != _remove)
         #        {
         #            result += conPeek(_c, i);
+        #        }
+        #    }
+        #
+        #    return result;
+        #}
+      ENDSOURCE
+      SOURCE #uniqueRecIds
+        #private static container uniqueRecIds(container _c)
+        #{
+        #    container result = conNull();
+        #    Set       seen   = new Set(Types::Int64);
+        #    int       i;
+        #    RecId     r;
+        #
+        #    for (i = 1; i <= conLen(_c); i++)
+        #    {
+        #        r = conPeek(_c, i);
+        #        if (r && !seen.in(r))
+        #        {
+        #            seen.add(r);
+        #            result += r;
+        #        }
+        #    }
+        #
+        #    return result;
+        #}
+      ENDSOURCE
+      SOURCE #getBatchRecIds
+        #private static container getBatchRecIds(container _c, int _startIndex, int _endIndex, RecId _exclude)
+        #{
+        #    container result = conNull();
+        #    int       i;
+        #    RecId     r;
+        #
+        #    if (_startIndex < 1)
+        #        _startIndex = 1;
+        #
+        #    if (_endIndex > conLen(_c))
+        #        _endIndex = conLen(_c);
+        #
+        #    for (i = _startIndex; i <= _endIndex; i++)
+        #    {
+        #        r = conPeek(_c, i);
+        #        if (r && r != _exclude)
+        #        {
+        #            result += r;
         #        }
         #    }
         #
