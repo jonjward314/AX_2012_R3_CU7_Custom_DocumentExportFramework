@@ -255,6 +255,8 @@ Formatversion: 1
         #                : 1;
         #
         #        msDelayPerDoc = 3600000 / capacityPerHour;
+#
+        #        Jay_PrintOrchestratorService::recoverProcessingAsFailed(_queueType);
         #
         #        // -------------------------------------------------------------
         #        // SELECT NEXT RECORD
@@ -445,7 +447,7 @@ Formatversion: 1
         #
         #                    ttsBegin;
         #                    select forUpdate sliceLock
-        #                        where sliceLock.RecId == prodRec.SliceId;
+        #                        where sliceLock.RecId == histRec.SliceId;
         #
         #                    if (sliceLock.RecId)
         #                    {
@@ -499,6 +501,41 @@ Formatversion: 1
         #    return printedCount;
         #}
         #
+      ENDSOURCE
+      SOURCE #recoverProcessingAsFailed
+        #private static void recoverProcessingAsFailed(Jay_ExportQueueType _queueType)
+        #{
+        #    Jay_DocExportProdQueue prod;
+        #    Jay_DocExportHistQueue hist;
+        #    utcDateTime nowUtc = DateTimeUtil::utcNow();
+        #
+        #    if (_queueType == Jay_ExportQueueType::Production)
+        #    {
+        #        ttsBegin;
+        #        while select forUpdate prod
+        #            where prod.Status == Jay_ExportQueueStatus::Processing
+        #        {
+        #            prod.Status         = Jay_ExportQueueStatus::FailedExport;
+        #            prod.Attempts++;
+        #            prod.LastAttemptUtc = nowUtc;
+        #            prod.update();
+        #        }
+        #        ttsCommit;
+        #    }
+        #    else
+        #    {
+        #        ttsBegin;
+        #        while select forUpdate hist
+        #            where hist.Status == Jay_ExportQueueStatus::Processing
+        #        {
+        #            hist.Status         = Jay_ExportQueueStatus::FailedExport;
+        #            hist.Attempts++;
+        #            hist.LastAttemptUtc = nowUtc;
+        #            hist.update();
+        #        }
+        #        ttsCommit;
+        #    }
+        #}
       ENDSOURCE
       SOURCE #endPrint
         #private static void endPrint()
@@ -1176,6 +1213,9 @@ Formatversion: 1
         #    }
         #
         #    info("✔ [B-OK] Print lock acquired");
+#
+        #    // Recover orphaned Processing rows before this run starts.
+        #    Jay_ArbitrationService::DetectStuckPrinter();
         #
         #    // Clear pending immediately now that we are RUNNING
         #    try
@@ -1299,6 +1339,7 @@ Formatversion: 1
         #    // -------------------------------------------------------------
         #    try
         #    {
+        #        Jay_ArbitrationService::DetectStuckPrinter();
         #        Jay_PrintOrchestratorService::clearPendingPrintCycle();
         #    }
         #    catch (Exception::Error)
