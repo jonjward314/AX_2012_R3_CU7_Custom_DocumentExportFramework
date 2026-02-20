@@ -253,6 +253,16 @@ Formatversion: 1
         #            Jay_EnqueueService::enqueueViaLegacy(sliceRO, recIds);
         #        }
         #
+        #        // Post-enqueue cleanup: collapse queued duplicates per scan.
+        #        if (sliceRO.QueueType == Jay_ExportQueueType::Historical)
+        #        {
+        #            Jay_EnqueueService::clearQueuedHistDuplicatesByParentScan(sliceRO.ParentScanId);
+        #        }
+        #        else if (sliceRO.QueueType == Jay_ExportQueueType::Production)
+        #        {
+        #            Jay_EnqueueService::clearQueuedProdDuplicatesByParentScan(sliceRO.ParentScanId);
+        #        }
+        #
         #        ttsBegin;
         #        select forUpdate sliceUpd
         #            where sliceUpd.RecId == _sliceRecId;
@@ -489,6 +499,88 @@ Formatversion: 1
         #                moved, _batchRecId, enum2str(_queueType)));
         #}
         #
+      ENDSOURCE
+      SOURCE #clearQueuedHistDuplicatesByParentScan
+        #private static void clearQueuedHistDuplicatesByParentScan(RecId _parentScanId)
+        #{
+        #    Jay_DocExportHistQueue keepHist;
+        #    Jay_DocExportHistQueue dupHist;
+        #    int64                  removed = 0;
+        #    ;
+        #
+        #    if (!_parentScanId)
+        #    {
+        #        return;
+        #    }
+        #
+        #    ttsBegin;
+        #    while select forUpdate dupHist
+        #        where dupHist.Status       == Jay_ExportQueueStatus::Queued
+        #          && dupHist.ParentScanId == _parentScanId
+        #        exists join keepHist
+        #            where keepHist.Status       == Jay_ExportQueueStatus::Queued
+        #              && keepHist.ParentScanId == dupHist.ParentScanId
+        #              && keepHist.DataAreaId   == dupHist.DataAreaId
+        #              && keepHist.DocTableId   == dupHist.DocTableId
+        #              && keepHist.DocRecId     == dupHist.DocRecId
+        #              && keepHist.DocType      == dupHist.DocType
+        #              && keepHist.DocSubType   == dupHist.DocSubType
+        #              && (keepHist.CreatedDateTime < dupHist.CreatedDateTime
+        #                  || (keepHist.CreatedDateTime == dupHist.CreatedDateTime
+        #                      && keepHist.RecId < dupHist.RecId))
+        #    {
+        #        dupHist.delete();
+        #        removed++;
+        #    }
+        #    ttsCommit;
+        #
+        #    if (removed > 0)
+        #    {
+        #        info(strFmt("Hist queue duplicate cleanup removed %1 row(s) for ParentScanId %2.",
+        #                    removed, _parentScanId));
+        #    }
+        #}
+      ENDSOURCE
+      SOURCE #clearQueuedProdDuplicatesByParentScan
+        #private static void clearQueuedProdDuplicatesByParentScan(RecId _parentScanId)
+        #{
+        #    Jay_DocExportProdQueue keepProd;
+        #    Jay_DocExportProdQueue dupProd;
+        #    int64                  removed = 0;
+        #    ;
+        #
+        #    if (!_parentScanId)
+        #    {
+        #        return;
+        #    }
+        #
+        #    ttsBegin;
+        #    while select forUpdate dupProd
+        #        where dupProd.Status       == Jay_ExportQueueStatus::Queued
+        #          && dupProd.ParentScanId == _parentScanId
+        #        exists join keepProd
+        #            where keepProd.Status       == Jay_ExportQueueStatus::Queued
+        #              && keepProd.ParentScanId == dupProd.ParentScanId
+        #              && keepProd.DataAreaId   == dupProd.DataAreaId
+        #              && keepProd.DocTableId   == dupProd.DocTableId
+        #              && keepProd.DocRecId     == dupProd.DocRecId
+        #              && keepProd.DocType      == dupProd.DocType
+        #              && keepProd.DocSubType   == dupProd.DocSubType
+        #              && (keepProd.CreatedDateTime < dupProd.CreatedDateTime
+        #                  || (keepProd.CreatedDateTime == dupProd.CreatedDateTime
+        #                      && keepProd.RecId < dupProd.RecId))
+        #    {
+        #        dupProd.delete();
+        #        removed++;
+        #    }
+        #    ttsCommit;
+        #
+        #    if (removed > 0)
+        #    {
+        #        info(strFmt("Prod queue duplicate cleanup removed %1 row(s) for ParentScanId %2.",
+        #                    removed, _parentScanId));
+        #    }
+        #}
       ENDSOURCE
       SOURCE #removeRecIdFromContainer
         #private static container removeRecIdFromContainer(container _c, RecId _remove)
